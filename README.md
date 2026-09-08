@@ -59,6 +59,9 @@ Phase 2.1 聚焦知识库隔离、DomainPort 与 admin 上传；LLM 抽取为 st
 # 全量单元测试（默认 InMemory）
 pytest -v
 
+# 一期 e2e：种子库 test-ecommerce（PG）或 default（InMemory）
+pytest -v tests/test_e2e_sample.py
+
 # 知识库隔离 + corporate 领域骨架
 pytest -v tests/test_kb_isolation.py tests/test_corporate_domain_skeleton.py
 
@@ -66,7 +69,7 @@ pytest -v tests/test_kb_isolation.py tests/test_corporate_domain_skeleton.py
 docker run -d --name akos-pg -e POSTGRES_PASSWORD=akos -e POSTGRES_USER=akos -e POSTGRES_DB=akos -p 5432:5432 pgvector/pgvector:pg16
 psql postgresql://akos:akos@localhost:5432/akos -f infra/schema.sql
 psql postgresql://akos:akos@localhost:5432/akos -f infra/migrations/002_knowledge_bases.sql
-AKOS_USE_PG=true pytest -v tests/test_pg_knowledge.py tests/test_cli_kb_persistence.py tests/test_admin_kb_api.py
+AKOS_USE_PG=true pytest -v tests/test_pg_knowledge.py tests/test_cli_kb_persistence.py tests/test_admin_kb_api.py tests/test_e2e_sample.py
 
 # 可选：配置 AKOS_LLM_API_KEY 后运行 LLM 集成测试
 AKOS_LLM_API_KEY=sk-... pytest -v tests/test_corporate_domain_skeleton.py -k llm_integration
@@ -78,7 +81,7 @@ AKOS_LLM_API_KEY=sk-... pytest -v tests/test_corporate_domain_skeleton.py -k llm
 - 两个知识库 Claim 互不可见（`test_kb_isolation`）
 - `POST /ask` 带 `knowledge_base_id` 只命中该库
 - `akos ask --kb <id>` 跨 CLI 进程可答（PG）
-- 一期 e2e 在 `test-ecommerce` 库 PASS
+- 一期 e2e 在 `test-ecommerce` 库 PASS（`tests/test_e2e_sample.py`）
 
 ## PostgreSQL（可选）
 
