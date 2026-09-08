@@ -97,3 +97,48 @@ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE entities
+        ADD CONSTRAINT fk_entities_knowledge_base
+        FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases (id);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE relations
+        ADD CONSTRAINT fk_relations_knowledge_base
+        FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases (id);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE claim_evidence
+        ADD CONSTRAINT fk_claim_evidence_knowledge_base
+        FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases (id);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE memory_episodes
+        ADD CONSTRAINT fk_memory_episodes_knowledge_base
+        FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases (id);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE memory_semantics
+        ADD CONSTRAINT fk_memory_semantics_knowledge_base
+        FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases (id);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
