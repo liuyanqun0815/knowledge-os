@@ -1,8 +1,8 @@
-from infra.bootstrap import build_default_orchestrator
+from infra.bootstrap import build_orchestrator_for_kb
 
 
-def test_mvp_success_criterion():
-    orch = build_default_orchestrator()
+def test_mvp_success_criterion(seeded_kb_id):
+    orch = build_orchestrator_for_kb(seeded_kb_id)
     report = orch.ingest("samples/refund_policy_v3.md", "policy")
     assert report.claims_created > 0
     assert report.quarantined >= 0
