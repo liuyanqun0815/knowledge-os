@@ -28,17 +28,17 @@ class OrchestratorDeps:
     memory: InMemoryMemoryStore
 
 
-def build_pg_knowledge() -> PgKnowledge:
+def build_pg_knowledge(knowledge_base_id: str = "legacy") -> PgKnowledge:
     from infra.db import get_engine
 
     settings = Settings()
-    return PgKnowledge(get_engine(settings))
+    return PgKnowledge(get_engine(settings), knowledge_base_id)
 
 
 def _build_knowledge() -> KnowledgePort:
     settings = Settings()
     if settings.use_pg:
-        return build_pg_knowledge()
+        return build_pg_knowledge("legacy")
     return InMemoryKnowledge()
 
 

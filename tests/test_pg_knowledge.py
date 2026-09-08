@@ -3,9 +3,10 @@ import os
 import pytest
 
 from knowledge.models import Claim, Source
+from tests.conftest import pg_enabled
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("AKOS_USE_PG", "false").lower() != "true",
+    not pg_enabled(),
     reason="AKOS_USE_PG not enabled",
 )
 
@@ -24,13 +25,18 @@ def _source(sid: str = "s-pg-1") -> Source:
     )
 
 
-def test_pg_append_claim_roundtrip():
+@pytest.fixture
+def pg_knowledge(pg_engine, pg_kb_repo):
+    from infra.pg_repos import PgKnowledge
+
+    kb = pg_kb_repo.create(name="pg-knowledge-test", domain_type="ecommerce_cs", description="")
+    return PgKnowledge(pg_engine, kb.id)
+
+
+def test_pg_append_claim_roundtrip(pg_knowledge):
     from datetime import datetime, timezone
 
-    from infra.bootstrap import build_pg_knowledge
-
-    repo = build_pg_knowledge()
-    repo.save_source(_source())
+    pg_knowledge.save_source(_source())
     c1 = Claim(
         id="c-pg-1",
         family_id="f-pg-1",
@@ -46,8 +52,8 @@ def test_pg_append_claim_roundtrip():
         valid_to=None,
         source_ids=["s-pg-1"],
     )
-    repo.append_claim(c1)
-    fetched = repo.get_claim("c-pg-1")
+    pg_knowledge.append_claim(c1)
+    fetched = pg_knowledge.get_claim("c-pg-1")
     assert fetched is not None
     assert fetched.object == "买家"
     assert fetched.status == "active"
@@ -67,25 +73,22 @@ def test_pg_append_claim_roundtrip():
         valid_to=None,
         source_ids=["s-pg-1"],
     )
-    repo.mark_superseded("c-pg-1", datetime.now(timezone.utc))
-    repo.append_claim(c2)
+    pg_knowledge.mark_superseded("c-pg-1", datetime.now(timezone.utc))
+    pg_knowledge.append_claim(c2)
 
-    active = repo.get_active_claims("七天无理由", "运费承担方")
+    active = pg_knowledge.get_active_claims("七天无理由", "运费承担方")
     assert len(active) == 1
     assert active[0].object == "平台"
 
-    hist = repo.get_claim_history("f-pg-1")
+    hist = pg_knowledge.get_claim_history("f-pg-1")
     assert len(hist) >= 2
     assert {c.id for c in hist} >= {"c-pg-1", "c-pg-2"}
 
 
-def test_pg_mark_superseded_does_not_overwrite_object():
+def test_pg_mark_superseded_does_not_overwrite_object(pg_knowledge):
     from datetime import datetime, timezone
 
-    from infra.bootstrap import build_pg_knowledge
-
-    repo = build_pg_knowledge()
-    repo.save_source(_source("s-pg-2"))
+    pg_knowledge.save_source(_source("s-pg-2"))
     c1 = Claim(
         id="c-pg-super-1",
         family_id="f-pg-super",
@@ -101,10 +104,10 @@ def test_pg_mark_superseded_does_not_overwrite_object():
         valid_to=None,
         source_ids=["s-pg-2"],
     )
-    repo.append_claim(c1)
-    repo.mark_superseded("c-pg-super-1", datetime.now(timezone.utc))
+    pg_knowledge.append_claim(c1)
+    pg_knowledge.mark_superseded("c-pg-super-1", datetime.now(timezone.utc))
 
-    updated = repo.get_claim("c-pg-super-1")
+    updated = pg_knowledge.get_claim("c-pg-super-1")
     assert updated is not None
     assert updated.status == "superseded"
     assert updated.object == "7"

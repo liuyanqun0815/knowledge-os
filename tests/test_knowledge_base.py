@@ -1,49 +1,11 @@
-import os
-from pathlib import Path
-
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def _pg_enabled() -> bool:
-    return os.getenv("AKOS_USE_PG", "false").lower() == "true"
-
+from tests.conftest import pg_enabled
 
 pytestmark = pytest.mark.skipif(
-    not _pg_enabled(),
+    not pg_enabled(),
     reason="requires AKOS_USE_PG=true",
 )
-
-
-def _run_sql_script(engine, script_path: Path) -> None:
-    from sqlalchemy import text
-
-    content = script_path.read_text(encoding="utf-8")
-    statements = [s.strip() for s in content.split(";") if s.strip() and not s.strip().startswith("--")]
-    with engine.begin() as conn:
-        for stmt in statements:
-            conn.execute(text(stmt))
-
-
-@pytest.fixture(scope="module")
-def pg_engine():
-    from infra.db import get_engine, reset_engine
-    from infra.settings import Settings
-
-    reset_engine()
-    engine = get_engine(Settings(use_pg=True))
-    _run_sql_script(engine, ROOT / "infra" / "schema.sql")
-    _run_sql_script(engine, ROOT / "infra" / "migrations" / "002_knowledge_bases.sql")
-    yield engine
-    reset_engine()
-
-
-@pytest.fixture
-def pg_kb_repo(pg_engine):
-    from knowledge_base.pg_repo import PgKnowledgeBaseRepo
-
-    return PgKnowledgeBaseRepo(pg_engine)
 
 
 def test_create_and_get_knowledge_base(pg_kb_repo):

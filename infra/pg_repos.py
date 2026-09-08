@@ -7,7 +7,6 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from infra.db import get_engine
 from knowledge.models import Claim, Source
 
 
@@ -45,15 +44,21 @@ def _row_to_claim(row: Any) -> Claim:
 
 
 class PgKnowledge:
-    def __init__(self, engine: Engine | None = None) -> None:
-        self._engine = engine or get_engine()
+    """PostgreSQL knowledge repository scoped to a single knowledge base."""
+
+    def __init__(self, engine: Engine, knowledge_base_id: str) -> None:
+        self._engine = engine
+        self._knowledge_base_id = knowledge_base_id
 
     def save_source(self, source: Source) -> Source:
         with self._engine.begin() as conn:
             conn.execute(
                 text("""
-                    INSERT INTO sources (id, title, type, uri, version, created_at, status)
-                    VALUES (:id, :title, :type, :uri, :version, :created_at, :status)
+                    INSERT INTO sources (
+                        id, knowledge_base_id, title, type, uri, version, created_at, status
+                    ) VALUES (
+                        :id, :knowledge_base_id, :title, :type, :uri, :version, :created_at, :status
+                    )
                     ON CONFLICT (id) DO UPDATE SET
                         title = EXCLUDED.title,
                         type = EXCLUDED.type,
@@ -61,9 +66,11 @@ class PgKnowledge:
                         version = EXCLUDED.version,
                         created_at = EXCLUDED.created_at,
                         status = EXCLUDED.status
+                    WHERE sources.knowledge_base_id = EXCLUDED.knowledge_base_id
                     """),
                 {
                     "id": source.id,
+                    "knowledge_base_id": self._knowledge_base_id,
                     "title": source.title,
                     "type": source.type,
                     "uri": source.uri,
@@ -77,8 +84,12 @@ class PgKnowledge:
     def get_source(self, source_id: str) -> Source | None:
         with self._engine.connect() as conn:
             row = conn.execute(
-                text("SELECT id, title, type, uri, version, created_at, status FROM sources WHERE id = :id"),
-                {"id": source_id},
+                text("""
+                    SELECT id, title, type, uri, version, created_at, status
+                    FROM sources
+                    WHERE id = :id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {"id": source_id, "knowledge_base_id": self._knowledge_base_id},
             ).one_or_none()
         if row is None:
             return None
@@ -88,18 +99,27 @@ class PgKnowledge:
         with self._engine.begin() as conn:
             conn.execute(
                 text("""
-                    INSERT INTO source_texts (source_id, text)
-                    VALUES (:source_id, :text)
+                    INSERT INTO source_texts (source_id, knowledge_base_id, text)
+                    VALUES (:source_id, :knowledge_base_id, :text)
                     ON CONFLICT (source_id) DO UPDATE SET text = EXCLUDED.text
+                    WHERE source_texts.knowledge_base_id = EXCLUDED.knowledge_base_id
                     """),
-                {"source_id": source_id, "text": text_content},
+                {
+                    "source_id": source_id,
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "text": text_content,
+                },
             )
 
     def get_source_text(self, source_id: str) -> str | None:
         with self._engine.connect() as conn:
             row = conn.execute(
-                text("SELECT text FROM source_texts WHERE source_id = :source_id"),
-                {"source_id": source_id},
+                text("""
+                    SELECT text
+                    FROM source_texts
+                    WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {"source_id": source_id, "knowledge_base_id": self._knowledge_base_id},
             ).one_or_none()
         if row is None:
             return None
@@ -110,11 +130,11 @@ class PgKnowledge:
             conn.execute(
                 text("""
                     INSERT INTO claims (
-                        id, family_id, version, subject, predicate, object,
+                        id, knowledge_base_id, family_id, version, subject, predicate, object,
                         subject_type, object_type, confidence, status,
                         valid_from, valid_to, source_ids
                     ) VALUES (
-                        :id, :family_id, :version, :subject, :predicate, :object,
+                        :id, :knowledge_base_id, :family_id, :version, :subject, :predicate, :object,
                         :subject_type, :object_type, :confidence, :status,
                         :valid_from, :valid_to, CAST(:source_ids AS jsonb)
                     )
@@ -122,6 +142,7 @@ class PgKnowledge:
                     """),
                 {
                     "id": claim.id,
+                    "knowledge_base_id": self._knowledge_base_id,
                     "family_id": claim.family_id,
                     "version": claim.version,
                     "subject": claim.subject,
@@ -144,9 +165,13 @@ class PgKnowledge:
                 text("""
                     UPDATE claims
                     SET status = 'superseded', valid_to = COALESCE(:valid_to, NOW())
-                    WHERE id = :claim_id
+                    WHERE id = :claim_id AND knowledge_base_id = :knowledge_base_id
                     """),
-                {"claim_id": claim_id, "valid_to": valid_to},
+                {
+                    "claim_id": claim_id,
+                    "valid_to": valid_to,
+                    "knowledge_base_id": self._knowledge_base_id,
+                },
             )
 
     def get_claim(self, claim_id: str) -> Claim | None:
@@ -156,9 +181,10 @@ class PgKnowledge:
                     SELECT id, family_id, version, subject, predicate, object,
                            subject_type, object_type, confidence, status,
                            valid_from, valid_to, source_ids
-                    FROM claims WHERE id = :id
+                    FROM claims
+                    WHERE id = :id AND knowledge_base_id = :knowledge_base_id
                     """),
-                {"id": claim_id},
+                {"id": claim_id, "knowledge_base_id": self._knowledge_base_id},
             ).one_or_none()
         if row is None:
             return None
@@ -170,9 +196,14 @@ class PgKnowledge:
                    subject_type, object_type, confidence, status,
                    valid_from, valid_to, source_ids
             FROM claims
-            WHERE status = 'active' AND subject = :subject
+            WHERE knowledge_base_id = :knowledge_base_id
+              AND status = 'active'
+              AND subject = :subject
         """
-        params: dict[str, Any] = {"subject": subject}
+        params: dict[str, Any] = {
+            "subject": subject,
+            "knowledge_base_id": self._knowledge_base_id,
+        }
         if predicate is not None:
             sql += " AND predicate = :predicate"
             params["predicate"] = predicate
@@ -189,24 +220,37 @@ class PgKnowledge:
                            subject_type, object_type, confidence, status,
                            valid_from, valid_to, source_ids
                     FROM claims
-                    WHERE family_id = :family_id
+                    WHERE family_id = :family_id AND knowledge_base_id = :knowledge_base_id
                     ORDER BY version
                     """),
-                {"family_id": claim_family_id},
+                {"family_id": claim_family_id, "knowledge_base_id": self._knowledge_base_id},
             ).fetchall()
         return [_row_to_claim(row) for row in rows]
 
     def add_quarantine(self, reason: str, raw: dict) -> None:
         with self._engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO quarantine (reason, raw) VALUES (:reason, CAST(:raw AS jsonb))"),
-                {"reason": reason, "raw": json.dumps(raw)},
+                text("""
+                    INSERT INTO quarantine (knowledge_base_id, reason, raw)
+                    VALUES (:knowledge_base_id, :reason, CAST(:raw AS jsonb))
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "reason": reason,
+                    "raw": json.dumps(raw),
+                },
             )
 
     def list_quarantine(self) -> list[dict]:
         with self._engine.connect() as conn:
             rows = conn.execute(
-                text("SELECT reason, raw FROM quarantine ORDER BY id"),
+                text("""
+                    SELECT reason, raw
+                    FROM quarantine
+                    WHERE knowledge_base_id = :knowledge_base_id
+                    ORDER BY id
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id},
             ).fetchall()
         result: list[dict] = []
         for row in rows:

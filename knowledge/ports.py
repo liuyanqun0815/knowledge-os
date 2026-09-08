@@ -4,6 +4,13 @@ from knowledge.models import Claim, Source
 
 
 class KnowledgePort(Protocol):
+    """Knowledge persistence port.
+
+    PostgreSQL implementations (``PgKnowledge``) are constructed with a
+    ``knowledge_base_id`` so every query is scoped to one knowledge base.
+    In-memory implementations do not require a knowledge base id (Task 5).
+    """
+
     def save_source(self, source: Source) -> Source: ...
     def get_source(self, source_id: str) -> Source | None: ...
     def save_source_text(self, source_id: str, text: str) -> None: ...
