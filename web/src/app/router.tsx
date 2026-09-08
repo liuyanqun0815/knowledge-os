@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ComingSoonPage } from "../pages/ComingSoonPage";
+import { KnowledgeBaseDetailPage } from "../pages/KnowledgeBaseDetailPage";
+import { KnowledgeBaseListPage } from "../pages/KnowledgeBaseListPage";
+import { KnowledgeBaseNewPage } from "../pages/KnowledgeBaseNewPage";
 import { Layout } from "./Layout";
 
 export function AppRouter() {
@@ -8,18 +11,9 @@ export function AppRouter() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/knowledge-bases" replace />} />
-        <Route
-          path="/knowledge-bases"
-          element={<EmptyState title="知识库管理" description="知识库列表与创建功能将在下一任务中提供。" />}
-        />
-        <Route
-          path="/knowledge-bases/new"
-          element={<EmptyState title="新建知识库" description="知识库创建表单将在下一任务中提供。" />}
-        />
-        <Route
-          path="/knowledge-bases/:id"
-          element={<EmptyState title="知识库详情" description="知识库编辑与归档功能将在下一任务中提供。" />}
-        />
+        <Route path="/knowledge-bases" element={<KnowledgeBaseListPage />} />
+        <Route path="/knowledge-bases/new" element={<KnowledgeBaseNewPage />} />
+        <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
         <Route
           path="/sources"
           element={<EmptyState title="文档管理" description="文档上传与编译状态功能即将提供。" />}
