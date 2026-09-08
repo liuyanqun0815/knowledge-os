@@ -1,5 +1,5 @@
 import { apiFetch } from "./http";
-import type { AskResponse } from "./types";
+import type { AgentTraceStep, AskResponse } from "./types";
 
 export type AskQuestionParams = {
   knowledgeBaseId: string;
@@ -26,4 +26,10 @@ export async function askQuestion(params: AskQuestionParams): Promise<AskRespons
     body: JSON.stringify(body),
   });
   return response.json() as Promise<AskResponse>;
+}
+
+export async function fetchTrace(kbId: string, requestId: string): Promise<AgentTraceStep[]> {
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/traces/${requestId}`);
+  const payload = (await response.json()) as { trace?: AgentTraceStep[] | null };
+  return payload.trace ?? [];
 }

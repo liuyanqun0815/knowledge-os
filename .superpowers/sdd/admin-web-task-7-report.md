@@ -33,5 +33,29 @@ Completed on branch `feat/admin-web`.
 
 ## Concerns
 
-- The backend currently exposes no admin trace-fetch endpoint, so responses without inline trace use the specified unavailable fallback.
+- ~~The backend currently exposes no admin trace-fetch endpoint, so responses without inline trace use the specified unavailable fallback.~~ Addressed: frontend now calls `GET /admin/knowledge-bases/{id}/traces/{request_id}` when inline trace is empty.
 - Evidence is intentionally rendered from the generic `Record<string, unknown>` API contract; `span` is the only promoted summary field.
+
+## Task 7 Review Fix: fetchTrace secondary path
+
+**Date:** 2026-09-08
+
+### Changes
+
+- Added `fetchTrace(kbId, requestId)` in `web/src/api/ask.ts` — GET `/admin/knowledge-bases/${kbId}/traces/${requestId}` via `apiFetch`, returns `trace` array or `[]`.
+- Updated `AskPage.handleSubmit`: after `askQuestion`, when `(response.trace ?? []).length === 0` and `response.request_id` is set, calls `fetchTrace`; on failure keeps empty steps and shows「轨迹暂不可用」.
+
+### Test evidence
+
+```text
+cd web && npm test -- src/pages/AskPage.test.tsx src/api/ask.test.ts
+
+ ✓ src/api/ask.test.ts (3 tests)
+ ✓ src/pages/AskPage.test.tsx (8 tests)
+
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+```
+
+- `ask.test.ts`: `fetchTrace` GET path + empty payload fallback.
+- `AskPage.test.tsx`: secondary fetch on empty trace + request_id; success renders steps; failure shows degradation.

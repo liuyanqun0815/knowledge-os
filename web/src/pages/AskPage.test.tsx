@@ -5,12 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { AskPage } from "./AskPage";
 
-const { askQuestion, useKb } = vi.hoisted(() => ({
+const { askQuestion, fetchTrace, useKb } = vi.hoisted(() => ({
   askQuestion: vi.fn(),
+  fetchTrace: vi.fn(),
   useKb: vi.fn(),
 }));
 
-vi.mock("../api/ask", () => ({ askQuestion }));
+vi.mock("../api/ask", () => ({ askQuestion, fetchTrace }));
 vi.mock("../app/KbContext", () => ({ useKb }));
 
 const answer = {
@@ -28,6 +29,7 @@ describe("AskPage", () => {
     vi.clearAllMocks();
     useKb.mockReturnValue({ kbId: "kb-1", setKbId: vi.fn(), clearKb: vi.fn() });
     askQuestion.mockResolvedValue(answer);
+    fetchTrace.mockResolvedValue([]);
   });
 
   afterEach(cleanup);
@@ -71,12 +73,27 @@ describe("AskPage", () => {
   it("shows unavailable trace fallback when response trace is empty", async () => {
     const user = userEvent.setup();
     askQuestion.mockResolvedValue({ ...answer, trace: null });
+    fetchTrace.mockRejectedValue(new Error("404"));
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "问题");
     await user.click(screen.getByRole("button", { name: "提问" }));
 
     expect(await screen.findByText("轨迹暂不可用")).toBeInTheDocument();
+    expect(fetchTrace).toHaveBeenCalledWith("kb-1", "r1");
+  });
+
+  it("fetches trace by request_id when ask response omits trace", async () => {
+    const user = userEvent.setup();
+    askQuestion.mockResolvedValue({ ...answer, trace: null });
+    fetchTrace.mockResolvedValue([{ node: "answer", status: "ok" as const, summary: "done" }]);
+    render(<AskPage />);
+
+    await user.type(screen.getByLabelText("问题"), "问题");
+    await user.click(screen.getByRole("button", { name: "提问" }));
+
+    expect(await screen.findByText("answer")).toBeInTheDocument();
+    expect(fetchTrace).toHaveBeenCalledWith("kb-1", "r1");
   });
 
   it("clears the previous result when kbId changes", async () => {

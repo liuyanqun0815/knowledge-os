@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { askQuestion } from "../api/ask";
+import { askQuestion, fetchTrace } from "../api/ask";
 import type { AskResponse } from "../api/types";
 import { useKb } from "../app/KbContext";
 import { EmptyState } from "../components/EmptyState";
@@ -39,8 +39,19 @@ export function AskPage() {
         question: question.trim(),
         ...(asOf ? { asOf: new Date(asOf).toISOString() } : {}),
       });
+      if (requestSequence.current !== requestId) {
+        return;
+      }
+      let trace = response.trace ?? [];
+      if (trace.length === 0 && response.request_id) {
+        try {
+          trace = await fetchTrace(kbId, response.request_id);
+        } catch {
+          trace = [];
+        }
+      }
       if (requestSequence.current === requestId) {
-        setResult(response);
+        setResult({ ...response, trace });
       }
     } catch {
       if (requestSequence.current === requestId) {
