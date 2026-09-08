@@ -1,10 +1,13 @@
 from dataclasses import asdict
+from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from app.admin_auth import require_admin_token
 from app.deps import build_orchestrator_for_request
 from knowledge.errors import DomainError
+from orchestrator.service import LangGraphOrchestrator
 
 router = APIRouter()
 
@@ -27,6 +30,7 @@ class AskRequest(BaseModel):
     knowledge_base_id: str
     question: str
     session_id: str | None = None
+    as_of: datetime | None = None
 
 
 class AskResponse(BaseModel):
@@ -35,12 +39,18 @@ class AskResponse(BaseModel):
     evidence: list[dict]
     confidence: float
     retrieval_mode: str
+    request_id: str | None = None
+    trace: list[dict] | None = None
 
 
 class EvidenceResponse(BaseModel):
     conclusion: str
     items: list[dict]
     confidence: float
+
+
+def get_ask_orchestrator(body: AskRequest, request: Request) -> LangGraphOrchestrator:
+    return build_orchestrator_for_request(body.knowledge_base_id, request)
 
 
 @router.post("/sources", response_model=RegisterSourceResponse)
@@ -60,9 +70,11 @@ def compile_source(source_id: str, body: CompileSourceRequest, request: Request)
     return asdict(report)
 
 
-@router.post("/ask", response_model=AskResponse)
-def ask(body: AskRequest, request: Request) -> AskResponse:
-    orchestrator = build_orchestrator_for_request(body.knowledge_base_id, request)
+@router.post("/ask", response_model=AskResponse, dependencies=[Depends(require_admin_token)])
+def ask(
+    body: AskRequest,
+    orchestrator: LangGraphOrchestrator = Depends(get_ask_orchestrator),
+) -> AskResponse:
     try:
         answer = orchestrator.ask(body.question, session_id=body.session_id)
     except DomainError as exc:
@@ -73,6 +85,8 @@ def ask(body: AskRequest, request: Request) -> AskResponse:
         evidence=answer.evidence,
         confidence=answer.confidence,
         retrieval_mode=answer.retrieval_mode,
+        request_id=None,
+        trace=None,
     )
 
 
