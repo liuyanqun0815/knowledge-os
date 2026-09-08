@@ -36,3 +36,19 @@ uvicorn app.main:app --reload
 ```bash
 cp .env.example .env
 ```
+
+| 变量 | 说明 | 默认 |
+|------|------|------|
+| `AKOS_DATA_ROOT` | 本地文件存储根目录 | `./data` |
+| `AKOS_DATABASE_URL` | PostgreSQL 连接串 | `postgresql+psycopg://akos:akos@localhost:5432/akos` |
+| `AKOS_USE_PG` | 启用 PostgreSQL 适配器 | `false` |
+
+## PostgreSQL（可选）
+
+单元测试默认使用 InMemory 适配器；启用 PG 需先启动 pgvector 并初始化 schema：
+
+```bash
+docker run -d --name akos-pg -e POSTGRES_PASSWORD=akos -e POSTGRES_USER=akos -e POSTGRES_DB=akos -p 5432:5432 pgvector/pgvector:pg16
+psql postgresql://akos:akos@localhost:5432/akos -f infra/schema.sql
+AKOS_USE_PG=true pytest tests/test_pg_knowledge.py -v
+```

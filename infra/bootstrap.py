@@ -6,7 +6,10 @@ from domains.ecommerce_cs.seed import register_ecommerce_cs
 from evidence.memory_repo import InMemoryEvidence
 from graph.memory_repo import InMemoryGraph
 from infra.files import LocalFileStore
+from infra.pg_repos import PgKnowledge
+from infra.settings import Settings
 from knowledge.memory_repo import InMemoryKnowledge
+from knowledge.ports import KnowledgePort
 from memory.memory_repo import InMemoryMemoryStore
 from ontology.registry import InMemoryOntology
 from orchestrator.service import LangGraphOrchestrator
@@ -16,7 +19,7 @@ from retrieval.hybrid import HybridRetrieval
 @dataclass
 class OrchestratorDeps:
     files: LocalFileStore
-    knowledge: InMemoryKnowledge
+    knowledge: KnowledgePort
     ontology: InMemoryOntology
     graph: InMemoryGraph
     evidence: InMemoryEvidence
@@ -25,10 +28,24 @@ class OrchestratorDeps:
     memory: InMemoryMemoryStore
 
 
+def build_pg_knowledge() -> PgKnowledge:
+    from infra.db import get_engine
+
+    settings = Settings()
+    return PgKnowledge(get_engine(settings))
+
+
+def _build_knowledge() -> KnowledgePort:
+    settings = Settings()
+    if settings.use_pg:
+        return build_pg_knowledge()
+    return InMemoryKnowledge()
+
+
 def build_orchestrator_deps() -> OrchestratorDeps:
     ontology = InMemoryOntology()
     register_ecommerce_cs(ontology)
-    knowledge = InMemoryKnowledge()
+    knowledge = _build_knowledge()
     graph = InMemoryGraph()
     evidence = InMemoryEvidence()
     retrieval = HybridRetrieval(knowledge, graph)
