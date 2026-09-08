@@ -32,7 +32,8 @@ akos = "cli.main:app"
 where = ["."]
 include = [
   "app*", "cli*", "compiler*", "domains*", "evidence*", "graph*",
-  "infra*", "knowledge*", "memory*", "ontology*", "orchestrator*", "retrieval*",
+  "infra*", "knowledge*", "knowledge_base*", "memory*", "ontology*",
+  "orchestrator*", "retrieval*",
 ]
 
 [tool.pytest.ini_options]
