@@ -10,7 +10,9 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-08-akos-phase2-design.md` §5（Phase 2.1）
 
-**Out of scope（本计划不做，见 Phase 2.2–2.4 独立 plan）:** evolution/、Verification Agent、Neo4j Docker、LlmExtractor 生产调优、Web 管理台 UI
+**Out of scope（本计划不做，见 Phase 2.2–2.4 独立 plan）:** evolution/、Verification Agent、Neo4j Docker、LlmExtractor 生产调优
+
+**Web 管理台 UI** 见独立 plan：[`docs/superpowers/plans/2026-09-08-akos-admin-web.md`](2026-09-08-akos-admin-web.md)（已实现 F0–F3）
 
 ## Global Constraints
 

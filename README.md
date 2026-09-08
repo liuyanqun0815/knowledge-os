@@ -34,6 +34,24 @@ uvicorn app.main:app --reload
 
 启动后访问 `http://127.0.0.1:8000/docs` 查看 Swagger 文档。
 
+## 管理台 Web UI
+
+React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`。
+
+**Implementation plan:** [`docs/superpowers/plans/2026-09-08-akos-admin-web.md`](docs/superpowers/plans/2026-09-08-akos-admin-web.md)
+
+```bash
+# 终端 A — 后端
+uvicorn app.main:app --reload --port 8000
+
+# 终端 B — 前端
+cd web && npm install && npm run dev
+```
+
+浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。详细说明与手工 E2E 验收清单见 [`web/README.md`](web/README.md)。
+
+可选鉴权：后端 `.env` 设置 `ADMIN_API_TOKEN`，前端 `web/.env.local` 设置 `VITE_ADMIN_API_TOKEN`（值需一致）。
+
 ## 环境变量
 
 复制 `.env.example` 为 `.env` 并按需修改：
@@ -50,6 +68,7 @@ cp .env.example .env
 | `AKOS_LLM_BASE_URL` | OpenAI 兼容 API 地址 | `https://api.openai.com/v1` |
 | `AKOS_LLM_API_KEY` | LLM API Key（未配置时 corporate 库跳过 LLM 抽取） | 空 |
 | `AKOS_LLM_MODEL` | LLM 模型名 | `gpt-4o-mini` |
+| `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
 
 ## Phase 2.1 验收
 
