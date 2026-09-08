@@ -95,6 +95,19 @@ class PgKnowledge:
             return None
         return _row_to_source(row)
 
+    def list_sources(self) -> list[Source]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, title, type, uri, version, created_at, status
+                    FROM sources
+                    WHERE knowledge_base_id = :knowledge_base_id
+                    ORDER BY created_at
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id},
+            ).fetchall()
+        return [_row_to_source(row) for row in rows]
+
     def save_source_text(self, source_id: str, text_content: str) -> None:
         with self._engine.begin() as conn:
             conn.execute(

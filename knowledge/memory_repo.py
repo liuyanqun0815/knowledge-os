@@ -16,6 +16,9 @@ class InMemoryKnowledge:
     def get_source(self, source_id: str) -> Source | None:
         return self._sources.get(source_id)
 
+    def list_sources(self) -> list[Source]:
+        return list(self._sources.values())
+
     def save_source_text(self, source_id: str, text: str) -> None:
         self._source_texts[source_id] = text
 
