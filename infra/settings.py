@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://akos:akos@localhost:5432/akos"
     use_pg: bool = False
     default_domain_type: str = "ecommerce_cs"
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
 
 
 @lru_cache
