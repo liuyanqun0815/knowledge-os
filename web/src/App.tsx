@@ -1,3 +1,5 @@
+import { AppRouter } from "./app/router";
+
 export default function App() {
-  return <p>AKOS Admin</p>;
+  return <AppRouter />;
 }
