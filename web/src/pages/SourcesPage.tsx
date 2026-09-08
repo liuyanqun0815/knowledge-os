@@ -1,0 +1,165 @@
+import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffect, useState } from "react";
+import { listSources, uploadSource } from "../api/sources";
+import type { SourceItem } from "../api/types";
+import { useKb } from "../app/KbContext";
+import { EmptyState } from "../components/EmptyState";
+import { ErrorBanner } from "../components/ErrorBanner";
+
+const STATUS_LABELS: Record<SourceItem["compile_status"], string> = {
+  pending: "等待编译",
+  running: "编译中",
+  succeeded: "已完成",
+  failed: "编译失败",
+};
+
+export function SourcesPage() {
+  const { kbId } = useKb();
+  const [sources, setSources] = useState<SourceItem[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSources = useCallback(async () => {
+    if (!kbId) {
+      return;
+    }
+
+    try {
+      const items = await listSources(kbId);
+      setSources(items);
+      setError(null);
+    } catch {
+      setError("文档列表加载失败，请稍后重试。");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [kbId]);
+
+  useEffect(() => {
+    setSources([]);
+    setSelectedFile(null);
+    setError(null);
+    if (!kbId) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    void loadSources();
+  }, [kbId, loadSources]);
+
+  const hasCompilingSource = sources.some(({ compile_status }) =>
+    ["pending", "running"].includes(compile_status),
+  );
+
+  useEffect(() => {
+    if (!kbId || !hasCompilingSource) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadSources();
+    }, 2000);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasCompilingSource, kbId, loadSources]);
+
+  function selectFile(file: File | undefined) {
+    if (file) {
+      setSelectedFile(file);
+      setError(null);
+    }
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    selectFile(event.target.files?.[0]);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    selectFile(event.dataTransfer.files[0]);
+  }
+
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!kbId || !selectedFile) {
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+    try {
+      await uploadSource(kbId, selectedFile);
+      setSelectedFile(null);
+      await loadSources();
+    } catch {
+      setError("文档上传失败，请稍后重试。");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  if (!kbId) {
+    return <EmptyState title="请先选择知识库" description="选择知识库后即可上传和管理文档。" />;
+  }
+
+  return (
+    <section className="page-section">
+      <div className="page-header">
+        <div>
+          <h1>文档来源</h1>
+          <p>上传文档并查看知识编译状态。</p>
+        </div>
+      </div>
+
+      {error ? <ErrorBanner message={error} /> : null}
+
+      <form onSubmit={handleUpload}>
+        <div
+          className="upload-drop-zone"
+          data-testid="source-drop-zone"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDrop}
+        >
+          <label htmlFor="source-file">选择文档</label>
+          <input id="source-file" type="file" onChange={handleFileChange} disabled={isUploading} />
+          <p>可点击选择或将文件拖放到此处。</p>
+          {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
+        </div>
+        <button className="button button-primary" type="submit" disabled={!selectedFile || isUploading}>
+          {isUploading ? "上传中…" : "上传文档"}
+        </button>
+      </form>
+
+      {isLoading ? <p role="status">正在加载文档…</p> : null}
+      {!isLoading && !error && sources.length === 0 ? (
+        <EmptyState title="暂无文档" description="上传第一个文档开始构建知识库。" />
+      ) : null}
+      {sources.length > 0 ? (
+        <div className="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>文件名</th>
+                <th>编译状态</th>
+                <th>上传时间</th>
+                <th>错误摘要</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sources.map((source) => (
+                <tr key={source.id}>
+                  <td>{source.filename}</td>
+                  <td>{STATUS_LABELS[source.compile_status]}</td>
+                  <td>{source.created_at ? new Date(source.created_at).toLocaleString() : "—"}</td>
+                  <td>{source.error_summary || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
