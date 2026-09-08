@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+import hashlib
+import uuid
+from datetime import datetime, timezone
+
+from typing import TYPE_CHECKING, Any
+
+from compiler.ports import CompileReport, ExtractorPort
+from evidence.ports import EvidencePort
+from graph.ports import GraphPort
+from knowledge.models import Claim, TextSpan
+from knowledge.ports import KnowledgePort
+from ontology.ports import OntologyPort
+
+if TYPE_CHECKING:
+    from retrieval.ports import RetrievalPort
+
+
+def _family_id(subject: str, predicate: str, object_type: str) -> str:
+    raw = f"{subject}|{predicate}|{object_type}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _entity_id(name: str, entity_type: str) -> str:
+    raw = f"{entity_type}:{name}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+class KnowledgeCompiler:
+    def __init__(
+        self,
+        ontology: OntologyPort,
+        knowledge: KnowledgePort,
+        graph: GraphPort,
+        evidence: EvidencePort,
+        extractor: ExtractorPort,
+        retrieval: Any | None = None,
+    ) -> None:
+        self._ontology = ontology
+        self._knowledge = knowledge
+        self._graph = graph
+        self._evidence = evidence
+        self._extractor = extractor
+        self._retrieval = retrieval
+
+    def ingest(self, source_id: str) -> CompileReport:
+        text = self._knowledge.get_source_text(source_id)
+        if text is None:
+            return CompileReport(
+                source_id=source_id,
+                claims_created=0,
+                entities_upserted=0,
+                evidence_links=0,
+                quarantined=0,
+                errors=["source text not found"],
+            )
+
+        claims_created = 0
+        entities_upserted = 0
+        evidence_links = 0
+        quarantined = 0
+        errors: list[str] = []
+
+        for extracted in self._extractor.extract(text):
+            subject = self._ontology.normalize_term(extracted.subject)
+            obj = self._ontology.normalize_term(extracted.object)
+            subject_type = self._ontology.resolve_entity_type(subject) or "Concept"
+            object_type = self._ontology.resolve_entity_type(obj) or "Concept"
+
+            if not self._ontology.validate_claim(subject_type, extracted.predicate, object_type):
+                self._knowledge.add_quarantine(
+                    "invalid_predicate",
+                    {
+                        "subject": subject,
+                        "predicate": extracted.predicate,
+                        "object": obj,
+                        "subject_type": subject_type,
+                        "object_type": object_type,
+                    },
+                )
+                quarantined += 1
+                continue
+
+            claim_id = str(uuid.uuid4())
+            claim = Claim(
+                id=claim_id,
+                family_id=_family_id(subject, extracted.predicate, object_type),
+                version=1,
+                subject=subject,
+                predicate=extracted.predicate,
+                object=obj,
+                subject_type=subject_type,
+                object_type=object_type,
+                confidence=extracted.confidence,
+                status="active",
+                valid_from=datetime.now(timezone.utc),
+                valid_to=None,
+                source_ids=[source_id],
+            )
+            self._knowledge.append_claim(claim)
+            claims_created += 1
+
+            subject_entity = _entity_id(subject, subject_type)
+            object_entity = _entity_id(obj, object_type)
+            self._graph.upsert_entity(subject_entity, subject_type, {"name": subject})
+            self._graph.upsert_entity(object_entity, object_type, {"name": obj})
+            entities_upserted += 2
+            self._graph.upsert_relation(subject_entity, extracted.predicate, object_entity, {})
+
+            self._evidence.bind(
+                claim_id,
+                source_id,
+                TextSpan(source_id, extracted.start, extracted.end, extracted.quote),
+                extracted.confidence,
+            )
+            evidence_links += 1
+
+            if self._retrieval is not None:
+                self._retrieval.index_claim(claim)
+
+        return CompileReport(
+            source_id=source_id,
+            claims_created=claims_created,
+            entities_upserted=entities_upserted,
+            evidence_links=evidence_links,
+            quarantined=quarantined,
+            errors=errors,
+        )
