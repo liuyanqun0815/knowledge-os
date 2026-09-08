@@ -10,7 +10,6 @@ import { TraceTimeline } from "../components/TraceTimeline";
 export function AskPage() {
   const { kbId } = useKb();
   const [question, setQuestion] = useState("");
-  const [asOf, setAsOf] = useState("");
   const [result, setResult] = useState<AskResponse | null>(null);
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +36,6 @@ export function AskPage() {
       const response = await askQuestion({
         knowledgeBaseId: kbId,
         question: question.trim(),
-        ...(asOf ? { asOf: new Date(asOf).toISOString() } : {}),
       });
       if (requestSequence.current !== requestId) {
         return;
@@ -90,14 +88,7 @@ export function AskPage() {
           placeholder="请输入要查询的问题"
           disabled={isAsking}
         />
-        <label htmlFor="ask-as-of">截至时间（可选）</label>
-        <input
-          id="ask-as-of"
-          type="datetime-local"
-          value={asOf}
-          onChange={(event) => setAsOf(event.target.value)}
-          disabled={isAsking}
-        />
+        <p className="form-helper">时间点查询将在后续版本开放</p>
         <div className="form-actions">
           <button className="button button-primary" type="submit" disabled={isAsking || !question.trim()}>
             {isAsking ? "提问中…" : "提问"}

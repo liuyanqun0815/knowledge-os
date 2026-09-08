@@ -75,6 +75,7 @@ export function KnowledgeBaseDetailPage() {
     try {
       const updated = await updateKnowledgeBase(id, { status: "archived" });
       setKnowledgeBase(updated);
+      window.dispatchEvent(new CustomEvent("akos:kb-list-changed"));
       setNotice("知识库已归档。");
     } catch {
       setError("知识库归档失败，请稍后重试。");

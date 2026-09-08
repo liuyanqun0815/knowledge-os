@@ -85,6 +85,7 @@ describe("knowledge base pages", () => {
     });
     expect(localStorage.getItem("akos_current_kb")).toBe("kb-new");
     expect(await screen.findByRole("heading", { name: "企业文化" })).toBeInTheDocument();
+    await waitFor(() => expect(listKnowledgeBases).toHaveBeenCalledTimes(2));
   });
 
   it("updates and archives a knowledge base after confirmation", async () => {
@@ -107,6 +108,7 @@ describe("knowledge base pages", () => {
     await waitFor(() => {
       expect(updateKnowledgeBase).toHaveBeenCalledWith("kb-1", { status: "archived" });
     });
+    await waitFor(() => expect(listKnowledgeBases).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("link", { name: "管理文档" })).toHaveAttribute("href", "/sources?kb=kb-1");
     expect(screen.getByRole("link", { name: "开始问答" })).toHaveAttribute("href", "/ask?kb=kb-1");
   });

@@ -13,25 +13,35 @@ export function KbSwitcher() {
   useEffect(() => {
     let active = true;
 
-    listKnowledgeBases()
-      .then((items) => {
-        if (active) {
-          setKnowledgeBases(items);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setError("知识库列表加载失败，请检查 API 或管理员令牌。");
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoading(false);
-        }
-      });
+    function loadKnowledgeBases() {
+      setIsLoading(true);
+      listKnowledgeBases()
+        .then((items) => {
+          if (active) {
+            setKnowledgeBases(items);
+            setError(null);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setError("知识库列表加载失败，请检查 API 或管理员令牌。");
+          }
+        })
+        .finally(() => {
+          if (active) {
+            setIsLoading(false);
+          }
+        });
+    }
+
+    loadKnowledgeBases();
+    window.addEventListener("akos:kb-list-changed", loadKnowledgeBases);
+    window.addEventListener("focus", loadKnowledgeBases);
 
     return () => {
       active = false;
+      window.removeEventListener("akos:kb-list-changed", loadKnowledgeBases);
+      window.removeEventListener("focus", loadKnowledgeBases);
     };
   }, []);
 

@@ -66,6 +66,30 @@ describe("sources page", () => {
     expect(listSources).toHaveBeenCalledWith("kb-1");
   });
 
+  it("ignores a stale source list after kbId changes", async () => {
+    let resolveFirstRequest: (items: (typeof source)[]) => void = () => undefined;
+    listSources
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirstRequest = resolve;
+        }),
+      )
+      .mockResolvedValueOnce([{ ...source, id: "source-2", filename: "new-kb.md" }]);
+
+    const view = render(<SourcesPage />);
+    useKb.mockReturnValue({ kbId: "kb-2", setKbId: vi.fn(), clearKb: vi.fn() });
+    view.rerender(<SourcesPage />);
+
+    expect(await screen.findByText("new-kb.md")).toBeInTheDocument();
+    await act(async () => {
+      resolveFirstRequest([{ ...source, filename: "old-kb.md" }]);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("old-kb.md")).not.toBeInTheDocument();
+    expect(screen.getByText("new-kb.md")).toBeInTheDocument();
+  });
+
   it("uploads the selected file and refreshes the list", async () => {
     const user = userEvent.setup();
     render(<SourcesPage />);

@@ -58,16 +58,17 @@ describe("AskPage", () => {
     });
   });
 
-  it("converts as-of time to an ISO string", async () => {
+  it("does not expose or send the unsupported as-of option", async () => {
     const user = userEvent.setup();
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "历史政策是什么？");
-    await user.type(screen.getByLabelText("截至时间（可选）"), "2026-09-08T10:30");
     await user.click(screen.getByRole("button", { name: "提问" }));
 
     await waitFor(() => expect(askQuestion).toHaveBeenCalled());
-    expect(askQuestion.mock.calls[0][0].asOf).toBe(new Date("2026-09-08T10:30").toISOString());
+    expect(screen.queryByLabelText("截至时间（可选）")).not.toBeInTheDocument();
+    expect(screen.getByText("时间点查询将在后续版本开放")).toBeInTheDocument();
+    expect(askQuestion.mock.calls[0][0]).not.toHaveProperty("asOf");
   });
 
   it("shows unavailable trace fallback when response trace is empty", async () => {

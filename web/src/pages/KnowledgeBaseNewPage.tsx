@@ -32,6 +32,7 @@ export function KnowledgeBaseNewPage() {
         description: description.trim(),
       });
       setKbId(created.id);
+      window.dispatchEvent(new CustomEvent("akos:kb-list-changed"));
       navigate(`/knowledge-bases/${created.id}`);
     } catch {
       setError("知识库创建失败，请检查输入后重试。");

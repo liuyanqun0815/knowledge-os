@@ -1,4 +1,4 @@
-import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffect, useState } from "react";
+import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { listSources, uploadSource } from "../api/sources";
 import type { SourceItem } from "../api/types";
 import { useKb } from "../app/KbContext";
@@ -19,24 +19,34 @@ export function SourcesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   const loadSources = useCallback(async () => {
     if (!kbId) {
       return;
     }
 
+    const requestId = requestSequence.current + 1;
+    requestSequence.current = requestId;
     try {
       const items = await listSources(kbId);
-      setSources(items);
-      setError(null);
+      if (requestSequence.current === requestId) {
+        setSources(items);
+        setError(null);
+      }
     } catch {
-      setError("文档列表加载失败，请稍后重试。");
+      if (requestSequence.current === requestId) {
+        setError("文档列表加载失败，请稍后重试。");
+      }
     } finally {
-      setIsLoading(false);
+      if (requestSequence.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [kbId]);
 
   useEffect(() => {
+    requestSequence.current += 1;
     setSources([]);
     setSelectedFile(null);
     setError(null);
