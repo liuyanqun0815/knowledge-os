@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     data_root: str = "./data"
     database_url: str = "postgresql+psycopg://akos:akos@localhost:5432/akos"
     use_pg: bool = False
+    default_domain_type: str = "ecommerce_cs"
 
 
 @lru_cache

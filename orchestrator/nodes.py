@@ -7,7 +7,6 @@ from orchestrator.state import AskState, IngestState
 from retrieval.ports import RetrievalMode
 
 _GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关")
-_ALIAS_CANDIDATES = ("7天无理由", "七天无理由退货", "无理由退货", "七天无理由")
 
 
 def store_source_node(state: IngestState, deps: Any) -> dict:
@@ -38,7 +37,7 @@ def recall_node(state: AskState, deps: Any) -> dict:
 def normalize_node(state: AskState, deps: Any) -> dict:
     question = state["question"]
     normalized = question
-    for alias in _ALIAS_CANDIDATES:
+    for alias in deps.domain.get_aliases():
         if alias in normalized:
             normalized = normalized.replace(alias, deps.ontology.normalize_term(alias))
     return {"normalized_question": normalized}
@@ -68,19 +67,6 @@ def explain_node(state: AskState, deps: Any) -> dict:
     return {"claim_ids": claim_ids}
 
 
-def _claim_to_text(deps: Any, claim_id: str) -> str | None:
-    claim = deps.knowledge.get_claim(claim_id)
-    if claim is None:
-        return None
-    if claim.predicate == "排除":
-        return f"{claim.object}不适用{claim.subject}"
-    if claim.predicate == "适用类目":
-        return f"{claim.subject}适用类目为{claim.object}"
-    if claim.predicate == "运费承担方":
-        return f"{claim.subject}运费承担方为{claim.object}"
-    return f"{claim.subject}{claim.predicate}{claim.object}"
-
-
 def _retrieval_mode_value(mode: RetrievalMode | None) -> str:
     if mode is None:
         return RetrievalMode.HYBRID.value
@@ -90,11 +76,12 @@ def _retrieval_mode_value(mode: RetrievalMode | None) -> str:
 def answer_node(state: AskState, deps: Any) -> dict:
     claim_ids = state.get("claim_ids") or []
     retrieval_mode = state.get("retrieval_mode")
+    low_confidence_message = deps.domain.low_confidence_message()
 
     if not claim_ids:
         return {
             "answer": Answer(
-                text="依据不足，无法根据现有政策回答该问题。",
+                text=low_confidence_message,
                 claim_ids=[],
                 evidence=[],
                 confidence=0.1,
@@ -106,7 +93,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
     if bundle.confidence < 0.4 or not bundle.items:
         return {
             "answer": Answer(
-                text="依据不足，无法根据现有政策回答该问题。",
+                text=low_confidence_message,
                 claim_ids=[],
                 evidence=[],
                 confidence=bundle.confidence if bundle.confidence > 0 else 0.1,
@@ -114,7 +101,11 @@ def answer_node(state: AskState, deps: Any) -> dict:
             )
         }
 
-    texts = [text for claim_id in claim_ids if (text := _claim_to_text(deps, claim_id))]
+    texts = []
+    for claim_id in claim_ids:
+        claim = deps.knowledge.get_claim(claim_id)
+        if claim is not None:
+            texts.append(deps.domain.format_claim(claim))
     answer_text = "。".join(texts) if texts else bundle.conclusion
     evidence = [
         {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]}

@@ -5,6 +5,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+TEST_KB_NAME = "test-ecommerce"
+
 
 def pg_enabled() -> bool:
     return os.getenv("AKOS_USE_PG", "false").lower() == "true"
@@ -25,14 +27,26 @@ def any_uuid() -> str:
     return "00000000-0000-0000-0000-000000000001"
 
 
+@pytest.fixture(scope="session")
+def seeded_kb_id(request):
+    if not pg_enabled():
+        return "default"
+    pg_kb_repo = request.getfixturevalue("pg_kb_repo")
+    kb = pg_kb_repo.create(name=TEST_KB_NAME, domain_type="ecommerce_cs", description="ci")
+    return kb.id
+
+
 @pytest.fixture
-def build_orchestrator_deps():
-    from infra.bootstrap import build_orchestrator_deps as _build
+def build_orchestrator_deps(seeded_kb_id):
+    from infra.bootstrap import build_orchestrator_for_kb
+
+    def _build():
+        return build_orchestrator_for_kb(seeded_kb_id).deps
 
     return _build
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def pg_engine():
     if not pg_enabled():
         pytest.skip("requires AKOS_USE_PG=true")
@@ -48,7 +62,7 @@ def pg_engine():
     reset_engine()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def pg_kb_repo(pg_engine):
     from knowledge_base.pg_repo import PgKnowledgeBaseRepo
 
