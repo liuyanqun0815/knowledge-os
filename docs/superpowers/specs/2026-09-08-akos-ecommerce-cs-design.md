@@ -110,7 +110,7 @@ domains/ecommerce_cs → ontology（注册）, compiler（抽取提示/规则种
 | 职责 | 选型 |
 |------|------|
 | API | FastAPI |
-| 编排 | LangGraph 或等价状态机（`OrchestratorPort` 统一） |
+| 编排 | **LangGraph**（`StateGraph` 双图：ingest / ask；`OrchestratorPort` 门面） |
 | Source/Claim/Event/Evidence/Version | PostgreSQL |
 | Embedding | pgvector |
 | BM25/全文 | PostgreSQL `tsvector` |
@@ -202,13 +202,23 @@ class MemoryPort(Protocol):
 
 ### 3.8 orchestrator/
 
+**实现选型（已锁定）**：LangGraph `StateGraph`。对外仍暴露 `OrchestratorPort`；内部拆两条独立子图，避免 ingest/ask 硬耦合。
+
+```text
+OrchestratorPort（门面）
+  ├── ingest_graph: store → compile → END
+  └── ask_graph: recall → normalize → route_mode → retrieve → explain → answer → remember → END
+```
+
 ```python
 class OrchestratorPort(Protocol):
     def ask(self, question: str, session_id: str | None = None) -> Answer: ...
     def ingest(self, file_path: str, source_type: str) -> CompileReport: ...
+    def register_source(self, file_path: str, source_type: str) -> str: ...
+    def compile_source(self, source_id: str) -> CompileReport: ...
 ```
 
-编译流与问答流分离，不共用一个僵化状态机硬耦合。
+编译流与问答流分离：两条 LangGraph 子图，二期可在 `ask_graph` 增 Verification/Research 节点而不改 Port。
 
 ### 3.9 app/ + cli/
 
@@ -646,12 +656,13 @@ class AnswerV2:
 | 入口 | 纯后端 + FastAPI/CLI | UI 不阻塞领域正确性 |
 | 架构 | 模块化单体 + 精简存储 | 可落地；Port 保证可换引擎 |
 | Claim | 追加版本 | 为二期演化预留，避免推倒重来 |
+| 编排 | LangGraph StateGraph | 双图 ingest/ask；二期加 Agent 节点 |
 
 ---
 
 ## 12. 开放问题（实现计划阶段再定）
 
-1. 编排用 LangGraph 还是自研轻量状态机（不影响 Port）  
+1. ~~编排用 LangGraph 还是自研轻量状态机~~ → **已选 LangGraph**（见 §3.8、§11）  
 2. 抽取模型与提示版本管理策略  
 3. Claim family 对齐：规则键 vs 嵌入聚类（二期 Diff 关键）  
 4. 多租户是否在一期表结构预留 `tenant_id` 空列  
