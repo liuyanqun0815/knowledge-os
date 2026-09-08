@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from compiler.rule_extractor import RuleExtractor
+from knowledge.models import Claim
+from ontology.ports import OntologyPort
+
+_GENERIC_PREDICATES = [
+    ("Concept", "相关", "Concept"),
+    ("Concept", "定义", "Concept"),
+    ("Concept", "属于", "Concept"),
+]
+
+
+def register_generic_ontology(ontology: OntologyPort) -> None:
+    for subject_type, predicate, object_type in _GENERIC_PREDICATES:
+        ontology.register_predicate(subject_type, predicate, object_type)
+
+
+class GenericDomain:
+    name = "generic"
+
+    def register_ontology(self, ontology: OntologyPort) -> None:
+        register_generic_ontology(ontology)
+
+    def get_extractor(self) -> RuleExtractor:
+        return RuleExtractor()
+
+    def get_aliases(self) -> list[str]:
+        return []
+
+    def format_claim(self, claim: Claim) -> str:
+        return f"{claim.subject}{claim.predicate}{claim.object}"
+
+    def low_confidence_message(self) -> str:
+        return "依据不足，无法根据现有知识库内容回答该问题。"
