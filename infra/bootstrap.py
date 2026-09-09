@@ -82,23 +82,45 @@ def _resolve_kb(knowledge_base_id: str, settings: Settings) -> KnowledgeBase:
     )
 
 
+def _build_graph(settings: Settings, engine, kb_id: str) -> GraphPort:
+    backend = settings.graph_backend.lower()
+    if backend == "neo4j":
+        from graph.adapters.neo4j import Neo4jGraph
+
+        return Neo4jGraph(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+            knowledge_base_id=kb_id,
+        )
+    if backend == "postgres" and settings.use_pg and engine is not None:
+        from infra.pg_graph import PgGraph
+
+        return PgGraph(engine, kb_id)
+    return InMemoryGraph()
+
+
 def _build_repos(
     knowledge_base_id: str, settings: Settings
 ) -> tuple[KnowledgePort, GraphPort, EvidencePort, MemoryPort]:
     if settings.use_pg:
         from infra.db import get_engine
         from infra.pg_evidence import PgEvidence
-        from infra.pg_graph import PgGraph
         from infra.pg_memory import PgMemory
 
         engine = get_engine(settings)
         return (
             PgKnowledge(engine, knowledge_base_id),
-            PgGraph(engine, knowledge_base_id),
+            _build_graph(settings, engine, knowledge_base_id),
             PgEvidence(engine, knowledge_base_id),
             PgMemory(engine, knowledge_base_id),
         )
-    return InMemoryKnowledge(), InMemoryGraph(), InMemoryEvidence(), InMemoryMemoryStore()
+    return (
+        InMemoryKnowledge(),
+        _build_graph(settings, None, knowledge_base_id),
+        InMemoryEvidence(),
+        InMemoryMemoryStore(),
+    )
 
 
 def build_orchestrator_deps(knowledge_base_id: str | None = None) -> OrchestratorDeps:

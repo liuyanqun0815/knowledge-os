@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     data_root: str = "./data"
     database_url: str = "postgresql+psycopg://akos:akos@localhost:5432/akos"
     use_pg: bool = False
+    graph_backend: str = "memory"  # memory | postgres | neo4j
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "akos-neo4j"
     default_domain_type: str = "ecommerce_cs"
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
