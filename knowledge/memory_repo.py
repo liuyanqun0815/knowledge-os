@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from knowledge.models import Claim, Source
 
 
@@ -50,6 +52,32 @@ class InMemoryKnowledge:
     def get_claim_history(self, claim_family_id: str) -> list[Claim]:
         claim_ids = self._families.get(claim_family_id, [])
         return [self._claims[cid] for cid in claim_ids if cid in self._claims]
+
+    def mark_superseded(self, claim_id: str, valid_to: datetime | None = None) -> None:
+        claim = self._claims.get(claim_id)
+        if claim is None:
+            return
+        claim.status = "superseded"
+        claim.valid_to = valid_to or datetime.now(timezone.utc)
+
+    def get_claims_for_source(self, source_id: str) -> list[Claim]:
+        return [claim for claim in self._claims.values() if source_id in claim.source_ids]
+
+    def get_claims_by_status(self, status: str) -> list[Claim]:
+        return [claim for claim in self._claims.values() if claim.status == status]
+
+    def as_of(self, query_time: datetime, family_id: str) -> Claim | None:
+        claims = self.get_claim_history(family_id)
+        candidates: list[Claim] = []
+        for claim in claims:
+            if claim.valid_from is not None and claim.valid_from > query_time:
+                continue
+            if claim.valid_to is not None and query_time >= claim.valid_to:
+                continue
+            candidates.append(claim)
+        if not candidates:
+            return None
+        return max(candidates, key=lambda claim: claim.version)
 
     def add_quarantine(self, reason: str, raw: dict) -> None:
         self._quarantine.append({"reason": reason, "raw": raw})

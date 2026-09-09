@@ -240,6 +240,65 @@ class PgKnowledge:
             ).fetchall()
         return [_row_to_claim(row) for row in rows]
 
+    def get_claims_for_source(self, source_id: str) -> list[Claim]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, family_id, version, subject, predicate, object,
+                           subject_type, object_type, confidence, status,
+                           valid_from, valid_to, source_ids
+                    FROM claims
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_ids @> CAST(:source_ids AS jsonb)
+                    ORDER BY version
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "source_ids": json.dumps([source_id]),
+                },
+            ).fetchall()
+        return [_row_to_claim(row) for row in rows]
+
+    def get_claims_by_status(self, status: str) -> list[Claim]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, family_id, version, subject, predicate, object,
+                           subject_type, object_type, confidence, status,
+                           valid_from, valid_to, source_ids
+                    FROM claims
+                    WHERE knowledge_base_id = :knowledge_base_id AND status = :status
+                    ORDER BY version
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id, "status": status},
+            ).fetchall()
+        return [_row_to_claim(row) for row in rows]
+
+    def as_of(self, query_time: datetime, family_id: str) -> Claim | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT id, family_id, version, subject, predicate, object,
+                           subject_type, object_type, confidence, status,
+                           valid_from, valid_to, source_ids
+                    FROM claims
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND family_id = :family_id
+                      AND valid_from <= :query_time
+                      AND (valid_to IS NULL OR valid_to > :query_time)
+                    ORDER BY version DESC
+                    LIMIT 1
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "family_id": family_id,
+                    "query_time": query_time,
+                },
+            ).one_or_none()
+        if row is None:
+            return None
+        return _row_to_claim(row)
+
     def add_quarantine(self, reason: str, raw: dict) -> None:
         with self._engine.begin() as conn:
             conn.execute(
