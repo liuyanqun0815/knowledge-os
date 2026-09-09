@@ -8,7 +8,7 @@ const navItems = [
   { to: "/sources", label: "文档" },
   { to: "/ask", label: "问答" },
   { to: "/claims", label: "Claim" },
-  { to: "/quarantine", label: "隔离", comingSoon: true },
+  { to: "/quarantine", label: "隔离" },
 ];
 
 export function TopNav() {
@@ -31,7 +31,6 @@ export function TopNav() {
         {navItems.map((item) => (
           <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
             {item.label}
-            {item.comingSoon ? <small>即将推出</small> : null}
           </NavLink>
         ))}
       </nav>
