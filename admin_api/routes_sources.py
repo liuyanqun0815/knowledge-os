@@ -42,6 +42,7 @@ async def upload_source(
     _: None = Depends(_resolve_active_kb),
     file: UploadFile = File(...),
     source_type: str = Form("policy"),
+    replaces_source_id: str | None = Form(None),
 ) -> UploadSourceResponse:
     filename = Path(file.filename or "").name
     if not filename:
@@ -63,7 +64,7 @@ async def upload_source(
 
     orchestrator = build_orchestrator_for_request(kb_id, request)
     try:
-        report = orchestrator.ingest(str(dest), source_type)
+        report = orchestrator.ingest(str(dest), source_type, replaces_source_id=replaces_source_id)
     except DomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

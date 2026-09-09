@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from evolution.ports import ApplyReport
+from knowledge.models import Claim
 from knowledge_base.models import KnowledgeBase
 
 
@@ -60,3 +62,55 @@ class UploadSourceResponse(BaseModel):
     evidence_links: int
     quarantined: int
     errors: list[str] = Field(default_factory=list)
+
+
+class EvolveSourceRequest(BaseModel):
+    replaces_source_id: str | None = None
+
+
+class EvolveSourceResponse(BaseModel):
+    source_old_id: str
+    source_new_id: str
+    claims_activated: list[str] = Field(default_factory=list)
+    claims_superseded: list[str] = Field(default_factory=list)
+    events_created: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def from_report(cls, report: ApplyReport) -> EvolveSourceResponse:
+        return cls(
+            source_old_id=report.source_old_id,
+            source_new_id=report.source_new_id,
+            claims_activated=list(report.claims_activated),
+            claims_superseded=list(report.claims_superseded),
+            events_created=list(report.events_created),
+            errors=list(report.errors),
+        )
+
+
+class ClaimHistoryItemResponse(BaseModel):
+    id: str
+    family_id: str
+    version: int
+    subject: str
+    predicate: str
+    object: str
+    status: str
+    valid_from: datetime | None
+    valid_to: datetime | None
+    source_ids: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def from_claim(cls, claim: Claim) -> ClaimHistoryItemResponse:
+        return cls(
+            id=claim.id,
+            family_id=claim.family_id,
+            version=claim.version,
+            subject=claim.subject,
+            predicate=claim.predicate,
+            object=claim.object,
+            status=claim.status,
+            valid_from=claim.valid_from,
+            valid_to=claim.valid_to,
+            source_ids=list(claim.source_ids),
+        )

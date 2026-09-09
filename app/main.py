@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, FastAPI
 
+from admin_api.routes_evolution import router as evolution_router
 from admin_api.routes_knowledge_bases import router as knowledge_bases_router
 from admin_api.routes_sources import router as sources_router
 from app.admin_auth import require_admin_token
@@ -16,6 +17,7 @@ def create_app(data_root: str | None = None) -> FastAPI:
     admin_router = APIRouter(dependencies=[Depends(require_admin_token)])
     admin_router.include_router(knowledge_bases_router)
     admin_router.include_router(sources_router)
+    admin_router.include_router(evolution_router)
     app.include_router(admin_router, prefix="/admin")
     return app
 

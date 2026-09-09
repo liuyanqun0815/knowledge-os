@@ -4,6 +4,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from admin_api.claim_history import sorted_claim_history
+from admin_api.schemas import ClaimHistoryItemResponse
 from app.admin_auth import require_admin_token
 from app.deps import build_orchestrator_for_request
 from knowledge.errors import DomainError
@@ -16,6 +18,7 @@ class RegisterSourceRequest(BaseModel):
     knowledge_base_id: str
     path: str
     type: str = "policy"
+    replaces_source_id: str | None = None
 
 
 class RegisterSourceResponse(BaseModel):
@@ -39,6 +42,7 @@ class AskResponse(BaseModel):
     evidence: list[dict]
     confidence: float
     retrieval_mode: str
+    as_of: datetime | None = None
     request_id: str | None = None
     trace: list[dict] | None = None
 
@@ -57,7 +61,11 @@ def get_ask_orchestrator(body: AskRequest, request: Request) -> LangGraphOrchest
 def register_source(body: RegisterSourceRequest, request: Request) -> RegisterSourceResponse:
     orchestrator = build_orchestrator_for_request(body.knowledge_base_id, request)
     try:
-        source_id = orchestrator.register_source(body.path, body.type)
+        source_id = orchestrator.register_source(
+            body.path,
+            body.type,
+            replaces_source_id=body.replaces_source_id,
+        )
     except DomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RegisterSourceResponse(source_id=source_id)
@@ -76,7 +84,7 @@ def ask(
     orchestrator: LangGraphOrchestrator = Depends(get_ask_orchestrator),
 ) -> AskResponse:
     try:
-        answer = orchestrator.ask(body.question, session_id=body.session_id)
+        answer = orchestrator.ask(body.question, session_id=body.session_id, as_of=body.as_of)
     except DomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AskResponse(
@@ -85,9 +93,17 @@ def ask(
         evidence=answer.evidence,
         confidence=answer.confidence,
         retrieval_mode=answer.retrieval_mode,
+        as_of=answer.as_of,
         request_id=None,
         trace=None,
     )
+
+
+@router.get("/claims/{family_id}/history", response_model=list[ClaimHistoryItemResponse])
+def claim_history(family_id: str, knowledge_base_id: str, request: Request) -> list[ClaimHistoryItemResponse]:
+    orchestrator = build_orchestrator_for_request(knowledge_base_id, request)
+    claims_sorted = sorted_claim_history(orchestrator.deps.knowledge, family_id)
+    return [ClaimHistoryItemResponse.from_claim(claim) for claim in claims_sorted]
 
 
 @router.get("/claims/{claim_id}/evidence", response_model=EvidenceResponse)
