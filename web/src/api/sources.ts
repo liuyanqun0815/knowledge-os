@@ -26,9 +26,20 @@ export async function listSources(kbId: string): Promise<SourceItem[]> {
   return raw.map(mapSource);
 }
 
-export async function uploadSource(kbId: string, file: File): Promise<UploadSourceResponse> {
+export type UploadSourceOptions = {
+  replacesSourceId?: string;
+};
+
+export async function uploadSource(
+  kbId: string,
+  file: File,
+  options: UploadSourceOptions = {},
+): Promise<UploadSourceResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (options.replacesSourceId) {
+    formData.append("replaces_source_id", options.replacesSourceId);
+  }
 
   const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/upload`, {
     method: "POST",

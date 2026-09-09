@@ -6,6 +6,7 @@ export type AskQuestionParams = {
   question: string;
   sessionId?: string;
   asOf?: string;
+  includeTrace?: boolean;
 };
 
 export async function askQuestion(params: AskQuestionParams): Promise<AskResponse> {
@@ -20,7 +21,8 @@ export async function askQuestion(params: AskQuestionParams): Promise<AskRespons
     body.as_of = params.asOf;
   }
 
-  const response = await apiFetch("/ask", {
+  const query = params.includeTrace ? "?include_trace=true" : "";
+  const response = await apiFetch(`/ask${query}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

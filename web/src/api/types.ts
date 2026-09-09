@@ -34,12 +34,50 @@ export type AgentTraceStep = {
   detail?: unknown;
 };
 
+export type ClaimHistoryItem = {
+  id: string;
+  family_id: string;
+  version: number;
+  subject: string;
+  predicate: string;
+  object: string;
+  status: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  source_ids: string[];
+};
+
+export type ClaimListItem = ClaimHistoryItem & {
+  subject_type: string;
+  object_type: string;
+  confidence: number;
+};
+
+export type QuarantineItem = {
+  id: number;
+  reason: string;
+  raw: Record<string, unknown>;
+};
+
+export type EvolveSourceResponse = {
+  source_old_id: string;
+  source_new_id: string;
+  claims_activated: string[];
+  claims_superseded: string[];
+  events_created: string[];
+  errors: string[];
+};
+
 export type AskResponse = {
   text: string;
   claim_ids: string[];
   evidence: Record<string, unknown>[];
   confidence: number;
   retrieval_mode: string;
+  verification_status: string;
+  competing_claim_ids: string[];
+  procedure_id?: string | null;
+  as_of?: string | null;
   request_id?: string | null;
   trace?: AgentTraceStep[] | null;
 };

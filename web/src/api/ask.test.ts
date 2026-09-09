@@ -17,6 +17,9 @@ describe("askQuestion", () => {
             evidence: [],
             confidence: 0.5,
             retrieval_mode: "hybrid",
+            verification_status: "verified",
+            competing_claim_ids: [],
+            procedure_id: null,
             request_id: null,
             trace: null,
           }),
@@ -28,6 +31,38 @@ describe("askQuestion", () => {
     await askQuestion({ knowledgeBaseId: "kb-1", question: "q" });
     expect(fetch).toHaveBeenCalledWith(
       "/ask",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ knowledge_base_id: "kb-1", question: "q" }),
+      }),
+    );
+  });
+
+  it("appends include_trace query param when includeTrace is true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            text: "ok",
+            claim_ids: [],
+            evidence: [],
+            confidence: 0.5,
+            retrieval_mode: "hybrid",
+            verification_status: "verified",
+            competing_claim_ids: [],
+            procedure_id: null,
+            request_id: null,
+            trace: [{ node: "verify", status: "ok" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    const { askQuestion } = await import("./ask");
+    await askQuestion({ knowledgeBaseId: "kb-1", question: "q", includeTrace: true });
+    expect(fetch).toHaveBeenCalledWith(
+      "/ask?include_trace=true",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ knowledge_base_id: "kb-1", question: "q" }),
