@@ -7,9 +7,45 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { EvidenceList } from "../components/EvidenceList";
 import { TraceTimeline } from "../components/TraceTimeline";
 
+const verificationStatusLabels: Record<string, string> = {
+  verified: "已核验",
+  partial: "部分核验",
+  unverified: "未核验",
+  conflict: "存在冲突",
+};
+
+function verificationBadgeClass(status: string): string {
+  switch (status) {
+    case "verified":
+      return "verification-badge verification-badge-verified";
+    case "partial":
+      return "verification-badge verification-badge-partial";
+    case "conflict":
+      return "verification-badge verification-badge-conflict";
+    default:
+      return "verification-badge verification-badge-unverified";
+  }
+}
+
+function formatAsOf(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString("zh-CN");
+}
+
+function toIsoAsOf(localValue: string): string {
+  return new Date(localValue).toISOString();
+}
+
 export function AskPage() {
   const { kbId } = useKb();
   const [question, setQuestion] = useState("");
+  const [asOfLocal, setAsOfLocal] = useState("");
   const [result, setResult] = useState<AskResponse | null>(null);
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +72,8 @@ export function AskPage() {
       const response = await askQuestion({
         knowledgeBaseId: kbId,
         question: question.trim(),
+        includeTrace: true,
+        ...(asOfLocal ? { asOf: toIsoAsOf(asOfLocal) } : {}),
       });
       if (requestSequence.current !== requestId) {
         return;
@@ -88,7 +126,14 @@ export function AskPage() {
           placeholder="请输入要查询的问题"
           disabled={isAsking}
         />
-        <p className="form-helper">时间点查询将在后续版本开放</p>
+        <label htmlFor="ask-as-of">截至时间（可选）</label>
+        <input
+          id="ask-as-of"
+          type="datetime-local"
+          value={asOfLocal}
+          onChange={(event) => setAsOfLocal(event.target.value)}
+          disabled={isAsking}
+        />
         <div className="form-actions">
           <button className="button button-primary" type="submit" disabled={isAsking || !question.trim()}>
             {isAsking ? "提问中…" : "提问"}
@@ -103,12 +148,32 @@ export function AskPage() {
             <p className="answer-text">{result.text}</p>
             <dl className="answer-meta">
               <div>
+                <dt>核验状态</dt>
+                <dd>
+                  <span className={verificationBadgeClass(result.verification_status)}>
+                    {verificationStatusLabels[result.verification_status] ?? result.verification_status}
+                  </span>
+                </dd>
+              </div>
+              <div>
                 <dt>置信度</dt>
                 <dd>{Math.round(result.confidence * 100)}%</dd>
               </div>
               <div>
                 <dt>检索模式</dt>
                 <dd>{result.retrieval_mode}</dd>
+              </div>
+              <div>
+                <dt>查询时点</dt>
+                <dd>{formatAsOf(result.as_of)}</dd>
+              </div>
+              <div>
+                <dt>竞争 Claim</dt>
+                <dd>{result.competing_claim_ids.length > 0 ? result.competing_claim_ids.join(", ") : "无"}</dd>
+              </div>
+              <div>
+                <dt>流程 ID</dt>
+                <dd>{result.procedure_id ?? "—"}</dd>
               </div>
             </dl>
           </article>

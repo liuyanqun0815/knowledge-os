@@ -20,6 +20,10 @@ const answer = {
   evidence: [{ claim_id: "c1", span: "定制商品不适用七天无理由" }],
   confidence: 0.9,
   retrieval_mode: "hybrid",
+  verification_status: "verified",
+  competing_claim_ids: [],
+  procedure_id: null,
+  as_of: null,
   request_id: "r1",
   trace: [{ node: "retrieve", status: "ok" as const, summary: "ok" }],
 };
@@ -55,20 +59,45 @@ describe("AskPage", () => {
     expect(askQuestion).toHaveBeenCalledWith({
       knowledgeBaseId: "kb-1",
       question: "定制商品可以退货吗？",
+      includeTrace: true,
     });
   });
 
-  it("does not expose or send the unsupported as-of option", async () => {
+  it("sends as_of as ISO when datetime-local is set", async () => {
     const user = userEvent.setup();
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "历史政策是什么？");
+    await user.type(screen.getByLabelText("截至时间（可选）"), "2024-06-15T14:30");
     await user.click(screen.getByRole("button", { name: "提问" }));
 
     await waitFor(() => expect(askQuestion).toHaveBeenCalled());
-    expect(screen.queryByLabelText("截至时间（可选）")).not.toBeInTheDocument();
-    expect(screen.getByText("时间点查询将在后续版本开放")).toBeInTheDocument();
-    expect(askQuestion.mock.calls[0][0]).not.toHaveProperty("asOf");
+    expect(askQuestion.mock.calls[0][0]).toMatchObject({
+      knowledgeBaseId: "kb-1",
+      question: "历史政策是什么？",
+      includeTrace: true,
+      asOf: new Date("2024-06-15T14:30").toISOString(),
+    });
+    expect(screen.queryByText("时间点查询将在后续版本开放")).not.toBeInTheDocument();
+  });
+
+  it("displays AnswerV2 meta fields after asking", async () => {
+    const user = userEvent.setup();
+    askQuestion.mockResolvedValue({
+      ...answer,
+      verification_status: "conflict",
+      competing_claim_ids: ["c2", "c3"],
+      procedure_id: "proc-42",
+      as_of: "2024-06-15T06:30:00.000Z",
+    });
+    render(<AskPage />);
+
+    await user.type(screen.getByLabelText("问题"), "运费谁承担？");
+    await user.click(screen.getByRole("button", { name: "提问" }));
+
+    expect(await screen.findByText("存在冲突")).toBeInTheDocument();
+    expect(screen.getByText("c2, c3")).toBeInTheDocument();
+    expect(screen.getByText("proc-42")).toBeInTheDocument();
   });
 
   it("shows unavailable trace fallback when response trace is empty", async () => {

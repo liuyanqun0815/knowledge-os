@@ -383,6 +383,34 @@ button {
   margin: 0;
 }
 
+.verification-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+
+.verification-badge-verified {
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.verification-badge-partial {
+  color: #92400e;
+  background: #fffbeb;
+}
+
+.verification-badge-unverified {
+  color: #4b5563;
+  background: #f3f4f6;
+}
+
+.verification-badge-conflict {
+  color: #991b1b;
+  background: #fef2f2;
+}
+
 .evidence-list,
 .trace-timeline {
   display: grid;
