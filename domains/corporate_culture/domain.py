@@ -32,6 +32,6 @@ class CorporateCultureDomain:
 
     def llm_extraction_spec(self) -> LlmExtractionSpec:
         return LlmExtractionSpec(
-            allowed_predicates=[],
-            entity_types=[],
+            allowed_predicates=["倡导", "禁止", "适用于"],
+            entity_types=["Value", "Behavior", "Policy", "Department"],
         )

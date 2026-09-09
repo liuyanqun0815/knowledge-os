@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import json
+
+from compiler.domain_llm_extractor import DomainLlmExtractor
+from compiler.extraction_spec import LlmExtractionSpec
+from compiler.llm_extractor import LlmExtractor, create_corporate_extractor
+from domains.corporate_culture.domain import CorporateCultureDomain
+
+
+class FakeLlmClient:
+    is_configured = True
+
+    def __init__(self, response: list[dict[str, object]]) -> None:
+        self.response = response
+        self.messages: list[dict[str, str]] = []
+
+    def chat_completions(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float = 0.0,
+        timeout: float = 60.0,
+    ) -> str:
+        self.messages = messages
+        return json.dumps(self.response, ensure_ascii=False)
+
+
+def _spec() -> LlmExtractionSpec:
+    return LlmExtractionSpec(
+        allowed_predicates=["倡导", "禁止", "适用于"],
+        entity_types=["Value", "Behavior", "Policy", "Department"],
+    )
+
+
+def test_domain_llm_extractor_parses_claims_and_spans() -> None:
+    client = FakeLlmClient(
+        [
+            {
+                "subject": "公司",
+                "predicate": "倡导",
+                "object": "诚信经营",
+                "confidence": 0.9,
+                "quote": "公司倡导诚信经营",
+            }
+        ]
+    )
+    text = "公司倡导诚信经营。"
+
+    claims = DomainLlmExtractor(client, _spec()).extract(text)
+
+    assert len(claims) == 1
+    assert claims[0].predicate == "倡导"
+    assert claims[0].quote in text
+    assert (claims[0].start, claims[0].end) == (0, 8)
+
+
+def test_domain_llm_extractor_keeps_unknown_predicates() -> None:
+    client = FakeLlmClient(
+        [
+            {
+                "subject": "公司",
+                "predicate": "鼓励",
+                "object": "持续学习",
+                "confidence": 0.8,
+                "quote": "公司鼓励持续学习",
+            }
+        ]
+    )
+
+    claims = DomainLlmExtractor(client, _spec()).extract("公司鼓励持续学习。")
+
+    assert [claim.predicate for claim in claims] == ["鼓励"]
+
+
+def test_prompt_contains_spec_and_json_schema() -> None:
+    client = FakeLlmClient([])
+
+    DomainLlmExtractor(client, _spec()).extract("公司倡导诚信经营。")
+
+    prompt = client.messages[0]["content"]
+    assert '"allowed_predicates": ["倡导", "禁止", "适用于"]' in prompt
+    assert '"entity_types": ["Value", "Behavior", "Policy", "Department"]' in prompt
+    assert '"subject": "string"' in prompt
+    assert '"start"' not in prompt
+
+
+def test_claim_with_quote_outside_source_is_discarded() -> None:
+    client = FakeLlmClient(
+        [
+            {
+                "subject": "公司",
+                "predicate": "倡导",
+                "object": "诚信经营",
+                "confidence": 0.9,
+                "quote": "不存在于原文",
+            }
+        ]
+    )
+
+    claims = DomainLlmExtractor(client, _spec()).extract("公司倡导诚信经营。")
+
+    assert claims == []
+
+
+def test_corporate_spec_and_factory_remain_compatible() -> None:
+    spec = CorporateCultureDomain().llm_extraction_spec()
+    client = FakeLlmClient([])
+
+    extractor = create_corporate_extractor(client)
+
+    assert spec.allowed_predicates == ["倡导", "禁止", "适用于"]
+    assert spec.entity_types == ["Value", "Behavior", "Policy", "Department"]
+    assert isinstance(extractor, LlmExtractor)
+    assert isinstance(extractor, DomainLlmExtractor)
