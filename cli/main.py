@@ -40,18 +40,19 @@ def ask(
     """Ask a question against ingested knowledge."""
     orchestrator = build_orchestrator_for_kb(kb)
     answer = orchestrator.ask(question, session_id=session_id)
-    typer.echo(
-        json.dumps(
-            {
-                "text": answer.text,
-                "claim_ids": answer.claim_ids,
-                "evidence": answer.evidence,
-                "confidence": answer.confidence,
-                "retrieval_mode": answer.retrieval_mode,
-            },
-            ensure_ascii=False,
-        )
-    )
+    payload = {
+        "text": answer.text,
+        "claim_ids": answer.claim_ids,
+        "evidence": answer.evidence,
+        "confidence": answer.confidence,
+        "retrieval_mode": answer.retrieval_mode,
+        "verification_status": answer.verification_status,
+        "competing_claim_ids": answer.competing_claim_ids,
+        "procedure_id": answer.procedure_id,
+    }
+    if answer.as_of is not None:
+        payload["as_of"] = answer.as_of.isoformat()
+    typer.echo(json.dumps(payload, ensure_ascii=False))
 
 
 @app.command()
