@@ -7,10 +7,11 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from knowledge.models import Claim, Source
+from knowledge.models import Claim, Event, Source
 
 
 def _row_to_source(row: Any) -> Source:
+    replaces = getattr(row, "replaces_source_id", None)
     return Source(
         id=row.id,
         title=row.title,
@@ -19,6 +20,20 @@ def _row_to_source(row: Any) -> Source:
         version=row.version,
         created_at=row.created_at,
         status=row.status,
+        replaces_source_id=replaces,
+    )
+
+
+def _row_to_event(row: Any) -> Event:
+    participants = row.participants
+    if isinstance(participants, str):
+        participants = json.loads(participants)
+    return Event(
+        id=row.id,
+        type=row.type,
+        participants=list(participants),
+        timestamp=row.timestamp,
+        source_id=row.source_id,
     )
 
 
@@ -55,9 +70,11 @@ class PgKnowledge:
             conn.execute(
                 text("""
                     INSERT INTO sources (
-                        id, knowledge_base_id, title, type, uri, version, created_at, status
+                        id, knowledge_base_id, title, type, uri, version, created_at, status,
+                        replaces_source_id
                     ) VALUES (
-                        :id, :knowledge_base_id, :title, :type, :uri, :version, :created_at, :status
+                        :id, :knowledge_base_id, :title, :type, :uri, :version, :created_at, :status,
+                        :replaces_source_id
                     )
                     ON CONFLICT (id) DO UPDATE SET
                         title = EXCLUDED.title,
@@ -65,7 +82,8 @@ class PgKnowledge:
                         uri = EXCLUDED.uri,
                         version = EXCLUDED.version,
                         created_at = EXCLUDED.created_at,
-                        status = EXCLUDED.status
+                        status = EXCLUDED.status,
+                        replaces_source_id = EXCLUDED.replaces_source_id
                     WHERE sources.knowledge_base_id = EXCLUDED.knowledge_base_id
                     """),
                 {
@@ -77,6 +95,7 @@ class PgKnowledge:
                     "version": source.version,
                     "created_at": source.created_at,
                     "status": source.status,
+                    "replaces_source_id": source.replaces_source_id,
                 },
             )
         return source
@@ -85,7 +104,7 @@ class PgKnowledge:
         with self._engine.connect() as conn:
             row = conn.execute(
                 text("""
-                    SELECT id, title, type, uri, version, created_at, status
+                    SELECT id, title, type, uri, version, created_at, status, replaces_source_id
                     FROM sources
                     WHERE id = :id AND knowledge_base_id = :knowledge_base_id
                     """),
@@ -99,7 +118,7 @@ class PgKnowledge:
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text("""
-                    SELECT id, title, type, uri, version, created_at, status
+                    SELECT id, title, type, uri, version, created_at, status, replaces_source_id
                     FROM sources
                     WHERE knowledge_base_id = :knowledge_base_id
                     ORDER BY created_at
@@ -331,3 +350,41 @@ class PgKnowledge:
                 raw = json.loads(raw)
             result.append({"reason": row.reason, "raw": raw})
         return result
+
+    def append_event(self, event: Event) -> Event:
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO events (
+                        id, knowledge_base_id, type, participants, timestamp, source_id
+                    ) VALUES (
+                        :id, :knowledge_base_id, :type, CAST(:participants AS jsonb),
+                        :timestamp, :source_id
+                    )
+                    ON CONFLICT (id) DO NOTHING
+                    """),
+                {
+                    "id": event.id,
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "type": event.type,
+                    "participants": json.dumps(event.participants),
+                    "timestamp": event.timestamp,
+                    "source_id": event.source_id,
+                },
+            )
+        return event
+
+    def list_events(self, source_id: str | None = None) -> list[Event]:
+        sql = """
+            SELECT id, type, participants, timestamp, source_id
+            FROM events
+            WHERE knowledge_base_id = :knowledge_base_id
+        """
+        params: dict[str, Any] = {"knowledge_base_id": self._knowledge_base_id}
+        if source_id is not None:
+            sql += " AND source_id = :source_id"
+            params["source_id"] = source_id
+        sql += " ORDER BY timestamp"
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(sql), params).fetchall()
+        return [_row_to_event(row) for row in rows]

@@ -14,6 +14,7 @@ class Source:
     version: str
     created_at: datetime
     status: str
+    replaces_source_id: Optional[str] = None
 
 
 @dataclass

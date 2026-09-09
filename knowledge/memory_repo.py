@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from knowledge.models import Claim, Source
+from knowledge.models import Claim, Event, Source
 
 
 class InMemoryKnowledge:
@@ -10,6 +10,7 @@ class InMemoryKnowledge:
         self._claims: dict[str, Claim] = {}
         self._families: dict[str, list[str]] = {}
         self._quarantine: list[dict] = []
+        self._events: list[Event] = []
 
     def save_source(self, source: Source) -> Source:
         self._sources[source.id] = source
@@ -84,3 +85,12 @@ class InMemoryKnowledge:
 
     def list_quarantine(self) -> list[dict]:
         return list(self._quarantine)
+
+    def append_event(self, event: Event) -> Event:
+        self._events.append(event)
+        return event
+
+    def list_events(self, source_id: str | None = None) -> list[Event]:
+        if source_id is None:
+            return list(self._events)
+        return [event for event in self._events if event.source_id == source_id]

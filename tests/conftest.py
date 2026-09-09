@@ -58,6 +58,7 @@ def pg_engine():
     engine = get_engine(Settings(use_pg=True))
     run_sql_script(engine, ROOT / "infra" / "schema.sql")
     run_sql_script(engine, ROOT / "infra" / "migrations" / "002_knowledge_bases.sql")
+    run_sql_script(engine, ROOT / "infra" / "migrations" / "003_evolution.sql")
     yield engine
     reset_engine()
 

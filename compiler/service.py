@@ -44,7 +44,7 @@ class KnowledgeCompiler:
         self._extractor = extractor
         self._retrieval = retrieval
 
-    def ingest(self, source_id: str) -> CompileReport:
+    def ingest(self, source_id: str, staging: bool = False) -> CompileReport:
         text = self._knowledge.get_source_text(source_id)
         if text is None:
             return CompileReport(
@@ -83,6 +83,7 @@ class KnowledgeCompiler:
                 continue
 
             claim_id = str(uuid.uuid4())
+            claim_status = "staging" if staging else "active"
             claim = Claim(
                 id=claim_id,
                 family_id=_family_id(subject, extracted.predicate, object_type),
@@ -93,7 +94,7 @@ class KnowledgeCompiler:
                 subject_type=subject_type,
                 object_type=object_type,
                 confidence=extracted.confidence,
-                status="active",
+                status=claim_status,
                 valid_from=datetime.now(timezone.utc),
                 valid_to=None,
                 source_ids=[source_id],
@@ -116,7 +117,7 @@ class KnowledgeCompiler:
             )
             evidence_links += 1
 
-            if self._retrieval is not None:
+            if self._retrieval is not None and not staging:
                 self._retrieval.index_claim(claim)
 
         return CompileReport(

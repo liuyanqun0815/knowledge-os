@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS sources (
     uri TEXT NOT NULL,
     version TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL
+    status TEXT NOT NULL,
+    replaces_source_id TEXT REFERENCES sources (id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sources_kb ON sources (knowledge_base_id);
@@ -124,3 +125,15 @@ CREATE TABLE IF NOT EXISTS memory_semantics (
 );
 
 CREATE INDEX IF NOT EXISTS idx_memory_semantics_kb ON memory_semantics (knowledge_base_id);
+
+CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    knowledge_base_id TEXT NOT NULL REFERENCES knowledge_bases (id),
+    type TEXT NOT NULL,
+    participants JSONB NOT NULL DEFAULT '[]'::jsonb,
+    timestamp TIMESTAMPTZ NOT NULL,
+    source_id TEXT NOT NULL REFERENCES sources (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_kb ON events (knowledge_base_id);
+CREATE INDEX IF NOT EXISTS idx_events_source_id ON events (source_id);
