@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import replace
+from datetime import datetime, timezone
 from typing import Any
 
 from knowledge.models import Answer
@@ -8,6 +10,8 @@ from orchestrator.state import AskState, IngestState
 from retrieval.ports import RetrievalMode
 
 _GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关")
+_YEAR_PATTERN = re.compile(r"(20\d{2})年?")
+_TEMPORAL_WORDS = ("当时", "那时", "之前")
 
 
 def store_source_node(state: IngestState, deps: Any) -> dict:
@@ -44,11 +48,35 @@ def evolve_node(state: IngestState, deps: Any) -> dict:
         return {"error": "missing source ids for evolve", "evolve_report": None}
     diff = deps.evolution.diff_sources(old_id, new_id)
     evolve_report = deps.evolution.apply_diff(diff)
+    for claim_id in evolve_report.claims_activated:
+        claim = deps.knowledge.get_claim(claim_id)
+        if claim is not None:
+            deps.retrieval.index_claim(claim)
     return {"evolve_report": evolve_report}
 
 
 def recall_node(state: AskState, deps: Any) -> dict:
     deps.memory.recall(state["question"], state.get("session_id"))
+    return {}
+
+
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def parse_time_node(state: AskState, deps: Any) -> dict:
+    if state.get("as_of") is not None:
+        return {}
+    question = state["question"]
+    match = _YEAR_PATTERN.search(question)
+    if match:
+        year = int(match.group(1))
+        return {"as_of": datetime(year, 6, 30, tzinfo=timezone.utc)}
+    if any(word in question for word in _TEMPORAL_WORDS):
+        now = datetime.now(timezone.utc)
+        return {"as_of": datetime(now.year - 1, 6, 30, tzinfo=timezone.utc)}
     return {}
 
 
@@ -75,13 +103,34 @@ def route_mode_node(state: AskState, deps: Any) -> dict:
 def retrieve_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     mode = state.get("retrieval_mode") or RetrievalMode.HYBRID
-    hits = deps.retrieval.search(question, mode, {})
+    as_of = state.get("as_of")
+    filters: dict[str, Any] = {}
+    if as_of is not None:
+        filters["as_of"] = _ensure_utc(as_of)
+    hits = deps.retrieval.search(question, mode, filters)
     return {"hits": hits}
+
+
+def _resolve_claim_id_for_time(deps: Any, claim_id: str, as_of: datetime | None) -> str | None:
+    claim = deps.knowledge.get_claim(claim_id)
+    if claim is None:
+        return None
+    if as_of is None:
+        return claim_id if claim.status == "active" else None
+    temporal = deps.knowledge.as_of(_ensure_utc(as_of), claim.family_id)
+    return temporal.id if temporal is not None else None
 
 
 def explain_node(state: AskState, deps: Any) -> dict:
     hits = state.get("hits") or []
-    claim_ids = list(dict.fromkeys(hit.claim_id for hit in hits if hit.claim_id))
+    as_of = state.get("as_of")
+    claim_ids: list[str] = []
+    for hit in hits:
+        if not hit.claim_id:
+            continue
+        resolved = _resolve_claim_id_for_time(deps, hit.claim_id, as_of)
+        if resolved and resolved not in claim_ids:
+            claim_ids.append(resolved)
     return {"claim_ids": claim_ids}
 
 
@@ -94,6 +143,7 @@ def _retrieval_mode_value(mode: RetrievalMode | None) -> str:
 def answer_node(state: AskState, deps: Any) -> dict:
     claim_ids = state.get("claim_ids") or []
     retrieval_mode = state.get("retrieval_mode")
+    as_of = state.get("as_of")
     low_confidence_message = deps.domain.low_confidence_message()
 
     if not claim_ids:
@@ -104,6 +154,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                 evidence=[],
                 confidence=0.1,
                 retrieval_mode=_retrieval_mode_value(retrieval_mode),
+                as_of=as_of,
             )
         }
 
@@ -116,6 +167,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                 evidence=[],
                 confidence=bundle.confidence if bundle.confidence > 0 else 0.1,
                 retrieval_mode=_retrieval_mode_value(retrieval_mode),
+                as_of=as_of,
             )
         }
 
@@ -136,6 +188,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
             evidence=evidence,
             confidence=bundle.confidence,
             retrieval_mode=_retrieval_mode_value(retrieval_mode),
+            as_of=as_of,
         )
     }
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from datetime import datetime, timezone
 
 from graph.ports import GraphPort
 from knowledge.models import Claim
@@ -11,6 +12,23 @@ from retrieval.ports import Hit, RetrievalMode
 
 _TOP_K = 5
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
+
+
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _claim_valid_at(claim: Claim, as_of: datetime | None) -> bool:
+    if as_of is None:
+        return claim.status == "active"
+    query_time = _ensure_utc(as_of)
+    if claim.valid_from is not None and claim.valid_from > query_time:
+        return False
+    if claim.valid_to is not None and query_time >= claim.valid_to:
+        return False
+    return True
 
 
 def _tokenize(text: str) -> list[str]:
@@ -47,31 +65,32 @@ class HybridRetrieval:
 
     def search(self, query: str, mode: RetrievalMode, filters: dict) -> list[Hit]:
         top_k = int(filters.get("top_k", _TOP_K))
+        as_of = filters.get("as_of")
         if mode == RetrievalMode.CLAIM:
-            hits = self._search_claim(query)
+            hits = self._search_claim(query, as_of)
         elif mode == RetrievalMode.BM25:
-            hits = self._search_bm25(query)
+            hits = self._search_bm25(query, as_of)
         elif mode == RetrievalMode.GRAPH:
-            hits = self._search_graph(query)
+            hits = self._search_graph(query, as_of)
         elif mode == RetrievalMode.VECTOR:
-            hits = self._search_vector(query)
+            hits = self._search_vector(query, as_of)
         else:
             hits = self._merge_hits(
                 [
-                    self._search_claim(query),
-                    self._search_bm25(query),
-                    self._search_graph(query),
-                    self._search_vector(query),
+                    self._search_claim(query, as_of),
+                    self._search_bm25(query, as_of),
+                    self._search_graph(query, as_of),
+                    self._search_vector(query, as_of),
                 ]
             )
         hits.sort(key=lambda h: h.score, reverse=True)
         return hits[:top_k]
 
-    def _search_claim(self, query: str) -> list[Hit]:
+    def _search_claim(self, query: str, as_of: datetime | None = None) -> list[Hit]:
         hits: list[Hit] = []
         query_lower = query.lower()
         for claim in self._indexed_claims.values():
-            if claim.status != "active":
+            if not _claim_valid_at(claim, as_of):
                 continue
             text = f"{claim.subject} {claim.predicate} {claim.object}"
             score = 0.0
@@ -82,7 +101,7 @@ class HybridRetrieval:
                 hits.append(Hit(claim_id=claim.id, score=score, snippet=text))
         return hits
 
-    def _search_bm25(self, query: str) -> list[Hit]:
+    def _search_bm25(self, query: str, as_of: datetime | None = None) -> list[Hit]:
         query_tokens = set(_tokenize(query))
         if not query_tokens:
             return []
@@ -95,18 +114,18 @@ class HybridRetrieval:
                 continue
             score = overlap / len(query_tokens)
             snippet = self._snippet_for_overlap(text, query_tokens)
-            claim_id = self._claim_for_source(source_id)
+            claim_id = self._claim_for_source(source_id, as_of)
             hits.append(Hit(claim_id=claim_id, score=score, snippet=snippet))
         return hits
 
-    def _search_graph(self, query: str) -> list[Hit]:
+    def _search_graph(self, query: str, as_of: datetime | None = None) -> list[Hit]:
         hits: list[Hit] = []
         for entity_id, entity in self._graph.entities.items():
             name = entity.get("name", "")
             if not name or name not in query:
                 continue
             for edge in self._graph.neighbors(entity_id, depth=1):
-                claim_id = self._claim_for_subject_entity(edge.src, edge.predicate, edge.dst)
+                claim_id = self._claim_for_subject_entity(edge.src, edge.predicate, edge.dst, as_of)
                 snippet = f"{name} {edge.predicate}"
                 hits.append(
                     Hit(
@@ -118,14 +137,16 @@ class HybridRetrieval:
                 )
         return hits
 
-    def _search_vector(self, query: str) -> list[Hit]:
+    def _search_vector(self, query: str, as_of: datetime | None = None) -> list[Hit]:
         query_vec = _char_hash_vector(query)
         hits: list[Hit] = []
         for claim_id, claim_vec in self._claim_vectors.items():
+            claim = self._indexed_claims[claim_id]
+            if not _claim_valid_at(claim, as_of):
+                continue
             score = _cosine(query_vec, claim_vec)
             if score <= 0:
                 continue
-            claim = self._indexed_claims[claim_id]
             snippet = f"{claim.subject} {claim.predicate} {claim.object}"
             hits.append(Hit(claim_id=claim_id, score=score, snippet=snippet))
         return hits
@@ -164,18 +185,27 @@ class HybridRetrieval:
                 return text[start:end]
         return text[:40]
 
-    def _claim_for_source(self, source_id: str) -> str | None:
+    def _claim_for_source(self, source_id: str, as_of: datetime | None = None) -> str | None:
         for claim in self._indexed_claims.values():
-            if source_id in claim.source_ids:
+            if source_id not in claim.source_ids:
+                continue
+            if _claim_valid_at(claim, as_of):
                 return claim.id
         return None
 
-    def _claim_for_subject_entity(self, src: str, predicate: str, dst: str) -> str | None:
+    def _claim_for_subject_entity(
+        self,
+        src: str,
+        predicate: str,
+        dst: str,
+        as_of: datetime | None = None,
+    ) -> str | None:
         src_name = self._graph.entities.get(src, {}).get("name")
         dst_name = self._graph.entities.get(dst, {}).get("name")
         for claim in self._indexed_claims.values():
             if claim.predicate != predicate:
                 continue
             if claim.subject == src_name and claim.object == dst_name:
-                return claim.id
+                if _claim_valid_at(claim, as_of):
+                    return claim.id
         return None

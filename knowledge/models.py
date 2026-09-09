@@ -58,3 +58,4 @@ class Answer:
     evidence: list[dict[str, Any]]
     confidence: float
     retrieval_mode: str
+    as_of: datetime | None = None

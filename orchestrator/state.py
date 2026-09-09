@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import NotRequired, TypedDict
 
 from compiler.ports import CompileReport
@@ -19,6 +20,7 @@ class IngestState(TypedDict):
 class AskState(TypedDict):
     question: str
     session_id: str | None
+    as_of: datetime | None
     normalized_question: str | None
     retrieval_mode: RetrievalMode | None
     hits: list[Hit]
