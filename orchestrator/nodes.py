@@ -13,6 +13,7 @@ from orchestrator.state import AskState, IngestState
 from retrieval.ports import Hit, RetrievalMode
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
+_PROCEDURE_KEYWORDS = ("怎么做", "流程", "步骤", "怎么走")
 
 
 def store_source_node(state: IngestState, deps: Any) -> dict:
@@ -162,7 +163,10 @@ def normalize_node(state: AskState, deps: Any) -> dict:
 def route_mode_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     mode = retriever_agent.route_mode(question)
-    return {"retrieval_mode": mode}
+    procedure = None
+    if any(keyword in question for keyword in _PROCEDURE_KEYWORDS):
+        procedure = deps.memory.get_procedure(question)
+    return {"retrieval_mode": mode, "procedure": procedure}
 
 
 def retrieve_node(state: AskState, deps: Any) -> dict:
@@ -235,14 +239,74 @@ def _retrieval_mode_value(mode: RetrievalMode | None) -> str:
     return mode.value if isinstance(mode, RetrievalMode) else str(mode)
 
 
+def _format_procedure_steps(procedure: Any) -> str:
+    lines = [f"流程：{procedure.name}"]
+    for step in sorted(procedure.steps, key=lambda item: item.order):
+        lines.append(f"{step.order}. {step.description}")
+    return "\n".join(lines)
+
+
+def _procedure_claim_ids(procedure: Any) -> list[str]:
+    claim_ids: list[str] = []
+    for step in procedure.steps:
+        for claim_id in step.claim_refs:
+            if claim_id not in claim_ids:
+                claim_ids.append(claim_id)
+    return claim_ids
+
+
 def answer_node(state: AskState, deps: Any) -> dict:
     claim_ids = state.get("claim_ids") or []
     retrieval_mode = state.get("retrieval_mode")
     as_of = state.get("as_of")
     verification = state.get("verification")
+    procedure = state.get("procedure")
     low_confidence_message = deps.domain.low_confidence_message()
     verification_status = verification.verification_status if verification else "verified"
     competing_claim_ids = list(verification.competing_claim_ids) if verification else []
+    procedure_id = procedure.id if procedure else None
+
+    if procedure is not None:
+        procedure_claim_ids = _procedure_claim_ids(procedure)
+        merged_claim_ids = list(claim_ids)
+        for claim_id in procedure_claim_ids:
+            if claim_id not in merged_claim_ids:
+                merged_claim_ids.append(claim_id)
+
+        answer_parts = [_format_procedure_steps(procedure)]
+        claim_texts = []
+        for claim_id in merged_claim_ids:
+            claim = deps.knowledge.get_claim(claim_id)
+            if claim is not None:
+                claim_texts.append(deps.domain.format_claim(claim))
+        if claim_texts:
+            answer_parts.append("。".join(claim_texts))
+
+        evidence = []
+        confidence = 0.8
+        if merged_claim_ids:
+            bundle = deps.evidence.explain(merged_claim_ids)
+            evidence = [
+                {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]}
+                for item in bundle.items
+            ]
+            confidence = verification.adjusted_confidence if verification else bundle.confidence
+            if confidence < 0.4:
+                confidence = 0.8
+
+        return {
+            "answer": Answer(
+                text="\n".join(answer_parts),
+                claim_ids=merged_claim_ids,
+                evidence=evidence,
+                confidence=confidence,
+                retrieval_mode=_retrieval_mode_value(retrieval_mode),
+                verification_status=verification_status,
+                competing_claim_ids=competing_claim_ids,
+                as_of=as_of,
+                procedure_id=procedure_id,
+            )
+        }
 
     if not claim_ids:
         return {
@@ -255,6 +319,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                 verification_status=verification_status,
                 competing_claim_ids=competing_claim_ids,
                 as_of=as_of,
+                procedure_id=procedure_id,
             )
         }
 
@@ -271,6 +336,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                 verification_status=verification_status,
                 competing_claim_ids=competing_claim_ids,
                 as_of=as_of,
+                procedure_id=procedure_id,
             )
         }
 
@@ -294,6 +360,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
             verification_status=verification_status,
             competing_claim_ids=competing_claim_ids,
             as_of=as_of,
+            procedure_id=procedure_id,
         )
     }
 

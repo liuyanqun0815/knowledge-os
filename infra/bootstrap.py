@@ -140,6 +140,10 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     evolution = EvolutionService(knowledge)
     verification = VerificationService()
     files = LocalFileStore()
+    if kb.domain_type == "ecommerce_cs":
+        from domains.ecommerce_cs.procedures import seed_ecommerce_procedures
+
+        seed_ecommerce_procedures(memory)
     return OrchestratorDeps(
         files=files,
         knowledge=knowledge,

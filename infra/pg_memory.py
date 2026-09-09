@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from memory.models import Procedure, Step
 from memory.ports import RecallContext
 
 
@@ -103,3 +104,86 @@ class PgMemory:
                     value = json.loads(value)
                 semantics.append({"key": row.key, **dict(value)})
         return semantics
+
+    def remember_procedure(self, procedure: Procedure) -> None:
+        steps_payload = [
+            {
+                "order": step.order,
+                "description": step.description,
+                "claim_refs": step.claim_refs,
+            }
+            for step in procedure.steps
+        ]
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO procedures (
+                        id, knowledge_base_id, name, steps, ontology_refs, domain
+                    )
+                    VALUES (
+                        :id, :knowledge_base_id, :name,
+                        CAST(:steps AS jsonb), CAST(:ontology_refs AS jsonb), :domain
+                    )
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        steps = EXCLUDED.steps,
+                        ontology_refs = EXCLUDED.ontology_refs,
+                        domain = EXCLUDED.domain
+                    """),
+                {
+                    "id": procedure.id,
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "name": procedure.name,
+                    "steps": json.dumps(steps_payload),
+                    "ontology_refs": json.dumps(procedure.ontology_refs),
+                    "domain": procedure.domain,
+                },
+            )
+
+    def get_procedure(self, name: str) -> Procedure | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT id, name, steps, ontology_refs, domain
+                    FROM procedures
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND (
+                        name = :name
+                        OR :name ILIKE '%' || name || '%'
+                        OR name ILIKE '%' || :name || '%'
+                      )
+                    ORDER BY length(name) DESC
+                    LIMIT 1
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "name": name,
+                },
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_procedure(row)
+
+    @staticmethod
+    def _row_to_procedure(row: Any) -> Procedure:
+        steps_data = row.steps
+        if isinstance(steps_data, str):
+            steps_data = json.loads(steps_data)
+        ontology_refs = row.ontology_refs
+        if isinstance(ontology_refs, str):
+            ontology_refs = json.loads(ontology_refs)
+        steps = [
+            Step(
+                order=int(item["order"]),
+                description=str(item["description"]),
+                claim_refs=list(item.get("claim_refs") or []),
+            )
+            for item in steps_data
+        ]
+        return Procedure(
+            id=row.id,
+            name=row.name,
+            steps=steps,
+            ontology_refs=list(ontology_refs),
+            domain=row.domain,
+        )

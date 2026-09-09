@@ -1,3 +1,4 @@
+from memory.models import Procedure
 from memory.ports import RecallContext
 
 
@@ -5,6 +6,7 @@ class InMemoryMemoryStore:
     def __init__(self, max_episodes: int = 10) -> None:
         self._episodes: dict[str, list[dict]] = {}
         self._semantics: dict[str, dict] = {}
+        self._procedures: dict[str, Procedure] = {}
         self._max_episodes = max_episodes
 
     def remember_episode(self, session_id: str, episode: dict) -> None:
@@ -30,3 +32,14 @@ class InMemoryMemoryStore:
                 semantics.append({"key": key, **value})
 
         return RecallContext(episodes=episodes, semantics=semantics)
+
+    def remember_procedure(self, procedure: Procedure) -> None:
+        self._procedures[procedure.name] = procedure
+
+    def get_procedure(self, name: str) -> Procedure | None:
+        if name in self._procedures:
+            return self._procedures[name]
+        for procedure_name, procedure in self._procedures.items():
+            if procedure_name in name or name in procedure_name:
+                return procedure
+        return None

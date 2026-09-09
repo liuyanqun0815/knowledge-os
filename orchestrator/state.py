@@ -5,6 +5,7 @@ import operator
 from compiler.ports import CompileReport
 from evolution.ports import ApplyReport
 from knowledge.models import Answer
+from memory.models import Procedure
 from retrieval.ports import Hit, RetrievalMode
 from verification.ports import VerificationResult
 
@@ -31,3 +32,4 @@ class AskState(TypedDict):
     verification: VerificationResult | None
     trace: Annotated[list[dict], operator.add]
     answer: Answer | None
+    procedure: Procedure | None
