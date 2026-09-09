@@ -8,6 +8,15 @@ from knowledge.ports import KnowledgePort
 from infra.upload_utils import directory_from_relative, fuzzy_match, relative_path_from_kb_root
 
 
+def _enrichment_status(source_status: str) -> str | None:
+    return {
+        "enriching": "running",
+        "succeeded": "done",
+        "succeeded_partial": "done",
+        "failed": "failed",
+    }.get(source_status)
+
+
 def build_source_response(source: Source, knowledge: KnowledgePort, kb_dir: Path) -> dict:
     relative_path = ""
     directory = "/"
@@ -32,6 +41,7 @@ def build_source_response(source: Source, knowledge: KnowledgePort, kb_dir: Path
         "relative_path": relative_path,
         "directory": directory,
         "claims_count": claims_count,
+        "enrichment_status": _enrichment_status(source.status),
     }
 
 

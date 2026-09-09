@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
 
 from admin_api.schemas import (
     ClaimListItemResponse,
@@ -14,6 +14,7 @@ from admin_api.schemas import (
 from admin_api.source_helpers import build_source_response, filter_sources_by_query
 from app.admin_auth import require_admin_token
 from app.deps import build_orchestrator_for_request, get_kb_repo
+from compiler.enrichment import enrich_source
 from infra.upload_utils import ALLOWED_UPLOAD_SUFFIXES, extract_zip_documents
 from knowledge.errors import DomainError
 
@@ -84,9 +85,32 @@ def _ingest_saved_file(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _schedule_enrichment(
+    kb_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    source_ids: list[str],
+) -> None:
+    orchestrator = build_orchestrator_for_request(kb_id, request)
+    deps = orchestrator.deps
+    settings = request.app.state.settings
+    llm_enabled = settings.extract_llm and deps.llm_client.is_configured
+    for source_id in source_ids:
+        if llm_enabled:
+            deps.knowledge.update_source_status(source_id, "enriching")
+        background_tasks.add_task(
+            enrich_source,
+            kb_id=kb_id,
+            source_id=source_id,
+            deps=deps,
+            settings=settings,
+        )
+
+
 def _upload_zip_bytes(
     kb_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     kb_dir: Path,
     zip_bytes: bytes,
     source_type: str,
@@ -102,6 +126,7 @@ def _upload_zip_bytes(
         except HTTPException as exc:
             ingest_errors.append(f"{dest.name}: {exc.detail}")
 
+    _schedule_enrichment(kb_id, request, background_tasks, [item.source_id for item in results])
     skipped = len(extracted) - len(results) + len(extract_errors)
     return SourceUploadResponse(
         upload_mode="zip",
@@ -116,12 +141,14 @@ def _upload_zip_bytes(
 def _upload_single_file(
     kb_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     kb_dir: Path,
     dest: Path,
     source_type: str,
     replaces_source_id: str | None = None,
 ) -> SourceUploadResponse:
     report = _ingest_saved_file(kb_id, request, dest, source_type, replaces_source_id)
+    _schedule_enrichment(kb_id, request, background_tasks, [report.source_id])
     item = _item_from_dest(kb_dir, dest, report)
     return SourceUploadResponse(
         upload_mode="single",
@@ -137,6 +164,7 @@ def _upload_single_file(
 async def upload_source(
     kb_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     _: None = Depends(_resolve_active_kb),
     file: UploadFile = File(...),
     source_type: str = Form("policy"),
@@ -153,7 +181,7 @@ async def upload_source(
     if filename.lower().endswith(".zip"):
         if replaces_source_id:
             raise HTTPException(status_code=400, detail="replaces_source_id is not supported for zip upload")
-        return _upload_zip_bytes(kb_id, request, kb_dir, content, source_type)
+        return _upload_zip_bytes(kb_id, request, background_tasks, kb_dir, content, source_type)
 
     suffix = Path(filename).suffix.lower()
     if suffix not in ALLOWED_UPLOAD_SUFFIXES:
@@ -165,13 +193,22 @@ async def upload_source(
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"failed to save upload: {exc}") from exc
 
-    return _upload_single_file(kb_id, request, kb_dir, dest, source_type, replaces_source_id)
+    return _upload_single_file(
+        kb_id,
+        request,
+        background_tasks,
+        kb_dir,
+        dest,
+        source_type,
+        replaces_source_id,
+    )
 
 
 @router.post("/{kb_id}/sources/upload-zip", response_model=ZipUploadResponse, deprecated=True)
 async def upload_zip(
     kb_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     _: None = Depends(_resolve_active_kb),
     file: UploadFile = File(...),
     source_type: str = Form("policy"),
@@ -182,7 +219,7 @@ async def upload_zip(
 
     kb_dir = _kb_dir(kb_id, request)
     zip_bytes = await file.read()
-    return _upload_zip_bytes(kb_id, request, kb_dir, zip_bytes, source_type)
+    return _upload_zip_bytes(kb_id, request, background_tasks, kb_dir, zip_bytes, source_type)
 
 
 @router.get("/{kb_id}/sources", response_model=list[SourceResponse])

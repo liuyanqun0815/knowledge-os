@@ -55,6 +55,7 @@ class SourceResponse(BaseModel):
     relative_path: str = ""
     directory: str = "/"
     claims_count: int = 0
+    enrichment_status: str | None = None
 
 
 class UploadSourceResponse(BaseModel):
