@@ -70,6 +70,36 @@ cp .env.example .env
 | `AKOS_LLM_MODEL` | LLM 模型名 | `gpt-4o-mini` |
 | `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
 
+## Phase 2.3 验收
+
+Phase 2.3 聚焦可信问答：Verification Agent span 校验、竞争 Claim 冲突检测、AnswerV2 字段与 LangGraph trace 调试。
+
+```bash
+# 全量单元测试（默认 InMemory，排除 web）
+pytest -v --ignore=web
+
+# verification 核心规则（span 匹配 / 冲突 / confidence）
+pytest -v tests/test_verification_service.py
+
+# ask 流水线 verify 节点
+pytest -v tests/test_verify_ask.py
+
+# ingest verify_sample 高风险谓词 quarantine
+pytest -v tests/test_ingest_verify_sample.py
+
+# LangGraph trace + POST /ask AnswerV2 字段
+pytest -v tests/test_ask_trace.py
+
+# Phase 2.3 §7.5 E2E 验收（unverified / conflict / trace）
+pytest -v tests/test_verification_e2e.py
+```
+
+验收清单（spec §7.5）：
+
+- 手工注入 span 与原文不符的 Claim → `ask` 返回 `verification_status=unverified`，或 ingest `verify_sample` 将高风险 Claim quarantine
+- 同 family 两条 active Claim → `verification_status=conflict` 且 `competing_claim_ids` 列出竞争 Claim
+- `POST /ask?include_trace=true` 返回 trace JSON，含 `retrieve`、`verify` 等节点名
+
 ## Phase 2.2 验收
 
 Phase 2.2 聚焦知识演化：政策 V2 替换 V1 时自动 Diff → supersede；问答支持 `as_of` 时序查询与 Claim 版本历史。
