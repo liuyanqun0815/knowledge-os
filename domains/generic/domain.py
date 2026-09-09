@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from compiler.extraction_spec import LlmExtractionSpec
 from compiler.rule_extractor import RuleExtractor
 from knowledge.models import Claim
 from ontology.ports import OntologyPort
@@ -36,3 +37,9 @@ class GenericDomain:
 
     def high_risk_predicates(self) -> list[str]:
         return []
+
+    def llm_extraction_spec(self) -> LlmExtractionSpec:
+        return LlmExtractionSpec(
+            allowed_predicates=["规定", "适用于", "禁止", "要求"],
+            entity_types=["Concept", "Policy"],
+        )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from compiler.extraction_spec import LlmExtractionSpec
 from compiler.rule_extractor import RuleExtractor
 from domains.generic.domain import register_generic_ontology
 from knowledge.models import Claim
@@ -26,3 +27,9 @@ class LoanFinanceDomain:
 
     def high_risk_predicates(self) -> list[str]:
         return []
+
+    def llm_extraction_spec(self) -> LlmExtractionSpec:
+        return LlmExtractionSpec(
+            allowed_predicates=[],
+            entity_types=[],
+        )

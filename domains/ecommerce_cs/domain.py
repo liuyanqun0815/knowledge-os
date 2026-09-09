@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from compiler.extraction_spec import LlmExtractionSpec
 from compiler.rule_extractor import RuleExtractor
 from domains.ecommerce_cs.formatter import format_ecommerce_claim
 from domains.ecommerce_cs.seed import register_ecommerce_cs
@@ -27,3 +28,9 @@ class EcommerceCsDomain:
 
     def high_risk_predicates(self) -> list[str]:
         return ["运费承担方", "退货时限_天"]
+
+    def llm_extraction_spec(self) -> LlmExtractionSpec:
+        return LlmExtractionSpec(
+            allowed_predicates=[],
+            entity_types=[],
+        )

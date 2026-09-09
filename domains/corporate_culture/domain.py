@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from compiler.extraction_spec import LlmExtractionSpec
 from compiler.llm_extractor import create_corporate_extractor
 from compiler.ports import ExtractorPort
 from domains.corporate_culture.formatter import format_corporate_claim
@@ -28,3 +29,9 @@ class CorporateCultureDomain:
 
     def high_risk_predicates(self) -> list[str]:
         return []
+
+    def llm_extraction_spec(self) -> LlmExtractionSpec:
+        return LlmExtractionSpec(
+            allowed_predicates=[],
+            entity_types=[],
+        )

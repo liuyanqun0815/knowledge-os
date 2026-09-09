@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
+    extract_rules: bool = True
+    extract_llm: bool = True
+    chunk_max_chars: int = 3000
+    chunk_max_per_doc: int = 40
+    extract_min_confidence: float = 0.5
 
 
 @lru_cache

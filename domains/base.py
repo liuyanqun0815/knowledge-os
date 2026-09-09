@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from compiler.extraction_spec import LlmExtractionSpec
 from compiler.ports import ExtractorPort
 from knowledge.models import Claim
 from ontology.ports import OntologyPort
@@ -22,3 +23,5 @@ class DomainPort(Protocol):
     def low_confidence_message(self) -> str: ...
 
     def high_risk_predicates(self) -> list[str]: ...
+
+    def llm_extraction_spec(self) -> LlmExtractionSpec: ...
