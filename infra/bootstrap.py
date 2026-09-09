@@ -12,6 +12,7 @@ from evidence.ports import EvidencePort
 from graph.memory_repo import InMemoryGraph
 from graph.ports import GraphPort
 from infra.files import LocalFileStore
+from infra.llm import OpenAiCompatibleClient
 from infra.pg_repos import PgKnowledge
 from infra.settings import Settings
 from knowledge.errors import DomainError
@@ -37,6 +38,7 @@ class OrchestratorDeps:
     graph: GraphPort
     evidence: EvidencePort
     compiler: KnowledgeCompiler
+    llm_client: OpenAiCompatibleClient
     retrieval: HybridRetrieval
     memory: MemoryPort
     domain: DomainPort
@@ -137,6 +139,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     knowledge, graph, evidence, memory = _build_repos(knowledge_base_id, settings)
     retrieval = HybridRetrieval(knowledge, graph)
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
+    llm_client = OpenAiCompatibleClient(settings)
     evolution = EvolutionService(knowledge)
     verification = VerificationService()
     files = LocalFileStore(settings.data_root)
@@ -151,6 +154,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         graph=graph,
         evidence=evidence,
         compiler=compiler,
+        llm_client=llm_client,
         retrieval=retrieval,
         memory=memory,
         domain=domain,

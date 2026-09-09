@@ -135,6 +135,23 @@ class PgKnowledge:
             ).fetchall()
         return [_row_to_source(row) for row in rows]
 
+    def update_source_status(self, source_id: str, status: str) -> None:
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                text("""
+                    UPDATE sources
+                    SET status = :status
+                    WHERE id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {
+                    "source_id": source_id,
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "status": status,
+                },
+            )
+        if result.rowcount == 0:
+            raise DomainError(f"source_not_found: {source_id}")
+
     def save_source_text(self, source_id: str, text_content: str) -> None:
         with self._engine.begin() as conn:
             conn.execute(

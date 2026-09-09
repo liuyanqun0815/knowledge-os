@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+from typing import Any
+
+from compiler.chunker import chunk_text
+from compiler.domain_llm_extractor import DomainLlmExtractor
+from compiler.ports import ExtractedClaim
+from infra.settings import Settings
+
+
+def enrich_source(
+    *,
+    kb_id: str,
+    source_id: str,
+    deps: Any,
+    settings: Settings,
+) -> None:
+    """Backfill one source with claims extracted by the configured LLM."""
+    client = getattr(deps, "llm_client", None)
+    if not settings.extract_llm or client is None or not client.is_configured:
+        deps.knowledge.update_source_status(source_id, "succeeded")
+        return
+
+    deps.knowledge.update_source_status(source_id, "enriching")
+    try:
+        text = deps.knowledge.get_source_text(source_id)
+        if text is None:
+            raise RuntimeError(f"source text not found: {source_id}")
+
+        result = chunk_text(
+            text,
+            max_chars=settings.chunk_max_chars,
+            max_chunks=settings.chunk_max_per_doc,
+        )
+        extractor = DomainLlmExtractor(client, deps.domain.llm_extraction_spec())
+        extracted: list[ExtractedClaim] = []
+        failed_chunks = 0
+
+        for chunk in result.chunks:
+            for attempt in range(2):
+                try:
+                    extracted.extend(extractor.extract(chunk))
+                    break
+                except Exception:
+                    if attempt == 1:
+                        failed_chunks += 1
+
+        deps.compiler.apply_extracted_claims(
+            source_id,
+            extracted,
+            min_confidence=settings.extract_min_confidence,
+        )
+        failure_ratio = failed_chunks / len(result.chunks) if result.chunks else 0.0
+        final_status = "succeeded_partial" if result.truncated or failure_ratio >= 0.5 else "succeeded"
+        deps.knowledge.update_source_status(source_id, final_status)
+    except Exception:
+        deps.knowledge.update_source_status(source_id, "failed")
+        raise

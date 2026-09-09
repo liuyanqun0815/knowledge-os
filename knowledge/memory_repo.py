@@ -31,6 +31,12 @@ class InMemoryKnowledge:
     def list_sources(self) -> list[Source]:
         return list(self._sources.values())
 
+    def update_source_status(self, source_id: str, status: str) -> None:
+        source = self._sources.get(source_id)
+        if source is None:
+            raise DomainError(f"source_not_found: {source_id}")
+        source.status = status
+
     def save_source_text(self, source_id: str, text: str) -> None:
         self._source_texts[source_id] = text
 
