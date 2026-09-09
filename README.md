@@ -36,9 +36,9 @@ uvicorn app.main:app --reload
 
 ## 管理台 Web UI
 
-React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`。
+React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`。覆盖 F0–F4：知识库与文档管理、Claim 浏览、隔离审批、AnswerV2 问答（含 `as_of` / 轨迹）及文档演化上传。
 
-**Implementation plan:** [`docs/superpowers/plans/2026-09-08-akos-admin-web.md`](docs/superpowers/plans/2026-09-08-akos-admin-web.md)
+**Implementation plan:** [`docs/superpowers/plans/2026-09-08-akos-admin-web.md`](docs/superpowers/plans/2026-09-08-akos-admin-web.md) · F4+ [`2026-09-09-akos-admin-web-f4-plus.md`](docs/superpowers/plans/2026-09-09-akos-admin-web-f4-plus.md)
 
 ```bash
 # 终端 A — 后端

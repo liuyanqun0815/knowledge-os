@@ -16,6 +16,8 @@ export function SourcesPage() {
   const { kbId } = useKb();
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [replacesSourceId, setReplacesSourceId] = useState("");
+  const [uploadSummary, setUploadSummary] = useState<{ claims_created: number; quarantined: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +51,8 @@ export function SourcesPage() {
     requestSequence.current += 1;
     setSources([]);
     setSelectedFile(null);
+    setReplacesSourceId("");
+    setUploadSummary(null);
     setError(null);
     if (!kbId) {
       setIsLoading(false);
@@ -78,6 +82,7 @@ export function SourcesPage() {
   function selectFile(file: File | undefined) {
     if (file) {
       setSelectedFile(file);
+      setUploadSummary(null);
       setError(null);
     }
   }
@@ -99,9 +104,14 @@ export function SourcesPage() {
 
     setIsUploading(true);
     setError(null);
+    setUploadSummary(null);
+    const trimmedReplacesId = replacesSourceId.trim();
+    const uploadOptions = trimmedReplacesId ? { replacesSourceId: trimmedReplacesId } : {};
     try {
-      await uploadSource(kbId, selectedFile);
+      const result = await uploadSource(kbId, selectedFile, uploadOptions);
       setSelectedFile(null);
+      setReplacesSourceId("");
+      setUploadSummary({ claims_created: result.claims_created, quarantined: result.quarantined });
       await loadSources();
     } catch {
       setError("文档上传失败，请稍后重试。");
@@ -124,8 +134,13 @@ export function SourcesPage() {
       </div>
 
       {error ? <ErrorBanner message={error} /> : null}
+      {uploadSummary ? (
+        <p className="success-banner" role="status">
+          上传成功：新建 Claim {uploadSummary.claims_created} 条，隔离 {uploadSummary.quarantined} 条。
+        </p>
+      ) : null}
 
-      <form onSubmit={handleUpload}>
+      <form className="form-card" onSubmit={handleUpload}>
         <div
           className="upload-drop-zone"
           data-testid="source-drop-zone"
@@ -137,6 +152,15 @@ export function SourcesPage() {
           <p>可点击选择或将文件拖放到此处。</p>
           {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
         </div>
+        <label htmlFor="replaces-source-id">替换文档 ID (replaces_source_id)</label>
+        <input
+          id="replaces-source-id"
+          type="text"
+          value={replacesSourceId}
+          onChange={(event) => setReplacesSourceId(event.target.value)}
+          placeholder="可选：填写被替换的 source_id 以触发文档演化"
+          disabled={isUploading}
+        />
         <button className="button button-primary" type="submit" disabled={!selectedFile || isUploading}>
           {isUploading ? "上传中…" : "上传文档"}
         </button>

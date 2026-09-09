@@ -100,9 +100,35 @@ describe("sources page", () => {
     await user.click(screen.getByRole("button", { name: "上传文档" }));
 
     await waitFor(() => {
-      expect(uploadSource).toHaveBeenCalledWith("kb-1", file);
+      expect(uploadSource).toHaveBeenCalledWith("kb-1", file, {});
     });
     expect(listSources).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes replaces_source_id when provided and shows upload summary", async () => {
+    uploadSource.mockResolvedValue({
+      source_id: "source-3",
+      path: "uploads/evolved.md",
+      claims_created: 5,
+      entities_upserted: 2,
+      evidence_links: 4,
+      quarantined: 1,
+      errors: [],
+    });
+    const user = userEvent.setup();
+    render(<SourcesPage />);
+    await screen.findByText("guide.md");
+    const file = new File(["# Evolved"], "evolved.md", { type: "text/markdown" });
+
+    await user.upload(screen.getByLabelText("选择文档"), file);
+    await user.type(screen.getByLabelText(/替换文档 ID/), "source-1");
+    await user.click(screen.getByRole("button", { name: "上传文档" }));
+
+    await waitFor(() => {
+      expect(uploadSource).toHaveBeenCalledWith("kb-1", file, { replacesSourceId: "source-1" });
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("新建 Claim 5 条");
+    expect(screen.getByRole("status")).toHaveTextContent("隔离 1 条");
   });
 
   it("accepts a dropped file and reports upload failures", async () => {
