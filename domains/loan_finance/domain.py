@@ -30,6 +30,6 @@ class LoanFinanceDomain:
 
     def llm_extraction_spec(self) -> LlmExtractionSpec:
         return LlmExtractionSpec(
-            allowed_predicates=[],
-            entity_types=[],
+            allowed_predicates=["适用客户", "利率_年化", "最高额度"],
+            entity_types=["Product", "RateRule", "RiskLevel"],
         )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from compiler.extraction_spec import LlmExtractionSpec
 from compiler.rule_extractor import RuleExtractor
 from domains.ecommerce_cs.formatter import format_ecommerce_claim
-from domains.ecommerce_cs.seed import register_ecommerce_cs
+from domains.ecommerce_cs.seed import ENTITY_SEEDS, PREDICATES, register_ecommerce_cs
 from knowledge.models import Claim
 from ontology.ports import OntologyPort
 
@@ -30,7 +30,11 @@ class EcommerceCsDomain:
         return ["运费承担方", "退货时限_天"]
 
     def llm_extraction_spec(self) -> LlmExtractionSpec:
+        predicates = sorted({predicate for _, predicate, _ in PREDICATES})
+        entity_types = sorted(
+            set(ENTITY_SEEDS.values()) | {subject for subject, _, _ in PREDICATES} | {obj for _, _, obj in PREDICATES}
+        )
         return LlmExtractionSpec(
-            allowed_predicates=[],
-            entity_types=[],
+            allowed_predicates=predicates,
+            entity_types=entity_types,
         )
