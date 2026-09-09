@@ -31,7 +31,7 @@ akos = "cli.main:app"
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
-  "app*", "cli*", "compiler*", "domains*", "evidence*", "evolution*", "graph*",
+  "agents*", "app*", "cli*", "compiler*", "domains*", "evidence*", "evolution*", "graph*",
   "verification*",
   "infra*", "knowledge*", "knowledge_base*", "memory*", "ontology*",
   "orchestrator*", "retrieval*",

@@ -23,6 +23,7 @@ from memory.ports import MemoryPort
 from ontology.registry import InMemoryOntology
 from orchestrator.service import LangGraphOrchestrator
 from retrieval.hybrid import HybridRetrieval
+from verification.service import VerificationService
 
 DEFAULT_IN_MEMORY_KB_ID = "default"
 LEGACY_PG_KB_ID = "legacy"
@@ -40,6 +41,7 @@ class OrchestratorDeps:
     memory: MemoryPort
     domain: DomainPort
     evolution: EvolutionService
+    verification: VerificationService
     knowledge_base_id: str
 
 
@@ -114,6 +116,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     retrieval = HybridRetrieval(knowledge, graph)
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
     evolution = EvolutionService(knowledge)
+    verification = VerificationService()
     files = LocalFileStore()
     return OrchestratorDeps(
         files=files,
@@ -126,6 +129,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         memory=memory,
         domain=domain,
         evolution=evolution,
+        verification=verification,
         knowledge_base_id=knowledge_base_id,
     )
 

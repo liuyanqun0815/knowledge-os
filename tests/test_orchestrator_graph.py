@@ -13,7 +13,12 @@ def test_ask_graph_routes_low_confidence(build_orchestrator_deps):
     deps = build_orchestrator_deps()
     graph = build_ask_graph(deps)
     result: AskState = graph.invoke(
-        {"question": "今天天气怎么样？", "session_id": "s1", "as_of": None}
+        {
+            "question": "今天天气怎么样？",
+            "session_id": "s1",
+            "as_of": None,
+            "trace": [],
+        }
     )
     assert result["answer"] is not None
     assert result["answer"].confidence < 0.4
