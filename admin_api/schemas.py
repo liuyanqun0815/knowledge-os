@@ -114,3 +114,63 @@ class ClaimHistoryItemResponse(BaseModel):
             valid_to=claim.valid_to,
             source_ids=list(claim.source_ids),
         )
+
+
+class ClaimListItemResponse(ClaimHistoryItemResponse):
+    subject_type: str
+    object_type: str
+    confidence: float
+
+    @classmethod
+    def from_claim(cls, claim: Claim) -> ClaimListItemResponse:
+        return cls(
+            id=claim.id,
+            family_id=claim.family_id,
+            version=claim.version,
+            subject=claim.subject,
+            predicate=claim.predicate,
+            object=claim.object,
+            status=claim.status,
+            valid_from=claim.valid_from,
+            valid_to=claim.valid_to,
+            source_ids=list(claim.source_ids),
+            subject_type=claim.subject_type,
+            object_type=claim.object_type,
+            confidence=claim.confidence,
+        )
+
+
+class QuarantineItemResponse(BaseModel):
+    id: int
+    reason: str
+    raw: dict
+
+
+class ApproveQuarantineResponse(BaseModel):
+    claim: ClaimListItemResponse
+
+
+class DebugAskRequest(BaseModel):
+    question: str
+    session_id: str | None = None
+    as_of: datetime | None = None
+
+
+class DebugAskResponse(BaseModel):
+    text: str
+    claim_ids: list[str]
+    evidence: list[dict]
+    confidence: float
+    retrieval_mode: str
+    verification_status: str = "verified"
+    competing_claim_ids: list[str] = Field(default_factory=list)
+    procedure_id: str | None = None
+    as_of: datetime | None = None
+    trace: list[dict] = Field(default_factory=list)
+
+
+class GraphNeighborResponse(BaseModel):
+    src: str
+    predicate: str
+    dst: str
+    props: dict = Field(default_factory=dict)

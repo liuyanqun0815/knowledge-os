@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import hashlib
 import json
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from knowledge.errors import DomainError
 from knowledge.models import Claim, Event, Source
+
+
+def _family_id(subject: str, predicate: str, object_type: str) -> str:
+    raw = f"{subject}|{predicate}|{object_type}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def _row_to_source(row: Any) -> Source:
@@ -336,7 +344,7 @@ class PgKnowledge:
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text("""
-                    SELECT reason, raw
+                    SELECT id, reason, raw
                     FROM quarantine
                     WHERE knowledge_base_id = :knowledge_base_id
                     ORDER BY id
@@ -348,8 +356,104 @@ class PgKnowledge:
             raw = row.raw
             if isinstance(raw, str):
                 raw = json.loads(raw)
-            result.append({"reason": row.reason, "raw": raw})
+            result.append({"id": row.id, "reason": row.reason, "raw": raw})
         return result
+
+    def approve_quarantine(self, quarantine_id: int) -> Claim:
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT id, reason, raw
+                    FROM quarantine
+                    WHERE id = :quarantine_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {"quarantine_id": quarantine_id, "knowledge_base_id": self._knowledge_base_id},
+            ).one_or_none()
+            if row is None:
+                raise DomainError(f"quarantine_not_found: {quarantine_id}")
+
+            raw = row.raw
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+
+            conn.execute(
+                text("""
+                    DELETE FROM quarantine
+                    WHERE id = :quarantine_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {"quarantine_id": quarantine_id, "knowledge_base_id": self._knowledge_base_id},
+            )
+
+            if "claim_id" in raw:
+                claim_id = raw["claim_id"]
+                updated = conn.execute(
+                    text("""
+                        UPDATE claims
+                        SET status = 'active'
+                        WHERE id = :claim_id AND knowledge_base_id = :knowledge_base_id
+                        RETURNING id, family_id, version, subject, predicate, object,
+                                  subject_type, object_type, confidence, status,
+                                  valid_from, valid_to, source_ids
+                        """),
+                    {"claim_id": claim_id, "knowledge_base_id": self._knowledge_base_id},
+                ).one_or_none()
+                if updated is None:
+                    raise DomainError(f"claim_not_found: {claim_id}")
+                return _row_to_claim(updated)
+
+            required = ("subject", "predicate", "object")
+            missing = [field for field in required if field not in raw]
+            if missing:
+                raise DomainError(f"quarantine_raw_incomplete: missing {','.join(missing)}")
+
+            subject_type = raw.get("subject_type", "Concept")
+            object_type = raw.get("object_type", "Concept")
+            source_ids = [raw["source_id"]] if raw.get("source_id") else []
+            claim = Claim(
+                id=str(uuid.uuid4()),
+                family_id=_family_id(raw["subject"], raw["predicate"], object_type),
+                version=1,
+                subject=raw["subject"],
+                predicate=raw["predicate"],
+                object=raw["object"],
+                subject_type=subject_type,
+                object_type=object_type,
+                confidence=float(raw.get("confidence", 0.8)),
+                status="active",
+                valid_from=datetime.now(timezone.utc),
+                valid_to=None,
+                source_ids=source_ids,
+            )
+            conn.execute(
+                text("""
+                    INSERT INTO claims (
+                        id, knowledge_base_id, family_id, version, subject, predicate, object,
+                        subject_type, object_type, confidence, status,
+                        valid_from, valid_to, source_ids
+                    ) VALUES (
+                        :id, :knowledge_base_id, :family_id, :version, :subject, :predicate, :object,
+                        :subject_type, :object_type, :confidence, :status,
+                        :valid_from, :valid_to, CAST(:source_ids AS jsonb)
+                    )
+                    """),
+                {
+                    "id": claim.id,
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "family_id": claim.family_id,
+                    "version": claim.version,
+                    "subject": claim.subject,
+                    "predicate": claim.predicate,
+                    "object": claim.object,
+                    "subject_type": claim.subject_type,
+                    "object_type": claim.object_type,
+                    "confidence": claim.confidence,
+                    "status": claim.status,
+                    "valid_from": claim.valid_from,
+                    "valid_to": claim.valid_to,
+                    "source_ids": json.dumps(claim.source_ids),
+                },
+            )
+            return claim
 
     def append_event(self, event: Event) -> Event:
         with self._engine.begin() as conn:
