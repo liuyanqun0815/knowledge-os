@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from compiler.service import KnowledgeCompiler
 from domains.base import DomainPort
 from domains.registry import load_domain
+from evolution.service import EvolutionService
 from evidence.memory_repo import InMemoryEvidence
 from evidence.ports import EvidencePort
 from graph.memory_repo import InMemoryGraph
@@ -38,6 +39,7 @@ class OrchestratorDeps:
     retrieval: HybridRetrieval
     memory: MemoryPort
     domain: DomainPort
+    evolution: EvolutionService
     knowledge_base_id: str
 
 
@@ -111,6 +113,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     knowledge, graph, evidence, memory = _build_repos(knowledge_base_id, settings)
     retrieval = HybridRetrieval(knowledge, graph)
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
+    evolution = EvolutionService(knowledge)
     files = LocalFileStore()
     return OrchestratorDeps(
         files=files,
@@ -122,6 +125,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         retrieval=retrieval,
         memory=memory,
         domain=domain,
+        evolution=evolution,
         knowledge_base_id=knowledge_base_id,
     )
 

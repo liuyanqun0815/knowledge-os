@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from knowledge.models import Answer
@@ -12,7 +13,11 @@ _GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关")
 def store_source_node(state: IngestState, deps: Any) -> dict:
     try:
         stored = deps.files.store(state["file_path"], state["source_type"])
-        source = deps.knowledge.save_source(stored.source)
+        source = stored.source
+        replaces_source_id = state.get("replaces_source_id")
+        if replaces_source_id:
+            source = replace(source, replaces_source_id=replaces_source_id)
+        source = deps.knowledge.save_source(source)
         deps.knowledge.save_source_text(source.id, stored.text)
         return {"source_id": source.id, "error": None}
     except Exception as exc:
@@ -25,8 +30,21 @@ def compile_node(state: IngestState, deps: Any) -> dict:
     source_id = state.get("source_id")
     if not source_id:
         return {"error": "no source_id", "report": None}
-    report = deps.compiler.ingest(source_id)
+    staging = bool(state.get("replaces_source_id"))
+    report = deps.compiler.ingest(source_id, staging=staging)
     return {"report": report}
+
+
+def evolve_node(state: IngestState, deps: Any) -> dict:
+    if state.get("error"):
+        return {}
+    old_id = state.get("replaces_source_id")
+    new_id = state.get("source_id")
+    if not old_id or not new_id:
+        return {"error": "missing source ids for evolve", "evolve_report": None}
+    diff = deps.evolution.diff_sources(old_id, new_id)
+    evolve_report = deps.evolution.apply_diff(diff)
+    return {"evolve_report": evolve_report}
 
 
 def recall_node(state: AskState, deps: Any) -> dict:

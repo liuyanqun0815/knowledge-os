@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from compiler.ports import CompileReport
 from knowledge.models import Answer
 from orchestrator.graphs.ask_graph import build_ask_graph
@@ -10,22 +12,37 @@ class LangGraphOrchestrator:
         self._ingest = build_ingest_graph(deps)
         self._ask = build_ask_graph(deps)
 
-    def register_source(self, file_path: str, source_type: str) -> str:
+    def register_source(
+        self,
+        file_path: str,
+        source_type: str,
+        replaces_source_id: str | None = None,
+    ) -> str:
         stored = self.deps.files.store(file_path, source_type)
-        source = self.deps.knowledge.save_source(stored.source)
+        source = stored.source
+        if replaces_source_id:
+            source = replace(source, replaces_source_id=replaces_source_id)
+        source = self.deps.knowledge.save_source(source)
         self.deps.knowledge.save_source_text(source.id, stored.text)
         return source.id
 
     def compile_source(self, source_id: str) -> CompileReport:
         return self.deps.compiler.ingest(source_id)
 
-    def ingest(self, file_path: str, source_type: str) -> CompileReport:
+    def ingest(
+        self,
+        file_path: str,
+        source_type: str,
+        replaces_source_id: str | None = None,
+    ) -> CompileReport:
         state = self._ingest.invoke(
             {
                 "file_path": file_path,
                 "source_type": source_type,
                 "source_id": None,
+                "replaces_source_id": replaces_source_id,
                 "report": None,
+                "evolve_report": None,
                 "error": None,
             }
         )
