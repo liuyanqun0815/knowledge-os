@@ -1,8 +1,10 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getKnowledgeBase, updateKnowledgeBase } from "../api/knowledgeBases";
-import type { KnowledgeBase } from "../api/types";
+import { listSources } from "../api/sources";
+import type { KnowledgeBase, SourceItem } from "../api/types";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { SourceFileBrowser } from "../components/SourceFileBrowser";
 
 export function KnowledgeBaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +14,30 @@ export function KnowledgeBaseDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sources, setSources] = useState<SourceItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  const [sourcesError, setSourcesError] = useState<string | null>(null);
+  const sourceRequestSequence = useRef(0);
+
+  const loadSources = useCallback(async () => {
+    if (!id) {
+      return;
+    }
+    const requestId = sourceRequestSequence.current + 1;
+    sourceRequestSequence.current = requestId;
+    try {
+      const items = await listSources(id, { query: searchQuery });
+      if (sourceRequestSequence.current === requestId) {
+        setSources(items);
+        setSourcesError(null);
+      }
+    } catch {
+      if (sourceRequestSequence.current === requestId) {
+        setSourcesError("文档列表加载失败。");
+      }
+    }
+  }, [id, searchQuery]);
 
   useEffect(() => {
     if (!id) {
@@ -38,6 +64,16 @@ export function KnowledgeBaseDetailPage() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadSources();
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [id, loadSources]);
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -144,6 +180,27 @@ export function KnowledgeBaseDetailPage() {
           </button>
         </div>
       </form>
+
+      <section className="result-card">
+        <div className="page-header">
+          <div>
+            <h2>已上传文档</h2>
+            <p>按目录浏览本库文件，支持模糊搜索，并可查看每份文档的萃取结果。</p>
+          </div>
+          <Link className="button button-secondary" to={`/sources?kb=${id}`}>
+            前往文档管理
+          </Link>
+        </div>
+        {sourcesError ? <ErrorBanner message={sourcesError} /> : null}
+        <SourceFileBrowser
+          kbId={id}
+          sources={sources}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          expandedSourceId={expandedSourceId}
+          onToggleSource={(sourceId) => setExpandedSourceId((current) => (current === sourceId ? null : sourceId))}
+        />
+      </section>
     </section>
   );
 }

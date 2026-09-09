@@ -139,7 +139,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
     evolution = EvolutionService(knowledge)
     verification = VerificationService()
-    files = LocalFileStore()
+    files = LocalFileStore(settings.data_root)
     if kb.domain_type == "ecommerce_cs":
         from domains.ecommerce_cs.procedures import seed_ecommerce_procedures
 

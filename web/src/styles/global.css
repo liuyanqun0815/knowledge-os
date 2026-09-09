@@ -411,6 +411,16 @@ button {
   background: #fef2f2;
 }
 
+.claims-panel table {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.claims-panel td,
+.claims-panel th {
+  padding: 0.5rem 0.75rem;
+}
+
 .evidence-list,
 .trace-timeline {
   display: grid;

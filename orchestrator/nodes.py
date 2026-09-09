@@ -18,7 +18,11 @@ _PROCEDURE_KEYWORDS = ("怎么做", "流程", "步骤", "怎么走")
 
 def store_source_node(state: IngestState, deps: Any) -> dict:
     try:
-        stored = deps.files.store(state["file_path"], state["source_type"])
+        stored = deps.files.store(
+            state["file_path"],
+            state["source_type"],
+            knowledge_base_id=deps.knowledge_base_id,
+        )
         source = stored.source
         replaces_source_id = state.get("replaces_source_id")
         if replaces_source_id:

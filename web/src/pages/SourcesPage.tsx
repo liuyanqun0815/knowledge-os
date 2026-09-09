@@ -1,27 +1,45 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { listSources, uploadSource } from "../api/sources";
-import type { SourceItem } from "../api/types";
+import type { SourceItem, SourceUploadResponse } from "../api/types";
 import { useKb } from "../app/KbContext";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { SourceFileBrowser } from "../components/SourceFileBrowser";
 
-const STATUS_LABELS: Record<SourceItem["compile_status"], string> = {
-  pending: "等待编译",
-  running: "编译中",
-  succeeded: "已完成",
-  failed: "编译失败",
-};
+const ACCEPTED_EXTENSIONS = [".md", ".txt", ".zip"];
+
+function isAcceptedUploadFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return ACCEPTED_EXTENSIONS.some((suffix) => lowerName.endsWith(suffix));
+}
+
+function formatUploadSummary(result: SourceUploadResponse): string {
+  if (result.upload_mode === "zip") {
+    return `ZIP 解压完成：成功 ${result.files_ingested} 个，跳过 ${result.files_skipped} 个。`;
+  }
+
+  const item = result.results[0];
+  if (!item) {
+    return "上传成功。";
+  }
+
+  return `上传成功：新建 Claim ${item.claims_created} 条，隔离 ${item.quarantined} 条。`;
+}
 
 export function SourcesPage() {
   const { kbId } = useKb();
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [replacesSourceId, setReplacesSourceId] = useState("");
-  const [uploadSummary, setUploadSummary] = useState<{ claims_created: number; quarantined: number } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
+
+  const isZipSelected = selectedFile?.name.toLowerCase().endsWith(".zip") ?? false;
 
   const loadSources = useCallback(async () => {
     if (!kbId) {
@@ -30,8 +48,9 @@ export function SourcesPage() {
 
     const requestId = requestSequence.current + 1;
     requestSequence.current = requestId;
+    setIsLoading(true);
     try {
-      const items = await listSources(kbId);
+      const items = await listSources(kbId, { query: searchQuery });
       if (requestSequence.current === requestId) {
         setSources(items);
         setError(null);
@@ -45,7 +64,7 @@ export function SourcesPage() {
         setIsLoading(false);
       }
     }
-  }, [kbId]);
+  }, [kbId, searchQuery]);
 
   useEffect(() => {
     requestSequence.current += 1;
@@ -53,38 +72,32 @@ export function SourcesPage() {
     setSelectedFile(null);
     setReplacesSourceId("");
     setUploadSummary(null);
+    setExpandedSourceId(null);
+    setSearchQuery("");
     setError(null);
-    if (!kbId) {
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    void loadSources();
-  }, [kbId, loadSources]);
-
-  const hasCompilingSource = sources.some(({ compile_status }) =>
-    ["pending", "running"].includes(compile_status),
-  );
+  }, [kbId]);
 
   useEffect(() => {
-    if (!kbId || !hasCompilingSource) {
+    if (!kbId) {
       return;
     }
-
-    const intervalId = window.setInterval(() => {
+    const timer = window.setTimeout(() => {
       void loadSources();
-    }, 2000);
-
-    return () => window.clearInterval(intervalId);
-  }, [hasCompilingSource, kbId, loadSources]);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [kbId, loadSources]);
 
   function selectFile(file: File | undefined) {
-    if (file) {
-      setSelectedFile(file);
-      setUploadSummary(null);
-      setError(null);
+    if (!file) {
+      return;
     }
+    if (!isAcceptedUploadFile(file)) {
+      setError("仅支持 .md、.txt 或 .zip 文件。");
+      return;
+    }
+    setSelectedFile(file);
+    setUploadSummary(null);
+    setError(null);
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -106,18 +119,22 @@ export function SourcesPage() {
     setError(null);
     setUploadSummary(null);
     const trimmedReplacesId = replacesSourceId.trim();
-    const uploadOptions = trimmedReplacesId ? { replacesSourceId: trimmedReplacesId } : {};
+    const uploadOptions = trimmedReplacesId && !isZipSelected ? { replacesSourceId: trimmedReplacesId } : {};
     try {
       const result = await uploadSource(kbId, selectedFile, uploadOptions);
       setSelectedFile(null);
       setReplacesSourceId("");
-      setUploadSummary({ claims_created: result.claims_created, quarantined: result.quarantined });
+      setUploadSummary(formatUploadSummary(result));
       await loadSources();
     } catch {
       setError("文档上传失败，请稍后重试。");
     } finally {
       setIsUploading(false);
     }
+  }
+
+  function toggleSource(sourceId: string) {
+    setExpandedSourceId((current) => (current === sourceId ? null : sourceId));
   }
 
   if (!kbId) {
@@ -129,14 +146,14 @@ export function SourcesPage() {
       <div className="page-header">
         <div>
           <h1>文档来源</h1>
-          <p>上传文档并查看知识编译状态。</p>
+          <p>支持 .md / .txt 单文件或 .zip 压缩包（保留目录结构）上传。</p>
         </div>
       </div>
 
       {error ? <ErrorBanner message={error} /> : null}
       {uploadSummary ? (
         <p className="success-banner" role="status">
-          上传成功：新建 Claim {uploadSummary.claims_created} 条，隔离 {uploadSummary.quarantined} 条。
+          {uploadSummary}
         </p>
       ) : null}
 
@@ -147,9 +164,15 @@ export function SourcesPage() {
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
         >
-          <label htmlFor="source-file">选择文档</label>
-          <input id="source-file" type="file" onChange={handleFileChange} disabled={isUploading} />
-          <p>可点击选择或将文件拖放到此处。</p>
+          <label htmlFor="source-file">选择文档 (.md / .txt / .zip)</label>
+          <input
+            id="source-file"
+            type="file"
+            accept=".md,.txt,.zip,text/markdown,text/plain,application/zip"
+            onChange={handleFileChange}
+            disabled={isUploading}
+          />
+          <p>可点击选择、或将文件拖放到此处。ZIP 内仅解压 .md / .txt，并保留目录结构。</p>
           {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
         </div>
         <label htmlFor="replaces-source-id">替换文档 ID (replaces_source_id)</label>
@@ -158,41 +181,29 @@ export function SourcesPage() {
           type="text"
           value={replacesSourceId}
           onChange={(event) => setReplacesSourceId(event.target.value)}
-          placeholder="可选：填写被替换的 source_id 以触发文档演化"
-          disabled={isUploading}
+          placeholder="可选：单文件上传时填写被替换的 source_id"
+          disabled={isUploading || isZipSelected}
         />
-        <button className="button button-primary" type="submit" disabled={!selectedFile || isUploading}>
-          {isUploading ? "上传中…" : "上传文档"}
-        </button>
+        <div className="form-actions">
+          <button className="button button-primary" type="submit" disabled={!selectedFile || isUploading}>
+            {isUploading ? "上传中…" : "上传"}
+          </button>
+        </div>
       </form>
 
       {isLoading ? <p role="status">正在加载文档…</p> : null}
-      {!isLoading && !error && sources.length === 0 ? (
+      {!isLoading && !error && sources.length === 0 && !searchQuery ? (
         <EmptyState title="暂无文档" description="上传第一个文档开始构建知识库。" />
       ) : null}
-      {sources.length > 0 ? (
-        <div className="table-card">
-          <table>
-            <thead>
-              <tr>
-                <th>文件名</th>
-                <th>编译状态</th>
-                <th>上传时间</th>
-                <th>错误摘要</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sources.map((source) => (
-                <tr key={source.id}>
-                  <td>{source.filename}</td>
-                  <td>{STATUS_LABELS[source.compile_status]}</td>
-                  <td>{source.created_at ? new Date(source.created_at).toLocaleString() : "—"}</td>
-                  <td>{source.error_summary || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {!isLoading ? (
+        <SourceFileBrowser
+          kbId={kbId}
+          sources={sources}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          expandedSourceId={expandedSourceId}
+          onToggleSource={toggleSource}
+        />
       ) : null}
     </section>
   );

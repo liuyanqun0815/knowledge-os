@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from evolution.family import family_key
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]
 V3 = ROOT / "samples" / "refund_policy_v3.md"
@@ -44,7 +45,7 @@ def test_upload_with_replaces_supersedes_freight_claim(tmp_path, monkeypatch):
             data={"source_type": "policy"},
         )
     assert upload_v3.status_code == 200, upload_v3.text
-    v3_source_id = upload_v3.json()["source_id"]
+    v3_source_id = admin_upload_item(upload_v3)["source_id"]
 
     with V4.open("rb") as handle:
         upload_v4 = client.post(

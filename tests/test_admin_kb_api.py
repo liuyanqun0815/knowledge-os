@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
-from tests.conftest import ROOT, pg_enabled
+from tests.conftest import ROOT, admin_upload_item, pg_enabled
 
 SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"
 
@@ -39,7 +39,7 @@ def test_create_kb_upload_list_sources_claims_in_memory(tmp_path, monkeypatch):
             data={"source_type": "policy"},
         )
     assert upload.status_code == 200, upload.text
-    body = upload.json()
+    body = admin_upload_item(upload)
     assert body["claims_created"] >= 1
     assert body["source_id"]
 
@@ -91,7 +91,7 @@ def test_admin_kb_crud_and_upload_flow(pg_admin_client):
             data={"source_type": "policy"},
         )
     assert upload.status_code == 200, upload.text
-    upload_body = upload.json()
+    upload_body = admin_upload_item(upload)
     assert upload_body["claims_created"] >= 1
 
     sources = client.get(f"/admin/knowledge-bases/{kb_id}/sources")

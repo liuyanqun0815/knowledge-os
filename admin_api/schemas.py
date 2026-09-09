@@ -52,6 +52,9 @@ class SourceResponse(BaseModel):
     version: str
     created_at: datetime
     status: str
+    relative_path: str = ""
+    directory: str = "/"
+    claims_count: int = 0
 
 
 class UploadSourceResponse(BaseModel):
@@ -62,6 +65,24 @@ class UploadSourceResponse(BaseModel):
     evidence_links: int
     quarantined: int
     errors: list[str] = Field(default_factory=list)
+
+
+class ZipUploadItemResponse(UploadSourceResponse):
+    relative_path: str = ""
+    directory: str = "/"
+
+
+class SourceUploadResponse(BaseModel):
+    upload_mode: str
+    files_total: int
+    files_ingested: int
+    files_skipped: int
+    results: list[ZipUploadItemResponse] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+class ZipUploadResponse(SourceUploadResponse):
+    """Backward-compatible alias for batch upload responses."""
 
 
 class EvolveSourceRequest(BaseModel):

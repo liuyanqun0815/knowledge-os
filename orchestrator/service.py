@@ -27,7 +27,7 @@ class LangGraphOrchestrator:
         source_type: str,
         replaces_source_id: str | None = None,
     ) -> str:
-        stored = self.deps.files.store(file_path, source_type)
+        stored = self.deps.files.store(file_path, source_type, knowledge_base_id=self.deps.knowledge_base_id)
         source = stored.source
         if replaces_source_id:
             source = replace(source, replaces_source_id=replaces_source_id)

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"
@@ -28,7 +29,7 @@ def _seed_kb(client: TestClient, kb_id: str = DEFAULT_IN_MEMORY_KB_ID) -> str:
             data={"source_type": "policy"},
         )
     assert upload.status_code == 200, upload.text
-    return upload.json()["source_id"]
+    return admin_upload_item(upload)["source_id"]
 
 
 def test_procedure_ask_returns_steps(seeded_kb_id):

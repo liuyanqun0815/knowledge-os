@@ -12,6 +12,14 @@ def pg_enabled() -> bool:
     return os.getenv("AKOS_USE_PG", "false").lower() == "true"
 
 
+def admin_upload_item(response) -> dict:
+    body = response.json()
+    if "results" in body:
+        assert body["results"], "upload returned no results"
+        return body["results"][0]
+    return body
+
+
 def run_sql_script(engine, script_path: Path) -> None:
     from sqlalchemy import text
 

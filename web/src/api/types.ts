@@ -14,9 +14,12 @@ export type SourceItem = {
   created_at: string;
   compile_status: "pending" | "running" | "succeeded" | "failed";
   error_summary?: string | null;
+  relative_path?: string;
+  directory?: string;
+  claims_count?: number;
 };
 
-export type UploadSourceResponse = {
+export type UploadSourceResultItem = {
   source_id: string;
   path: string;
   claims_created: number;
@@ -24,6 +27,27 @@ export type UploadSourceResponse = {
   evidence_links: number;
   quarantined: number;
   errors: string[];
+  relative_path?: string;
+  directory?: string;
+};
+
+export type SourceUploadResponse = {
+  upload_mode: "single" | "zip";
+  files_total: number;
+  files_ingested: number;
+  files_skipped: number;
+  results: UploadSourceResultItem[];
+  errors: string[];
+};
+
+/** @deprecated use UploadSourceResultItem */
+export type UploadSourceResponse = UploadSourceResultItem;
+
+/** @deprecated use SourceUploadResponse */
+export type ZipUploadResponse = SourceUploadResponse;
+
+export type UploadSourceOptions = {
+  replacesSourceId?: string;
 };
 
 export type AgentTraceStep = {

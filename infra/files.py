@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from infra.upload_utils import relative_path_from_kb_root, source_id_from_relative_path
 from knowledge.errors import DomainError
 from knowledge.models import Source
 
@@ -13,7 +14,10 @@ class StoredFile:
 
 
 class LocalFileStore:
-    def store(self, path: str, source_type: str) -> StoredFile:
+    def __init__(self, data_root: str = "./data") -> None:
+        self._data_root = Path(data_root)
+
+    def store(self, path: str, source_type: str, knowledge_base_id: str | None = None) -> StoredFile:
         file_path = Path(path)
         if not file_path.exists():
             raise DomainError(f"file not found: {path}")
@@ -28,6 +32,14 @@ class LocalFileStore:
             raise DomainError(f"failed to decode file as utf-8: {path}") from exc
 
         source_id = file_path.stem
+        if knowledge_base_id:
+            kb_root = self._data_root / knowledge_base_id
+            try:
+                relative = relative_path_from_kb_root(file_path, kb_root)
+                source_id = source_id_from_relative_path(relative)
+            except ValueError:
+                pass
+
         source = Source(
             id=source_id,
             title=file_path.name,
