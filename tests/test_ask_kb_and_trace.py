@@ -5,17 +5,34 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.routes import get_ask_orchestrator
+from orchestrator.service import AskResult
 
 
 class FakeOrchestrator:
-    def ask(self, question: str, session_id: str | None = None) -> SimpleNamespace:
-        return SimpleNamespace(
+    def ask(
+        self,
+        question: str,
+        session_id: str | None = None,
+        as_of: datetime | None = None,
+        include_trace: bool = False,
+    ) -> SimpleNamespace | AskResult:
+        answer = SimpleNamespace(
             text=f"answer: {question}",
             claim_ids=["claim-1"],
             evidence=[{"claim_id": "claim-1"}],
             confidence=0.9,
             retrieval_mode="hybrid",
+            verification_status="verified",
+            competing_claim_ids=[],
+            procedure_id=None,
+            as_of=as_of,
         )
+        if include_trace:
+            return AskResult(
+                answer=answer,
+                trace=[{"node": "retrieve"}, {"node": "verify", "verification_status": "verified"}],
+            )
+        return answer
 
 
 def test_ask_requires_knowledge_base_id(tmp_path, monkeypatch):

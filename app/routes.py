@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from admin_api.claim_history import sorted_claim_history
@@ -9,7 +9,7 @@ from admin_api.schemas import ClaimHistoryItemResponse
 from app.admin_auth import require_admin_token
 from app.deps import build_orchestrator_for_request
 from knowledge.errors import DomainError
-from orchestrator.service import LangGraphOrchestrator
+from orchestrator.service import AskResult, LangGraphOrchestrator
 
 router = APIRouter()
 
@@ -34,6 +34,7 @@ class AskRequest(BaseModel):
     question: str
     session_id: str | None = None
     as_of: datetime | None = None
+    include_trace: bool = False
 
 
 class AskResponse(BaseModel):
@@ -42,6 +43,9 @@ class AskResponse(BaseModel):
     evidence: list[dict]
     confidence: float
     retrieval_mode: str
+    verification_status: str = "verified"
+    competing_claim_ids: list[str] = []
+    procedure_id: str | None = None
     as_of: datetime | None = None
     request_id: str | None = None
     trace: list[dict] | None = None
@@ -81,21 +85,37 @@ def compile_source(source_id: str, body: CompileSourceRequest, request: Request)
 @router.post("/ask", response_model=AskResponse, dependencies=[Depends(require_admin_token)])
 def ask(
     body: AskRequest,
+    include_trace: bool | None = Query(default=None),
     orchestrator: LangGraphOrchestrator = Depends(get_ask_orchestrator),
 ) -> AskResponse:
+    want_trace = include_trace if include_trace is not None else body.include_trace
     try:
-        answer = orchestrator.ask(body.question, session_id=body.session_id, as_of=body.as_of)
+        result = orchestrator.ask(
+            body.question,
+            session_id=body.session_id,
+            as_of=body.as_of,
+            include_trace=want_trace,
+        )
     except DomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if isinstance(result, AskResult):
+        answer = result.answer
+        trace = result.trace
+    else:
+        answer = result
+        trace = None
     return AskResponse(
         text=answer.text,
         claim_ids=answer.claim_ids,
         evidence=answer.evidence,
         confidence=answer.confidence,
         retrieval_mode=answer.retrieval_mode,
+        verification_status=answer.verification_status,
+        competing_claim_ids=answer.competing_claim_ids,
+        procedure_id=answer.procedure_id,
         as_of=answer.as_of,
         request_id=None,
-        trace=None,
+        trace=trace if want_trace else None,
     )
 
 

@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from compiler.ports import CompileReport
@@ -7,6 +7,12 @@ from knowledge.errors import DomainError
 from knowledge.models import Answer
 from orchestrator.graphs.ask_graph import build_ask_graph
 from orchestrator.graphs.ingest_graph import build_ingest_graph
+
+
+@dataclass
+class AskResult:
+    answer: Answer
+    trace: list[dict]
 
 
 class LangGraphOrchestrator:
@@ -83,7 +89,13 @@ class LangGraphOrchestrator:
         )
         return state["report"]
 
-    def ask(self, question: str, session_id: str | None = None, as_of: datetime | None = None) -> Answer:
+    def ask(
+        self,
+        question: str,
+        session_id: str | None = None,
+        as_of: datetime | None = None,
+        include_trace: bool = False,
+    ) -> Answer | AskResult:
         state = self._ask.invoke(
             {
                 "question": question,
@@ -98,4 +110,7 @@ class LangGraphOrchestrator:
                 "answer": None,
             }
         )
-        return state["answer"]
+        answer = state["answer"]
+        if include_trace:
+            return AskResult(answer=answer, trace=state.get("trace") or [])
+        return answer

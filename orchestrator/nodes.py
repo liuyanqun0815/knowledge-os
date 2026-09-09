@@ -169,7 +169,11 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     mode = state.get("retrieval_mode") or RetrievalMode.HYBRID
     hits = retriever_agent.retrieve(deps.retrieval, question, mode, state.get("as_of"))
-    return {"hits": hits}
+    mode_value = mode.value if isinstance(mode, RetrievalMode) else str(mode)
+    return {
+        "hits": hits,
+        "trace": [{"node": "retrieve", "hit_count": len(hits), "retrieval_mode": mode_value}],
+    }
 
 
 def _resolve_claim_id_for_time(deps: Any, claim_id: str, as_of: datetime | None) -> str | None:
