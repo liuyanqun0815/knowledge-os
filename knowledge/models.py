@@ -58,4 +58,7 @@ class Answer:
     evidence: list[dict[str, Any]]
     confidence: float
     retrieval_mode: str
+    verification_status: str = "verified"  # verified | partial | unverified | conflict
     as_of: datetime | None = None
+    procedure_id: str | None = None
+    competing_claim_ids: list[str] = field(default_factory=list)

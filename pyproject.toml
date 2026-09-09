@@ -32,6 +32,7 @@ akos = "cli.main:app"
 where = ["."]
 include = [
   "app*", "cli*", "compiler*", "domains*", "evidence*", "evolution*", "graph*",
+  "verification*",
   "infra*", "knowledge*", "knowledge_base*", "memory*", "ontology*",
   "orchestrator*", "retrieval*",
 ]
