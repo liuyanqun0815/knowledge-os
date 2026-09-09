@@ -66,9 +66,40 @@ cp .env.example .env
 | `AKOS_DATABASE_URL` | PostgreSQL 连接串 | `postgresql+psycopg://akos:akos@localhost:5432/akos` |
 | `AKOS_USE_PG` | 启用 PostgreSQL 适配器 | `false` |
 | `AKOS_LLM_BASE_URL` | OpenAI 兼容 API 地址 | `https://api.openai.com/v1` |
-| `AKOS_LLM_API_KEY` | LLM API Key（未配置时 corporate 库跳过 LLM 抽取） | 空 |
+| `AKOS_LLM_API_KEY` | LLM API Key（未配置时跳过 LLM 补抽） | 空 |
 | `AKOS_LLM_MODEL` | LLM 模型名 | `gpt-4o-mini` |
+| `AKOS_EXTRACT_RULES` | 启用规则抽取（同步阶段） | `true` |
+| `AKOS_EXTRACT_LLM` | 启用 LLM 后台补抽 | `true` |
+| `AKOS_CHUNK_MAX_CHARS` | 单切片最大字符数 | `3000` |
+| `AKOS_CHUNK_MAX_PER_DOC` | 单文档最大切片数 | `40` |
+| `AKOS_EXTRACT_MIN_CONFIDENCE` | LLM Claim 最低置信度 | `0.5` |
 | `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
+
+## Hybrid LLM 抽取（两段式）
+
+上传文档采用 **规则同步 + LLM 异步补抽**：
+
+1. **同步（秒级）**：`POST /admin/.../sources/upload` 仅跑规则抽取 → 立刻可问答；若 `AKOS_EXTRACT_LLM=true` 且已配置 Key，source 状态为 `enriching`。
+2. **后台**：FastAPI `BackgroundTasks` 调用 `EnrichmentRunner` 切片 + `DomainLlmExtractor` 补抽 → 去重合并 → 白名单外谓词进 quarantine → 终态 `succeeded` / `succeeded_partial`。
+
+**Implementation plan:** [`docs/superpowers/plans/2026-09-09-akos-hybrid-llm-extraction.md`](docs/superpowers/plans/2026-09-09-akos-hybrid-llm-extraction.md)
+
+| 开关 | 行为 |
+|------|------|
+| `AKOS_EXTRACT_LLM=false` | 仅规则抽取，与一期行为一致 |
+| 无 `AKOS_LLM_API_KEY` | 自动跳过补抽（即使 `AKOS_EXTRACT_LLM=true`） |
+| 超出切片上限 | `succeeded_partial`，规则 Claim 仍可用 |
+
+```bash
+# Hybrid 单元 / 集成
+pytest -v tests/test_chunker.py tests/test_domain_llm_extractor.py \
+  tests/test_enrichment_runner.py tests/test_hybrid_extraction_api.py \
+  tests/test_compiler_apply_extracted.py
+
+# 规则-only 回归（InMemory，避免 PG 依赖）
+$env:AKOS_USE_PG='false'; $env:AKOS_EXTRACT_LLM='false'
+pytest -v tests/test_e2e_sample.py tests/test_admin_kb_api.py --tb=short
+```
 
 ## Phase 2.4 验收
 
