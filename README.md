@@ -70,6 +70,58 @@ cp .env.example .env
 | `AKOS_LLM_MODEL` | LLM 模型名 | `gpt-4o-mini` |
 | `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
 
+## Phase 2.4 验收
+
+Phase 2.4 聚焦生产部署与运营：Docker Compose（PG + Neo4j + MinIO + API）、Procedural Memory、admin 完善（claims/quarantine/debug）。
+
+```bash
+# 全量单元测试（默认 InMemory，排除 web）
+pytest -v --ignore=web
+
+# Phase 2.4 §8.4 E2E 验收（procedure / quarantine / debug / docker 配置）
+pytest -v tests/test_phase24_e2e.py
+
+# admin API 细分（claims / quarantine / debug graph）
+pytest -v tests/test_admin_phase24.py
+
+# Procedural Memory 单元
+pytest -v tests/test_procedure_memory.py
+```
+
+**Docker Compose 启动（生产栈）：**
+
+```bash
+cd deploy
+cp .env.production.example .env.production
+# 按需编辑 AKOS_LLM_API_KEY、ADMIN_API_TOKEN 等
+
+docker compose up --build
+
+# 开发 overlay（暴露端口 + 源码热重载）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# 可选 Redis 热读
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile redis up --build
+```
+
+首次启动 PostgreSQL 后，从宿主机初始化 schema：
+
+```bash
+psql postgresql://akos:akos@localhost:5432/akos -f ../infra/schema.sql
+psql postgresql://akos:akos@localhost:5432/akos -f ../infra/migrations/002_knowledge_bases.sql
+psql postgresql://akos:akos@localhost:5432/akos -f ../infra/migrations/003_evolution.sql
+psql postgresql://akos:akos@localhost:5432/akos -f ../infra/migrations/004_procedures.sql
+```
+
+验收清单（spec §8.4）：
+
+- `docker compose up` 可启动 PG + Neo4j + MinIO + API（`deploy/docker-compose.yml`、`Dockerfile` 就绪）
+- 后台创建知识库 → 上传 → compile → ask（指定 `knowledge_base_id`）全链路
+- Neo4j Browser 可见该库实体/关系（节点/关系带 `kb_id`）
+- `akos ask --kb <id> "仅退款流程怎么走？"` → `procedure_id` + 流程 steps（`test_procedure_ask_returns_steps`）
+- quarantine 人工 approve 后进入主图（`test_quarantine_approve_creates_active_claim`）
+- `POST /admin/knowledge-bases/{kb_id}/debug/ask` 返回含 `retrieve`、`verify` 的 trace
+
 ## Phase 2.3 验收
 
 Phase 2.3 聚焦可信问答：Verification Agent span 校验、竞争 Claim 冲突检测、AnswerV2 字段与 LangGraph trace 调试。
