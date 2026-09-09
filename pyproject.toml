@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3.0", "black>=24.8.0"]
+neo4j = ["neo4j>=5.0.0"]
 
 [project.scripts]
 akos = "cli.main:app"

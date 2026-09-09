@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: akos
+      POSTGRES_PASSWORD: akos
+      POSTGRES_DB: akos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akos -d akos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/akos-neo4j
+    volumes:
+      - neo4j_data:/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: akos-minio
+      MINIO_ROOT_PASSWORD: akos-minio-secret
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    profiles:
+      - redis
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  akos-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      minio:
+        condition: service_started
+    env_file:
+      - path: .env.production
+        required: false
+    environment:
+      AKOS_USE_PG: "true"
+      AKOS_DATABASE_URL: postgresql+psycopg://akos:akos@postgres:5432/akos
+      AKOS_GRAPH_BACKEND: neo4j
+      AKOS_NEO4J_URI: bolt://neo4j:7687
+      AKOS_NEO4J_USER: neo4j
+      AKOS_NEO4J_PASSWORD: akos-neo4j
+      AKOS_FILES_BACKEND: minio
+      AKOS_MINIO_ENDPOINT: minio:9000
+      AKOS_MINIO_ACCESS_KEY: akos-minio
+      AKOS_MINIO_SECRET_KEY: akos-minio-secret
+      AKOS_MINIO_BUCKET: akos
+      AKOS_BM25_BACKEND: postgres
+      AKOS_MEMORY_HOT: pg
+      AKOS_DATA_ROOT: /app/data
+    ports:
+      - "8000:8000"
+    volumes:
+      - akos_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  minio_data:
+  redis_data:
+  akos_data:
