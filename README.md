@@ -70,6 +70,40 @@ cp .env.example .env
 | `AKOS_LLM_MODEL` | LLM 模型名 | `gpt-4o-mini` |
 | `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
 
+## Phase 2.2 验收
+
+Phase 2.2 聚焦知识演化：政策 V2 替换 V1 时自动 Diff → supersede；问答支持 `as_of` 时序查询与 Claim 版本历史。
+
+```bash
+# 全量单元测试（默认 InMemory）
+pytest -v
+
+# Phase 2.2 evolution 模块（differ / applier / as_of）
+pytest -v tests/test_evolution_differ.py tests/test_evolution_applier.py
+
+# ingest 演化流水线（v3 → v4 supersede）
+pytest -v tests/test_evolve_ingest.py
+
+# as_of 时序问答 + parse_time
+pytest -v tests/test_as_of_query.py
+
+# evolution API（upload replaces、evolve、claim history）
+pytest -v tests/test_evolution_api.py
+
+# Phase 2.2 §6.5 E2E 验收（v3→v4 / as_of / history）
+pytest -v tests/test_evolution_e2e.py
+
+# PostgreSQL 演化持久化（需 PG）
+AKOS_USE_PG=true pytest -v tests/test_evolution_e2e.py tests/test_evolve_ingest.py
+```
+
+验收清单（spec §6.5）：
+
+- `refund_policy_v3.md` → `refund_policy_v4.md`（运费承担方 买家→平台）自动 supersede
+- Diff 报告 1 条 supersede；active claim 为新值「平台」
+- `as_of(v3 生效日)` 仍返回「买家」（orchestrator 与 `POST /ask`）
+- `GET /claims/{family_id}/history` 与 admin history 返回 2 版本时间线
+
 ## Phase 2.1 验收
 
 Phase 2.1 聚焦知识库隔离、DomainPort 与 admin 上传；LLM 抽取为 stub（无 Key 时 corporate 库跳过抽取）。
