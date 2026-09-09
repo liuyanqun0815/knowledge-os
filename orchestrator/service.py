@@ -76,6 +76,7 @@ class LangGraphOrchestrator:
                 "source_id": None,
                 "replaces_source_id": replaces_source_id,
                 "report": None,
+                "verify_report": None,
                 "evolve_report": None,
                 "error": None,
             }
@@ -92,6 +93,8 @@ class LangGraphOrchestrator:
                 "retrieval_mode": None,
                 "hits": [],
                 "claim_ids": [],
+                "verification": None,
+                "trace": [],
                 "answer": None,
             }
         )

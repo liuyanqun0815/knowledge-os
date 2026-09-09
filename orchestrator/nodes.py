@@ -5,11 +5,12 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
+from agents.memory_agent import service as memory_agent
+from agents.retriever_agent import service as retriever_agent
+from agents.verification_agent import service as verification_agent
 from knowledge.models import Answer
 from orchestrator.state import AskState, IngestState
-from retrieval.ports import RetrievalMode
-
-_GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关")
+from retrieval.ports import Hit, RetrievalMode
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
 
@@ -55,8 +56,77 @@ def evolve_node(state: IngestState, deps: Any) -> dict:
     return {"evolve_report": evolve_report}
 
 
+def _claim_spans_verified(knowledge: Any, evidence: Any, claim_id: str) -> bool:
+    bundle = evidence.explain([claim_id])
+    if not bundle.items:
+        return False
+    for item in bundle.items:
+        text = knowledge.get_source_text(item["source_id"])
+        if text is None or item["quote"] not in text:
+            return False
+    return True
+
+
+def verify_sample_node(state: IngestState, deps: Any) -> dict:
+    if state.get("error"):
+        return {}
+    source_id = state.get("source_id")
+    if not source_id:
+        return {"error": "no source_id for verify_sample", "verify_report": None}
+
+    high_risk = set(deps.domain.high_risk_predicates())
+    if not high_risk:
+        return {
+            "verify_report": {
+                "checked": 0,
+                "passed": 0,
+                "quarantined": 0,
+                "failed_claim_ids": [],
+            }
+        }
+
+    if deps.knowledge.get_source_text(source_id) is None:
+        return {"error": "source text not found for verify_sample", "verify_report": None}
+
+    checked = 0
+    passed = 0
+    quarantined = 0
+    failed_claim_ids: list[str] = []
+
+    for claim in deps.knowledge.get_claims_for_source(source_id):
+        if claim.predicate not in high_risk:
+            continue
+        checked += 1
+        if _claim_spans_verified(deps.knowledge, deps.evidence, claim.id):
+            passed += 1
+            continue
+
+        bundle = deps.evidence.explain([claim.id])
+        failed_claim_ids.append(claim.id)
+        deps.knowledge.add_quarantine(
+            "span_mismatch",
+            {
+                "claim_id": claim.id,
+                "source_id": source_id,
+                "predicate": claim.predicate,
+                "quote": bundle.items[0]["quote"] if bundle.items else None,
+            },
+        )
+        claim.status = "quarantined"
+        quarantined += 1
+
+    return {
+        "verify_report": {
+            "checked": checked,
+            "passed": passed,
+            "quarantined": quarantined,
+            "failed_claim_ids": failed_claim_ids,
+        }
+    }
+
+
 def recall_node(state: AskState, deps: Any) -> dict:
-    deps.memory.recall(state["question"], state.get("session_id"))
+    memory_agent.recall(deps.memory, state["question"], state.get("session_id"))
     return {}
 
 
@@ -91,23 +161,14 @@ def normalize_node(state: AskState, deps: Any) -> dict:
 
 def route_mode_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
-    if "为什么" in question or "为何" in question:
-        mode = RetrievalMode.CLAIM
-    elif any(word in question for word in _GRAPH_RELATION_WORDS):
-        mode = RetrievalMode.GRAPH
-    else:
-        mode = RetrievalMode.HYBRID
+    mode = retriever_agent.route_mode(question)
     return {"retrieval_mode": mode}
 
 
 def retrieve_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     mode = state.get("retrieval_mode") or RetrievalMode.HYBRID
-    as_of = state.get("as_of")
-    filters: dict[str, Any] = {}
-    if as_of is not None:
-        filters["as_of"] = _ensure_utc(as_of)
-    hits = deps.retrieval.search(question, mode, filters)
+    hits = retriever_agent.retrieve(deps.retrieval, question, mode, state.get("as_of"))
     return {"hits": hits}
 
 
@@ -121,9 +182,7 @@ def _resolve_claim_id_for_time(deps: Any, claim_id: str, as_of: datetime | None)
     return temporal.id if temporal is not None else None
 
 
-def explain_node(state: AskState, deps: Any) -> dict:
-    hits = state.get("hits") or []
-    as_of = state.get("as_of")
+def _claim_ids_from_hits(deps: Any, hits: list[Hit], as_of: datetime | None) -> list[str]:
     claim_ids: list[str] = []
     for hit in hits:
         if not hit.claim_id:
@@ -131,7 +190,39 @@ def explain_node(state: AskState, deps: Any) -> dict:
         resolved = _resolve_claim_id_for_time(deps, hit.claim_id, as_of)
         if resolved and resolved not in claim_ids:
             claim_ids.append(resolved)
-    return {"claim_ids": claim_ids}
+    return claim_ids
+
+
+def verify_node(state: AskState, deps: Any) -> dict:
+    hits = state.get("hits") or []
+    as_of = state.get("as_of")
+    claim_ids = _claim_ids_from_hits(deps, hits, as_of)
+    if not claim_ids:
+        return {"claim_ids": [], "verification": None}
+    verification = verification_agent.verify_claims(
+        deps.verification,
+        deps.knowledge,
+        deps.evidence,
+        claim_ids,
+    )
+    trace_entry = {
+        "node": "verify",
+        "claim_ids": claim_ids,
+        "verification_status": verification.verification_status,
+    }
+    return {"claim_ids": claim_ids, "verification": verification, "trace": [trace_entry]}
+
+
+def explain_node(state: AskState, deps: Any) -> dict:
+    verification = state.get("verification")
+    claim_ids = state.get("claim_ids") or []
+    if verification is None:
+        effective_ids = claim_ids
+    elif verification.verification_status == "partial":
+        effective_ids = claim_ids
+    else:
+        effective_ids = verification.verified_claim_ids
+    return {"claim_ids": effective_ids}
 
 
 def _retrieval_mode_value(mode: RetrievalMode | None) -> str:
@@ -144,7 +235,10 @@ def answer_node(state: AskState, deps: Any) -> dict:
     claim_ids = state.get("claim_ids") or []
     retrieval_mode = state.get("retrieval_mode")
     as_of = state.get("as_of")
+    verification = state.get("verification")
     low_confidence_message = deps.domain.low_confidence_message()
+    verification_status = verification.verification_status if verification else "verified"
+    competing_claim_ids = list(verification.competing_claim_ids) if verification else []
 
     if not claim_ids:
         return {
@@ -154,19 +248,24 @@ def answer_node(state: AskState, deps: Any) -> dict:
                 evidence=[],
                 confidence=0.1,
                 retrieval_mode=_retrieval_mode_value(retrieval_mode),
+                verification_status=verification_status,
+                competing_claim_ids=competing_claim_ids,
                 as_of=as_of,
             )
         }
 
     bundle = deps.evidence.explain(claim_ids)
-    if bundle.confidence < 0.4 or not bundle.items:
+    confidence = verification.adjusted_confidence if verification else bundle.confidence
+    if confidence < 0.4 or not bundle.items:
         return {
             "answer": Answer(
                 text=low_confidence_message,
                 claim_ids=[],
                 evidence=[],
-                confidence=bundle.confidence if bundle.confidence > 0 else 0.1,
+                confidence=confidence if confidence > 0 else 0.1,
                 retrieval_mode=_retrieval_mode_value(retrieval_mode),
+                verification_status=verification_status,
+                competing_claim_ids=competing_claim_ids,
                 as_of=as_of,
             )
         }
@@ -186,8 +285,10 @@ def answer_node(state: AskState, deps: Any) -> dict:
             text=answer_text,
             claim_ids=claim_ids,
             evidence=evidence,
-            confidence=bundle.confidence,
+            confidence=confidence,
             retrieval_mode=_retrieval_mode_value(retrieval_mode),
+            verification_status=verification_status,
+            competing_claim_ids=competing_claim_ids,
             as_of=as_of,
         )
     }
@@ -197,5 +298,5 @@ def remember_node(state: AskState, deps: Any) -> dict:
     answer = state.get("answer")
     session_id = state.get("session_id")
     if answer and session_id:
-        deps.memory.remember_episode(session_id, {"q": state["question"], "a": answer.text})
+        memory_agent.remember(deps.memory, session_id, {"q": state["question"], "a": answer.text})
     return {}

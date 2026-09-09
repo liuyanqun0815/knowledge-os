@@ -1,10 +1,12 @@
 from datetime import datetime
-from typing import NotRequired, TypedDict
+from typing import Annotated, NotRequired, TypedDict
+import operator
 
 from compiler.ports import CompileReport
 from evolution.ports import ApplyReport
 from knowledge.models import Answer
 from retrieval.ports import Hit, RetrievalMode
+from verification.ports import VerificationResult
 
 
 class IngestState(TypedDict):
@@ -13,6 +15,7 @@ class IngestState(TypedDict):
     source_id: str | None
     replaces_source_id: NotRequired[str | None]
     report: CompileReport | None
+    verify_report: NotRequired[dict | None]
     evolve_report: NotRequired[ApplyReport | None]
     error: str | None
 
@@ -25,4 +28,6 @@ class AskState(TypedDict):
     retrieval_mode: RetrievalMode | None
     hits: list[Hit]
     claim_ids: list[str]
+    verification: VerificationResult | None
+    trace: Annotated[list[dict], operator.add]
     answer: Answer | None
