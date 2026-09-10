@@ -127,9 +127,11 @@ class DomainLlmExtractor:
             return None
 
         quote = str(item.get("quote", "")).strip() or f"{subject}{predicate}{obj}"
-        start = text.find(quote)
-        if not quote or start < 0:
+        if not quote:
             return None
+        # Missing quotes (start < 0) still return a claim so the compiler can
+        # quarantine as span_missing rather than silently dropping here.
+        start = text.find(quote)
 
         try:
             confidence = float(item.get("confidence", 0.7))

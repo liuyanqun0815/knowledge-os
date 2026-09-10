@@ -100,7 +100,7 @@ def test_open_prompt_uses_suggested_predicates_and_allows_novel() -> None:
     assert '"allowed_predicates"' not in prompt
 
 
-def test_claim_with_quote_outside_source_is_discarded() -> None:
+def test_claim_with_quote_outside_source_is_returned_for_quarantine() -> None:
     client = FakeLlmClient(
         [
             {
@@ -115,7 +115,10 @@ def test_claim_with_quote_outside_source_is_discarded() -> None:
 
     claims = DomainLlmExtractor(client, _spec()).extract("公司倡导诚信经营。")
 
-    assert claims == []
+    assert len(claims) == 1
+    assert claims[0].quote == "不存在于原文"
+    assert claims[0].quote not in "公司倡导诚信经营。"
+    assert claims[0].start < 0
 
 
 def test_corporate_spec_and_factory_remain_compatible() -> None:
