@@ -3,9 +3,6 @@
 # Usage (from deploy/):
 #   cp .env.production.example .env.production
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-#
-# Optional Redis hot memory:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile redis up --build
 
 services:
   postgres:
@@ -21,10 +18,6 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-
-  redis:
-    ports:
-      - "6379:6379"
 
   akos-api:
     volumes:

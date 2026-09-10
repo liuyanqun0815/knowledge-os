@@ -5,6 +5,7 @@ import { KnowledgeBaseDetailPage } from "../pages/KnowledgeBaseDetailPage";
 import { KnowledgeBaseListPage } from "../pages/KnowledgeBaseListPage";
 import { KnowledgeBaseNewPage } from "../pages/KnowledgeBaseNewPage";
 import { ClaimsPage } from "../pages/ClaimsPage";
+import { GraphPage } from "../pages/GraphPage";
 import { QuarantinePage } from "../pages/QuarantinePage";
 import { SourcesPage } from "../pages/SourcesPage";
 import { Layout } from "./Layout";
@@ -20,6 +21,7 @@ export function AppRouter() {
         <Route path="/sources" element={<SourcesPage />} />
         <Route path="/ask" element={<AskPage />} />
         <Route path="/claims" element={<ClaimsPage />} />
+        <Route path="/graph" element={<GraphPage />} />
         <Route path="/quarantine" element={<QuarantinePage />} />
         <Route path="*" element={<EmptyState title="页面不存在" description="请通过顶部导航访问管理功能。" />} />
       </Route>

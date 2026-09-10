@@ -99,3 +99,40 @@ class Neo4jGraph:
                 )
             )
         return edges
+
+    def list_entities(self) -> list[tuple[str, dict]]:
+        with self._get_driver().session() as session:
+            rows = session.run(
+                """
+                MATCH (n:Entity {kb_id: $kb_id})
+                RETURN n.id AS id, n.type AS type, properties(n) AS props
+                """,
+                kb_id=self._knowledge_base_id,
+            )
+
+        entities: list[tuple[str, dict]] = []
+        for record in rows:
+            props = dict(record["props"])
+            for key in ("id", "kb_id", "type"):
+                props.pop(key, None)
+            entities.append((record["id"], {"type": record["type"], **props}))
+        return entities
+
+    def get_entity(self, entity_id: str) -> dict | None:
+        with self._get_driver().session() as session:
+            record = session.run(
+                """
+                MATCH (n:Entity {id: $entity_id, kb_id: $kb_id})
+                RETURN n.type AS type, properties(n) AS props
+                """,
+                entity_id=entity_id,
+                kb_id=self._knowledge_base_id,
+            ).single()
+
+        if record is None:
+            return None
+
+        props = dict(record["props"])
+        for key in ("id", "kb_id", "type"):
+            props.pop(key, None)
+        return {"type": record["type"], **props}

@@ -1,0 +1,150 @@
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+from typer.testing import CliRunner
+
+from cli.main import app
+from evidence.memory_repo import InMemoryEvidence
+from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+from knowledge.memory_repo import InMemoryKnowledge
+from knowledge.models import Claim, Source
+from tests.conftest import ROOT
+from wiki.export import _sanitize_filename, export_wiki, resolve_wiki_output_dir
+
+
+def _source(source_id: str = "policy-v3", title: str = "refund_policy_v3.md") -> Source:
+    return Source(
+        id=source_id,
+        title=title,
+        type="policy",
+        uri=f"file://{source_id}",
+        version="1",
+        created_at=datetime.now(timezone.utc),
+        status="ready",
+    )
+
+
+def _claim(
+    claim_id: str,
+    family_id: str,
+    *,
+    subject: str = "七天无理由",
+    predicate: str = "运费承担方",
+    object_value: str = "买家",
+    source_ids: list[str] | None = None,
+) -> Claim:
+    return Claim(
+        id=claim_id,
+        family_id=family_id,
+        version=1,
+        subject=subject,
+        predicate=predicate,
+        object=object_value,
+        subject_type="RefundRule",
+        object_type="Concept",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=source_ids or ["policy-v3"],
+    )
+
+
+def test_sanitize_filename_replaces_unsafe_chars():
+    assert _sanitize_filename("a/b:c") == "a_b_c"
+
+
+def test_export_wiki_writes_index_log_source_and_entity_pages(tmp_path: Path):
+    knowledge = InMemoryKnowledge()
+    evidence = InMemoryEvidence()
+    knowledge.save_source(_source())
+    knowledge.save_source_text("policy-v3", "七天无理由退货运费由买家承担。")
+    knowledge.append_claim(_claim("claim-1", "family-1"))
+    knowledge.append_claim(
+        _claim(
+            "claim-2",
+            "family-2",
+            predicate="排除",
+            object_value="定制商品",
+        )
+    )
+
+    output_dir = tmp_path / "wiki-out"
+    result = export_wiki(knowledge, evidence, "legacy", output_dir)
+
+    assert result.kb_id == "legacy"
+    assert result.output_dir == output_dir
+    assert result.source_pages == 1
+    assert result.entity_pages == 1
+    assert result.files_written == 4
+    assert (output_dir / "index.md").exists()
+    assert (output_dir / "log.md").exists()
+    assert (output_dir / "source-policy-v3.md").exists()
+    assert (output_dir / "七天无理由.md").exists()
+
+    entity_content = (output_dir / "七天无理由.md").read_text(encoding="utf-8")
+    assert "type: entity" in entity_content
+    assert "## Claims" in entity_content
+    assert "运费承担方 → 买家" in entity_content
+    assert "排除 → 定制商品" in entity_content
+    assert "[[source-policy-v3|refund_policy_v3.md]]" in entity_content
+
+    source_content = (output_dir / "source-policy-v3.md").read_text(encoding="utf-8")
+    assert "type: source" in source_content
+    assert "refund_policy_v3.md" in source_content
+    assert "[[七天无理由|七天无理由]]" in source_content
+
+    index_content = (output_dir / "index.md").read_text(encoding="utf-8")
+    assert "Wiki Index — legacy" in index_content
+    assert "[[source-policy-v3|refund_policy_v3.md]]" in index_content
+    assert "[[七天无理由|七天无理由]]" in index_content
+
+
+def test_export_wiki_sanitizes_source_id_in_filename(tmp_path: Path):
+    knowledge = InMemoryKnowledge()
+    evidence = InMemoryEvidence()
+    knowledge.save_source(_source("nested/path", "nested.md"))
+    knowledge.append_claim(_claim("claim-1", "family-1", source_ids=["nested/path"]))
+
+    output_dir = tmp_path / "wiki-out"
+    export_wiki(knowledge, evidence, "legacy", output_dir)
+
+    assert (output_dir / "source-nested_path.md").exists()
+
+
+def test_resolve_wiki_output_dir_defaults_to_kb_wiki(tmp_path: Path):
+    data_root = str(tmp_path / "data")
+    output_dir = resolve_wiki_output_dir(data_root, "legacy")
+    assert output_dir == (tmp_path / "data" / "legacy" / "wiki").resolve()
+
+
+def test_resolve_wiki_output_dir_rejects_escape(tmp_path: Path):
+    data_root = str(tmp_path / "data")
+
+    with pytest.raises(ValueError, match="data root"):
+        resolve_wiki_output_dir(data_root, "legacy", "../outside")
+
+
+def test_wiki_export_cli_after_ingest(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("AKOS_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("AKOS_USE_PG", "false")
+    monkeypatch.setenv("AKOS_EXTRACT_LLM", "false")
+    monkeypatch.delenv("AKOS_LLM_API_KEY", raising=False)
+
+    runner = CliRunner()
+    kb_id = DEFAULT_IN_MEMORY_KB_ID
+    sample_md = ROOT / "samples" / "refund_policy_v3.md"
+    ingest_result = runner.invoke(app, ["ingest", str(sample_md), "--kb", kb_id])
+    assert ingest_result.exit_code == 0, ingest_result.stdout
+
+    out_dir = tmp_path / "wiki-cli"
+    export_result = runner.invoke(app, ["wiki-export", "--kb", kb_id, "--out", str(out_dir)])
+    assert export_result.exit_code == 0, export_result.stdout
+
+    payload = json.loads(export_result.stdout)
+    assert payload["kb_id"] == kb_id
+    assert payload["files_written"] >= 1
+    assert (out_dir / "index.md").exists()

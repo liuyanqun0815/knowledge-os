@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from knowledge.errors import DomainError
-from knowledge.models import Claim, Event, Source
+from knowledge.models import Claim, Event, Source, SourceChunk
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:
@@ -134,6 +134,70 @@ class PgKnowledge:
                 {"knowledge_base_id": self._knowledge_base_id},
             ).fetchall()
         return [_row_to_source(row) for row in rows]
+
+    def delete_source(self, source_id: str) -> None:
+        params = {
+            "source_id": source_id,
+            "knowledge_base_id": self._knowledge_base_id,
+            "source_ids": json.dumps([source_id]),
+        }
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE claims
+                    SET status = 'superseded', valid_to = COALESCE(valid_to, NOW())
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_ids @> CAST(:source_ids AS jsonb)
+                      AND jsonb_array_length(source_ids) = 1
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    UPDATE claims
+                    SET source_ids = source_ids - CAST(:source_id AS text)
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_ids @> CAST(:source_ids AS jsonb)
+                      AND jsonb_array_length(source_ids) > 1
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM claim_evidence
+                    WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM events
+                    WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    UPDATE sources
+                    SET replaces_source_id = NULL
+                    WHERE replaces_source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM source_texts
+                    WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM sources
+                    WHERE id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
 
     def update_source_status(self, source_id: str, status: str) -> None:
         with self._engine.begin() as conn:
@@ -509,3 +573,131 @@ class PgKnowledge:
         with self._engine.connect() as conn:
             rows = conn.execute(text(sql), params).fetchall()
         return [_row_to_event(row) for row in rows]
+
+    def save_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
+        self.mark_chunks_stale(source_id)
+        with self._engine.begin() as conn:
+            for chunk in chunks:
+                conn.execute(
+                    text("""
+                        INSERT INTO source_chunks (
+                            id, knowledge_base_id, source_id, chunk_index, title, summary, text,
+                            start_offset, end_offset, section_path, topics, token_count, status,
+                            content_hash, created_at
+                        ) VALUES (
+                            :id, :knowledge_base_id, :source_id, :chunk_index, :title, :summary, :text,
+                            :start_offset, :end_offset, CAST(:section_path AS jsonb), CAST(:topics AS jsonb),
+                            :token_count, :status, :content_hash, :created_at
+                        )
+                        """),
+                    {
+                        "id": chunk.id,
+                        "knowledge_base_id": self._knowledge_base_id,
+                        "source_id": source_id,
+                        "chunk_index": chunk.chunk_index,
+                        "title": chunk.title,
+                        "summary": chunk.summary,
+                        "text": chunk.text,
+                        "start_offset": chunk.start,
+                        "end_offset": chunk.end,
+                        "section_path": json.dumps(chunk.section_path),
+                        "topics": json.dumps(chunk.topics),
+                        "token_count": chunk.token_count,
+                        "status": chunk.status,
+                        "content_hash": chunk.content_hash,
+                        "created_at": chunk.created_at or datetime.now(timezone.utc),
+                    },
+                )
+
+    def list_chunks(self, source_id: str, *, status: str = "active") -> list[SourceChunk]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, source_id, chunk_index, title, summary, text, start_offset, end_offset,
+                           section_path, topics, token_count, status, content_hash, created_at
+                    FROM source_chunks
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_id = :source_id
+                      AND status = :status
+                    ORDER BY chunk_index
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "source_id": source_id,
+                    "status": status,
+                },
+            ).fetchall()
+        return [self._row_to_chunk(row) for row in rows]
+
+    def get_chunk(self, chunk_id: str) -> SourceChunk | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT id, source_id, chunk_index, title, summary, text, start_offset, end_offset,
+                           section_path, topics, token_count, status, content_hash, created_at
+                    FROM source_chunks
+                    WHERE id = :id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {"id": chunk_id, "knowledge_base_id": self._knowledge_base_id},
+            ).one_or_none()
+        return self._row_to_chunk(row) if row is not None else None
+
+    def mark_chunks_stale(self, source_id: str) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE source_chunks
+                    SET status = 'stale'
+                    WHERE knowledge_base_id = :knowledge_base_id AND source_id = :source_id
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id, "source_id": source_id},
+            )
+
+    def update_chunk(self, chunk: SourceChunk) -> SourceChunk:
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE source_chunks
+                    SET title = :title,
+                        summary = :summary,
+                        topics = CAST(:topics AS jsonb),
+                        token_count = :token_count,
+                        content_hash = :content_hash
+                    WHERE id = :id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {
+                    "id": chunk.id,
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "title": chunk.title,
+                    "summary": chunk.summary,
+                    "topics": json.dumps(chunk.topics),
+                    "token_count": chunk.token_count,
+                    "content_hash": chunk.content_hash,
+                },
+            )
+        return chunk
+
+    @staticmethod
+    def _row_to_chunk(row: Any) -> SourceChunk:
+        section_path = row.section_path
+        if isinstance(section_path, str):
+            section_path = json.loads(section_path)
+        topics = row.topics
+        if isinstance(topics, str):
+            topics = json.loads(topics)
+        return SourceChunk(
+            id=row.id,
+            source_id=row.source_id,
+            chunk_index=row.chunk_index,
+            title=row.title,
+            summary=row.summary,
+            text=row.text,
+            start=row.start_offset,
+            end=row.end_offset,
+            section_path=list(section_path or []),
+            topics=list(topics or []),
+            token_count=row.token_count or 0,
+            status=row.status,
+            content_hash=row.content_hash,
+            created_at=row.created_at,
+        )

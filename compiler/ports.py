@@ -23,6 +23,14 @@ class CompileReport:
     errors: list[str]
 
 
+@dataclass
+class ChunkIndexReport:
+    source_id: str
+    chunks_created: int
+    truncated: bool
+    errors: list[str]
+
+
 class ExtractorPort(Protocol):
     def extract(self, text: str) -> list[ExtractedClaim]: ...
 

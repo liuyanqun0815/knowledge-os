@@ -3,6 +3,7 @@ from datetime import datetime
 
 from compiler.ports import CompileReport
 from evolution.ports import ApplyReport
+from infra.tracing import build_run_config
 from knowledge.errors import DomainError
 from knowledge.models import Answer
 from orchestrator.graphs.ask_graph import build_ask_graph
@@ -75,6 +76,16 @@ class LangGraphOrchestrator:
         source_type: str,
         replaces_source_id: str | None = None,
     ) -> CompileReport:
+        config = build_run_config(
+            run_name="akos.ingest",
+            metadata={
+                "kb_id": self.deps.knowledge_base_id,
+                "file_path": file_path,
+                "source_type": source_type,
+                "replaces_source_id": replaces_source_id,
+            },
+            tags=["ingest", self.deps.knowledge_base_id],
+        )
         state = self._ingest.invoke(
             {
                 "file_path": file_path,
@@ -85,7 +96,8 @@ class LangGraphOrchestrator:
                 "verify_report": None,
                 "evolve_report": None,
                 "error": None,
-            }
+            },
+            config=config,
         )
         return state["report"]
 
@@ -96,6 +108,15 @@ class LangGraphOrchestrator:
         as_of: datetime | None = None,
         include_trace: bool = False,
     ) -> Answer | AskResult:
+        config = build_run_config(
+            run_name="akos.ask",
+            metadata={
+                "kb_id": self.deps.knowledge_base_id,
+                "session_id": session_id,
+                "include_trace": include_trace,
+            },
+            tags=["ask", self.deps.knowledge_base_id],
+        )
         state = self._ask.invoke(
             {
                 "question": question,
@@ -104,11 +125,17 @@ class LangGraphOrchestrator:
                 "normalized_question": None,
                 "retrieval_mode": None,
                 "hits": [],
+                "chunk_hits": [],
                 "claim_ids": [],
+                "chunk_ids": [],
                 "verification": None,
+                "synthesis_text": None,
+                "synthesis_citations": [],
+                "synthesis_skipped_reason": None,
                 "trace": [],
                 "answer": None,
-            }
+            },
+            config=config,
         )
         answer = state["answer"]
         if include_trace:

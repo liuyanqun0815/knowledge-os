@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -5,8 +6,11 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from admin_api.routes_claims import router as claims_router
 from admin_api.routes_debug import router as debug_router
+from admin_api.routes_graph import router as graph_router
 from admin_api.routes_evolution import router as evolution_router
 from admin_api.routes_knowledge_bases import router as knowledge_bases_router
+from admin_api.routes_lint import router as lint_router
+from admin_api.routes_wiki import router as wiki_router
 from admin_api.routes_quarantine import router as quarantine_router
 from admin_api.routes_sources import router as sources_router
 from app.admin_auth import require_admin_token
@@ -14,6 +18,7 @@ from app.routes import router
 from compiler.enrichment import enrich_source
 from infra.bootstrap import _get_kb_repo, build_orchestrator_for_kb
 from infra.settings import Settings
+from infra.tracing import configure_langsmith
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +57,14 @@ def _resume_enriching_sources(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _resume_enriching_sources(app)
+    configure_langsmith(app.state.settings)
+    asyncio.create_task(asyncio.to_thread(_resume_enriching_sources, app))
     yield
 
 
 def create_app(data_root: str | None = None) -> FastAPI:
     settings = Settings(data_root=data_root) if data_root is not None else Settings()
+    configure_langsmith(settings)
     app = FastAPI(title="AKOS", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.orchestrator_cache = {}
@@ -67,8 +74,11 @@ def create_app(data_root: str | None = None) -> FastAPI:
     admin_router.include_router(sources_router)
     admin_router.include_router(claims_router)
     admin_router.include_router(quarantine_router)
+    admin_router.include_router(lint_router)
+    admin_router.include_router(wiki_router)
     admin_router.include_router(evolution_router)
     admin_router.include_router(debug_router)
+    admin_router.include_router(graph_router)
     app.include_router(admin_router, prefix="/admin")
     return app
 

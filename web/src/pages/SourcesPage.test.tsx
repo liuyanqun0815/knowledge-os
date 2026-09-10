@@ -1,19 +1,27 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { SourcesPage } from "./SourcesPage";
 
-const { listSources, uploadSource, useKb } = vi.hoisted(() => ({
+const { deleteSource, deleteTree, listSources, moveSources, uploadSource, uploadTree, useKb } = vi.hoisted(() => ({
+  deleteSource: vi.fn(),
+  deleteTree: vi.fn(),
   listSources: vi.fn(),
+  moveSources: vi.fn(),
   uploadSource: vi.fn(),
+  uploadTree: vi.fn(),
   useKb: vi.fn(),
 }));
 
 vi.mock("../api/sources", () => ({
+  deleteSource,
+  deleteTree,
   listSources,
+  moveSources,
   uploadSource,
+  uploadTree,
 }));
 
 vi.mock("../app/KbContext", () => ({
@@ -53,6 +61,14 @@ describe("sources page", () => {
       ],
       errors: [],
     });
+    uploadTree.mockResolvedValue({
+      upload_mode: "tree",
+      files_total: 1,
+      files_ingested: 1,
+      files_skipped: 0,
+      results: [],
+      errors: [],
+    });
   });
 
   afterEach(() => {
@@ -72,19 +88,19 @@ describe("sources page", () => {
   it("lists source filenames and compile statuses", async () => {
     render(<SourcesPage />);
 
-    const table = await screen.findByRole("table");
-    expect(within(table).getByText("guide.md")).toBeInTheDocument();
-    expect(within(table).getByText("已完成")).toBeInTheDocument();
+    const tree = await screen.findByRole("tree");
+    expect(within(tree).getByText(/guide.md/)).toBeInTheDocument();
+    expect(within(tree).getByText("已完成")).toBeInTheDocument();
     expect(listSources).toHaveBeenCalledWith("kb-1", { query: "" });
   });
 
   it("uploads the selected file and refreshes the list", async () => {
     const user = userEvent.setup();
     render(<SourcesPage />);
-    await screen.findByText("guide.md");
+    await screen.findByText(/guide.md/);
     const file = new File(["# New"], "new.md", { type: "text/markdown" });
 
-    await user.upload(screen.getByLabelText(/选择文档/), file);
+    await user.upload(screen.getByLabelText("选择文件"), file);
     await user.click(screen.getByRole("button", { name: "上传" }));
 
     await waitFor(() => {
@@ -95,7 +111,7 @@ describe("sources page", () => {
   it("accepts a dropped file and reports upload failures", async () => {
     uploadSource.mockRejectedValue(new Error("network error"));
     render(<SourcesPage />);
-    await screen.findByText("guide.md");
+    await screen.findByText(/guide.md/);
     const file = new File(["bad"], "bad.md", { type: "text/markdown" });
 
     fireEvent.drop(screen.getByTestId("source-drop-zone"), {
@@ -105,6 +121,21 @@ describe("sources page", () => {
     fireEvent.click(screen.getByRole("button", { name: "上传" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("上传失败");
+  });
+
+  it("uploads a selected folder with browser relative paths", async () => {
+    const user = userEvent.setup();
+    render(<SourcesPage />);
+    await screen.findByText(/guide.md/);
+    const file = new File(["# Policy"], "refund.md", { type: "text/markdown" });
+    Object.defineProperty(file, "webkitRelativePath", { value: "policies/refund.md" });
+
+    await user.upload(screen.getByLabelText("选择文件夹"), file);
+    await user.click(screen.getByRole("button", { name: "上传" }));
+
+    await waitFor(() => {
+      expect(uploadTree).toHaveBeenCalledWith("kb-1", [{ file, relativePath: "policies/refund.md" }]);
+    });
   });
 
   it("wires the sources page into the application router", async () => {

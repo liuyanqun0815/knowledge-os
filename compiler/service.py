@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from compiler.ports import CompileReport, ExtractedClaim, ExtractorPort
+from compiler.intersect import select_hybrid_candidates
 from evidence.ports import EvidencePort
 from graph.ports import GraphPort
 from knowledge.models import Claim, TextSpan
@@ -48,7 +49,15 @@ class KnowledgeCompiler:
     def ontology(self) -> OntologyPort:
         return self._ontology
 
-    def ingest(self, source_id: str, staging: bool = False) -> CompileReport:
+    def ingest(
+        self,
+        source_id: str,
+        staging: bool = False,
+        *,
+        llm_client: Any | None = None,
+        domain: Any | None = None,
+        settings: Any | None = None,
+    ) -> CompileReport:
         text = self._knowledge.get_source_text(source_id)
         if text is None:
             return CompileReport(
@@ -60,13 +69,25 @@ class KnowledgeCompiler:
                 errors=["source text not found"],
             )
 
+        from infra.settings import Settings, get_settings
+
+        resolved_settings = settings or get_settings()
+        candidates = select_hybrid_candidates(
+            text,
+            rule_extractor=self._extractor,
+            llm_client=llm_client,
+            domain=domain,
+            settings=resolved_settings,
+            ontology=self._ontology,
+        )
+
         claims_created = 0
         entities_upserted = 0
         evidence_links = 0
         quarantined = 0
         errors: list[str] = []
 
-        for extracted in self._extractor.extract(text):
+        for extracted in candidates:
             subject = self._ontology.normalize_term(extracted.subject)
             obj = self._ontology.normalize_term(extracted.object)
             subject_type = self._ontology.resolve_entity_type(subject) or "Concept"

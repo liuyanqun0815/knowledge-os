@@ -112,3 +112,56 @@ def test_pg_mark_superseded_does_not_overwrite_object(pg_knowledge):
     assert updated.status == "superseded"
     assert updated.object == "7"
     assert updated.valid_to is not None
+
+
+def test_pg_delete_source_updates_claim_references(pg_knowledge):
+    from datetime import datetime, timezone
+
+    source_id = "不予退换货情形"
+    pg_knowledge.save_source(_source(source_id))
+    pg_knowledge.save_source(_source("s-keep"))
+    pg_knowledge.save_source_text(source_id, "source text")
+
+    only_source = Claim(
+        id="c-del-1",
+        family_id="f-del-1",
+        version=1,
+        subject="退款",
+        predicate="期限",
+        object="七天",
+        subject_type="Policy",
+        object_type="Duration",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=[source_id],
+    )
+    shared = Claim(
+        id="c-del-2",
+        family_id="f-del-2",
+        version=1,
+        subject="退款",
+        predicate="凭证",
+        object="订单",
+        subject_type="Policy",
+        object_type="Document",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=[source_id, "s-keep"],
+    )
+    pg_knowledge.append_claim(only_source)
+    pg_knowledge.append_claim(shared)
+
+    pg_knowledge.delete_source(source_id)
+
+    assert pg_knowledge.get_source(source_id) is None
+    assert pg_knowledge.get_source_text(source_id) is None
+    superseded = pg_knowledge.get_claim("c-del-1")
+    assert superseded is not None
+    assert superseded.status == "superseded"
+    kept = pg_knowledge.get_claim("c-del-2")
+    assert kept is not None
+    assert kept.source_ids == ["s-keep"]

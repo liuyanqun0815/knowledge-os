@@ -16,6 +16,51 @@ def _source(sid: str = "s1") -> Source:
     )
 
 
+def test_delete_source_updates_claim_references():
+    repo = InMemoryKnowledge()
+    repo.save_source(_source("s1"))
+    repo.save_source_text("s1", "source text")
+    only_source = Claim(
+        id="c1",
+        family_id="f1",
+        version=1,
+        subject="退款",
+        predicate="期限",
+        object="七天",
+        subject_type="Policy",
+        object_type="Duration",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=["s1"],
+    )
+    shared = Claim(
+        id="c2",
+        family_id="f2",
+        version=1,
+        subject="退款",
+        predicate="凭证",
+        object="订单",
+        subject_type="Policy",
+        object_type="Document",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=["s1", "s2"],
+    )
+    repo.append_claim(only_source)
+    repo.append_claim(shared)
+
+    repo.delete_source("s1")
+
+    assert repo.get_source("s1") is None
+    assert repo.get_source_text("s1") is None
+    assert only_source.status == "superseded"
+    assert shared.source_ids == ["s2"]
+
+
 def test_append_claim_keeps_history_and_active_filter():
     repo = InMemoryKnowledge()
     repo.save_source(_source())

@@ -79,3 +79,40 @@ class PgGraph:
                 props = json.loads(props)
             edges.append(Edge(src=row.src, predicate=row.predicate, dst=row.dst, props=dict(props)))
         return edges
+
+    def _entity_from_row(self, entity_id: str, entity_type: str, props: Any) -> dict:
+        if isinstance(props, str):
+            props = json.loads(props)
+        return {"type": entity_type, **dict(props)}
+
+    def list_entities(self) -> list[tuple[str, dict]]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, type, props
+                    FROM entities
+                    WHERE knowledge_base_id = :knowledge_base_id
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id},
+            ).fetchall()
+
+        return [(row.id, self._entity_from_row(row.id, row.type, row.props)) for row in rows]
+
+    def get_entity(self, entity_id: str) -> dict | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT type, props
+                    FROM entities
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND id = :entity_id
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "entity_id": entity_id,
+                },
+            ).fetchone()
+
+        if row is None:
+            return None
+        return self._entity_from_row(entity_id, row.type, row.props)

@@ -10,7 +10,8 @@ from knowledge.models import Claim
 from knowledge.ports import KnowledgePort
 from retrieval.ports import Hit, RetrievalMode
 
-_TOP_K = 5
+_TOP_K = 8
+_GRAPH_MAX_DEPTH = 2
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
 
 
@@ -62,6 +63,11 @@ class HybridRetrieval:
         self._indexed_claims[claim.id] = claim
         text = f"{claim.subject} {claim.predicate} {claim.object}"
         self._claim_vectors[claim.id] = _char_hash_vector(text)
+
+    def warm_index(self) -> None:
+        """从持久化 KnowledgePort 重建进程内索引（重启后可检索已有 active claims）。"""
+        for claim in self._knowledge.get_claims_by_status("active"):
+            self.index_claim(claim)
 
     def search(self, query: str, mode: RetrievalMode, filters: dict) -> list[Hit]:
         top_k = int(filters.get("top_k", _TOP_K))
@@ -120,21 +126,42 @@ class HybridRetrieval:
 
     def _search_graph(self, query: str, as_of: datetime | None = None) -> list[Hit]:
         hits: list[Hit] = []
-        for entity_id, entity in self._graph.entities.items():
+        seed_entities: list[tuple[str, str]] = []
+        for entity_id, entity in self._graph.list_entities():
             name = entity.get("name", "")
             if not name or name not in query:
                 continue
-            for edge in self._graph.neighbors(entity_id, depth=1):
-                claim_id = self._claim_for_subject_entity(edge.src, edge.predicate, edge.dst, as_of)
-                snippet = f"{name} {edge.predicate}"
-                hits.append(
-                    Hit(
-                        claim_id=claim_id,
-                        score=1.0,
-                        snippet=snippet,
-                        entity_id=entity_id,
+            seed_entities.append((entity_id, name))
+
+        visited_edges: set[tuple[str, str, str]] = set()
+        for entity_id, name in seed_entities:
+            frontier: list[tuple[str, int]] = [(entity_id, 0)]
+            seen_nodes: set[str] = {entity_id}
+            while frontier:
+                current_id, hop = frontier.pop(0)
+                if hop >= _GRAPH_MAX_DEPTH:
+                    continue
+                for edge in self._graph.neighbors(current_id, depth=1):
+                    edge_key = (edge.src, edge.predicate, edge.dst)
+                    if edge_key in visited_edges:
+                        continue
+                    visited_edges.add(edge_key)
+                    claim_id = self._claim_for_subject_entity(edge.src, edge.predicate, edge.dst, as_of)
+                    src_name = self._entity_name(edge.src) or name
+                    dst_name = self._entity_name(edge.dst) or ""
+                    snippet = f"{src_name} {edge.predicate} {dst_name}".strip()
+                    score = 1.0 / (hop + 1)
+                    hits.append(
+                        Hit(
+                            claim_id=claim_id,
+                            score=score,
+                            snippet=snippet,
+                            entity_id=edge.src,
+                        )
                     )
-                )
+                    if edge.dst not in seen_nodes and hop + 1 < _GRAPH_MAX_DEPTH:
+                        seen_nodes.add(edge.dst)
+                        frontier.append((edge.dst, hop + 1))
         return hits
 
     def _search_vector(self, query: str, as_of: datetime | None = None) -> list[Hit]:
@@ -193,6 +220,13 @@ class HybridRetrieval:
                 return claim.id
         return None
 
+    def _entity_name(self, entity_id: str) -> str | None:
+        entity = self._graph.get_entity(entity_id)
+        if not entity:
+            return None
+        name = entity.get("name")
+        return name if isinstance(name, str) else None
+
     def _claim_for_subject_entity(
         self,
         src: str,
@@ -200,8 +234,8 @@ class HybridRetrieval:
         dst: str,
         as_of: datetime | None = None,
     ) -> str | None:
-        src_name = self._graph.entities.get(src, {}).get("name")
-        dst_name = self._graph.entities.get(dst, {}).get("name")
+        src_name = self._entity_name(src)
+        dst_name = self._entity_name(dst)
         for claim in self._indexed_claims.values():
             if claim.predicate != predicate:
                 continue

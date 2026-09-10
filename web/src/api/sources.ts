@@ -1,5 +1,11 @@
 import { apiFetch } from "./http";
-import type { ClaimListItem, SourceItem, SourceUploadResponse, UploadSourceOptions } from "./types";
+import type {
+  ClaimListItem,
+  SourceContent,
+  SourceItem,
+  SourceUploadResponse,
+  UploadSourceOptions,
+} from "./types";
 
 type BackendSource = {
   id: string;
@@ -54,6 +60,9 @@ export async function uploadSource(
   if (options.replacesSourceId) {
     formData.append("replaces_source_id", options.replacesSourceId);
   }
+  if (options.relativePath) {
+    formData.append("relative_path", options.relativePath);
+  }
 
   const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/upload`, {
     method: "POST",
@@ -62,7 +71,57 @@ export async function uploadSource(
   return response.json() as Promise<SourceUploadResponse>;
 }
 
+export type UploadTreeEntry = {
+  file: File;
+  relativePath: string;
+};
+
+export async function uploadTree(kbId: string, entries: UploadTreeEntry[]): Promise<SourceUploadResponse> {
+  const formData = new FormData();
+  for (const entry of entries) {
+    formData.append("files", entry.file);
+    formData.append("relative_paths", entry.relativePath);
+  }
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/upload-tree`, {
+    method: "POST",
+    body: formData,
+  });
+  return response.json() as Promise<SourceUploadResponse>;
+}
+
+export async function moveSources(
+  kbId: string,
+  fromPath: string,
+  toPath: string,
+): Promise<SourceItem[]> {
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from_path: fromPath, to_path: toPath }),
+  });
+  const raw = (await response.json()) as BackendSource[];
+  return raw.map(mapSource);
+}
+
+export async function deleteSource(kbId: string, sourceId: string): Promise<void> {
+  await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${sourceId}`, { method: "DELETE" });
+}
+
+export async function deleteTree(kbId: string, path: string): Promise<{ deleted_count: number }> {
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/delete-tree`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  return response.json() as Promise<{ deleted_count: number }>;
+}
+
 export async function fetchSourceClaims(kbId: string, sourceId: string): Promise<ClaimListItem[]> {
   const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${sourceId}/claims`);
   return response.json() as Promise<ClaimListItem[]>;
+}
+
+export async function fetchSourceContent(kbId: string, sourceId: string): Promise<SourceContent> {
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${sourceId}/content`);
+  return response.json() as Promise<SourceContent>;
 }

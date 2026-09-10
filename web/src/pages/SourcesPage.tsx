@@ -1,5 +1,5 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { listSources, uploadSource } from "../api/sources";
+import { listSources, uploadSource, uploadTree, type UploadTreeEntry } from "../api/sources";
 import type { SourceItem, SourceUploadResponse } from "../api/types";
 import { useKb } from "../app/KbContext";
 import { EmptyState } from "../components/EmptyState";
@@ -17,6 +17,9 @@ function formatUploadSummary(result: SourceUploadResponse): string {
   if (result.upload_mode === "zip") {
     return `ZIP 解压完成：成功 ${result.files_ingested} 个，跳过 ${result.files_skipped} 个。`;
   }
+  if (result.upload_mode === "tree") {
+    return `文件夹上传完成：成功 ${result.files_ingested} 个，跳过 ${result.files_skipped} 个。`;
+  }
 
   const item = result.results[0];
   if (!item) {
@@ -30,6 +33,7 @@ export function SourcesPage() {
   const { kbId } = useKb();
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedTreeEntries, setSelectedTreeEntries] = useState<UploadTreeEntry[]>([]);
   const [replacesSourceId, setReplacesSourceId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
@@ -40,6 +44,7 @@ export function SourcesPage() {
   const requestSequence = useRef(0);
 
   const isZipSelected = selectedFile?.name.toLowerCase().endsWith(".zip") ?? false;
+  const hasSelectedUpload = selectedFile !== null || selectedTreeEntries.length > 0;
 
   const loadSources = useCallback(async () => {
     if (!kbId) {
@@ -70,6 +75,7 @@ export function SourcesPage() {
     requestSequence.current += 1;
     setSources([]);
     setSelectedFile(null);
+    setSelectedTreeEntries([]);
     setReplacesSourceId("");
     setUploadSummary(null);
     setExpandedSourceId(null);
@@ -96,12 +102,27 @@ export function SourcesPage() {
       return;
     }
     setSelectedFile(file);
+    setSelectedTreeEntries([]);
     setUploadSummary(null);
     setError(null);
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     selectFile(event.target.files?.[0]);
+  }
+
+  function handleFolderChange(event: ChangeEvent<HTMLInputElement>) {
+    const entries = [...(event.target.files ?? [])]
+      .filter((file) => [".md", ".txt"].some((suffix) => file.name.toLowerCase().endsWith(suffix)))
+      .map((file) => ({ file, relativePath: file.webkitRelativePath || file.name }));
+    if (entries.length === 0) {
+      setError("所选文件夹中没有可上传的 .md 或 .txt 文件。");
+      return;
+    }
+    setSelectedFile(null);
+    setSelectedTreeEntries(entries);
+    setUploadSummary(null);
+    setError(null);
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -111,7 +132,7 @@ export function SourcesPage() {
 
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!kbId || !selectedFile) {
+    if (!kbId || !hasSelectedUpload) {
       return;
     }
 
@@ -121,8 +142,12 @@ export function SourcesPage() {
     const trimmedReplacesId = replacesSourceId.trim();
     const uploadOptions = trimmedReplacesId && !isZipSelected ? { replacesSourceId: trimmedReplacesId } : {};
     try {
-      const result = await uploadSource(kbId, selectedFile, uploadOptions);
+      const result =
+        selectedTreeEntries.length > 0
+          ? await uploadTree(kbId, selectedTreeEntries)
+          : await uploadSource(kbId, selectedFile as File, uploadOptions);
       setSelectedFile(null);
+      setSelectedTreeEntries([]);
       setReplacesSourceId("");
       setUploadSummary(formatUploadSummary(result));
       await loadSources();
@@ -146,7 +171,7 @@ export function SourcesPage() {
       <div className="page-header">
         <div>
           <h1>文档来源</h1>
-          <p>支持 .md / .txt 单文件或 .zip 压缩包（保留目录结构）上传。</p>
+          <p>支持单文件、文件夹或 ZIP 上传；文件夹与 ZIP 会保留目录结构。</p>
         </div>
       </div>
 
@@ -164,16 +189,38 @@ export function SourcesPage() {
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
         >
-          <label htmlFor="source-file">选择文档 (.md / .txt / .zip)</label>
+          <p className="upload-drop-title">选择文档</p>
+          <p>拖拽文件到此处，或选择 .md / .txt / .zip；选择文件夹可保留目录结构。</p>
+          <div className="upload-picker-actions">
+            <label className="button button-secondary" htmlFor="source-file">
+              选择文件
+            </label>
+            <label className="button button-secondary" htmlFor="source-folder">
+              选择文件夹
+            </label>
+          </div>
           <input
             id="source-file"
+            className="visually-hidden"
             type="file"
             accept=".md,.txt,.zip,text/markdown,text/plain,application/zip"
+            aria-label="选择文档"
             onChange={handleFileChange}
             disabled={isUploading}
           />
-          <p>可点击选择、或将文件拖放到此处。ZIP 内仅解压 .md / .txt，并保留目录结构。</p>
+          <input
+            id="source-folder"
+            className="visually-hidden"
+            type="file"
+            accept=".md,.txt,text/markdown,text/plain"
+            multiple
+            aria-label="选择文件夹"
+            {...{ webkitdirectory: "", directory: "" }}
+            onChange={handleFolderChange}
+            disabled={isUploading}
+          />
           {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
+          {selectedTreeEntries.length > 0 ? <p>已选择文件夹：{selectedTreeEntries.length} 个文档</p> : null}
         </div>
         <label htmlFor="replaces-source-id">替换文档 ID (replaces_source_id)</label>
         <input
@@ -182,10 +229,10 @@ export function SourcesPage() {
           value={replacesSourceId}
           onChange={(event) => setReplacesSourceId(event.target.value)}
           placeholder="可选：单文件上传时填写被替换的 source_id"
-          disabled={isUploading || isZipSelected}
+          disabled={isUploading || isZipSelected || selectedTreeEntries.length > 0}
         />
         <div className="form-actions">
-          <button className="button button-primary" type="submit" disabled={!selectedFile || isUploading}>
+          <button className="button button-primary" type="submit" disabled={!hasSelectedUpload || isUploading}>
             {isUploading ? "上传中…" : "上传"}
           </button>
         </div>
@@ -203,6 +250,8 @@ export function SourcesPage() {
           onSearchChange={setSearchQuery}
           expandedSourceId={expandedSourceId}
           onToggleSource={toggleSource}
+          onChanged={loadSources}
+          onError={setError}
         />
       ) : null}
     </section>

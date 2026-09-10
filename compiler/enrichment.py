@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+from langsmith import traceable
 
 from compiler.chunker import chunk_text
 from compiler.domain_llm_extractor import DomainLlmExtractor
@@ -8,7 +11,10 @@ from compiler.ports import ExtractedClaim
 from compiler.spec_utils import apply_open_flag
 from infra.settings import Settings
 
+logger = logging.getLogger(__name__)
 
+
+@traceable(name="akos.enrich_source", run_type="chain")
 def enrich_source(
     *,
     kb_id: str,
@@ -53,9 +59,16 @@ def enrich_source(
             min_confidence=settings.extract_min_confidence,
             open_predicates=settings.extract_open_predicates,
         )
+        logger.info(
+            "LLM enrichment finished for source %s in kb %s: extracted=%s claims",
+            source_id,
+            kb_id,
+            len(extracted),
+        )
         failure_ratio = failed_chunks / len(result.chunks) if result.chunks else 0.0
         final_status = "succeeded_partial" if result.truncated or failure_ratio >= 0.5 else "succeeded"
         deps.knowledge.update_source_status(source_id, final_status)
     except Exception:
+        logger.exception("LLM enrichment failed for source %s in kb %s", source_id, kb_id)
         deps.knowledge.update_source_status(source_id, "failed")
         raise

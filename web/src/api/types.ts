@@ -32,7 +32,7 @@ export type UploadSourceResultItem = {
 };
 
 export type SourceUploadResponse = {
-  upload_mode: "single" | "zip";
+  upload_mode: "single" | "zip" | "tree";
   files_total: number;
   files_ingested: number;
   files_skipped: number;
@@ -48,6 +48,16 @@ export type ZipUploadResponse = SourceUploadResponse;
 
 export type UploadSourceOptions = {
   replacesSourceId?: string;
+  relativePath?: string;
+};
+
+export type SourceContent = {
+  source_id: string;
+  title: string;
+  relative_path: string;
+  content: string;
+  size_bytes: number;
+  encoding: string;
 };
 
 export type AgentTraceStep = {
@@ -104,4 +114,31 @@ export type AskResponse = {
   as_of?: string | null;
   request_id?: string | null;
   trace?: AgentTraceStep[] | null;
+};
+
+export type GraphEntity = {
+  id: string;
+  type: string;
+  name: string;
+};
+
+export type GraphEdge = {
+  src: string;
+  predicate: string;
+  dst: string;
+  src_name: string;
+  dst_name: string;
+};
+
+export type GraphSnapshotResponse = {
+  entities: GraphEntity[];
+  edges: GraphEdge[];
+  truncated: boolean;
+  entity_total: number;
+};
+
+export type GraphNeighborsResponse = {
+  entity_id: string;
+  entities: GraphEntity[];
+  edges: GraphEdge[];
 };

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+from langsmith import traceable
 
 from infra.settings import Settings, get_settings
 
@@ -19,6 +20,11 @@ class OpenAiCompatibleClient:
     def is_configured(self) -> bool:
         return bool(self._settings.llm_api_key)
 
+    @traceable(
+        name="akos.llm.chat_completions",
+        run_type="llm",
+        metadata={"ls_provider": "openai-compatible"},
+    )
     def chat_completions(
         self,
         messages: list[dict[str, str]],
@@ -33,13 +39,25 @@ class OpenAiCompatibleClient:
                 "Configure AKOS_LLM_BASE_URL, AKOS_LLM_API_KEY, and AKOS_LLM_MODEL in .env."
             )
 
+        model = self._settings.llm_model
+        try:
+            from langsmith.run_helpers import get_current_run_tree
+
+            run_tree = get_current_run_tree()
+            if run_tree is not None:
+                run_tree.metadata["ls_model_name"] = model
+        except ImportError:
+            pass
+
         base_url = self._settings.llm_base_url.rstrip("/")
         url = f"{base_url}/chat/completions"
         payload = {
-            "model": self._settings.llm_model,
+            "model": model,
             "messages": messages,
             "temperature": temperature,
         }
+        if not self._settings.llm_thinking:
+            payload["thinking"] = {"type": "disabled"}
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",

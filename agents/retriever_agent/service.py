@@ -5,7 +5,7 @@ from typing import Any
 
 from retrieval.ports import Hit, RetrievalMode, RetrievalPort
 
-_GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关")
+_GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关", "影响", "涉及", "对应")
 
 
 def route_mode(question: str) -> RetrievalMode:

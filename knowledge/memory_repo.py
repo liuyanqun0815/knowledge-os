@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import hashlib
+import re
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from knowledge.errors import DomainError
-from knowledge.models import Claim, Event, Source
+from knowledge.models import Claim, Event, Source, SourceChunk
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:
@@ -20,6 +24,8 @@ class InMemoryKnowledge:
         self._quarantine: list[dict] = []
         self._quarantine_seq = 0
         self._events: list[Event] = []
+        self._chunks: dict[str, SourceChunk] = {}
+        self._chunks_by_source: dict[str, list[str]] = {}
 
     def save_source(self, source: Source) -> Source:
         self._sources[source.id] = source
@@ -30,6 +36,18 @@ class InMemoryKnowledge:
 
     def list_sources(self) -> list[Source]:
         return list(self._sources.values())
+
+    def delete_source(self, source_id: str) -> None:
+        self._sources.pop(source_id, None)
+        self._source_texts.pop(source_id, None)
+        self.mark_chunks_stale(source_id)
+        for claim in self._claims.values():
+            if source_id not in claim.source_ids:
+                continue
+            if len(claim.source_ids) == 1:
+                self.mark_superseded(claim.id)
+            else:
+                claim.source_ids = [item for item in claim.source_ids if item != source_id]
 
     def update_source_status(self, source_id: str, status: str) -> None:
         source = self._sources.get(source_id)
@@ -150,3 +168,35 @@ class InMemoryKnowledge:
         if source_id is None:
             return list(self._events)
         return [event for event in self._events if event.source_id == source_id]
+
+    def save_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
+        self.mark_chunks_stale(source_id)
+        chunk_ids: list[str] = []
+        for chunk in chunks:
+            self._chunks[chunk.id] = chunk
+            chunk_ids.append(chunk.id)
+        self._chunks_by_source[source_id] = chunk_ids
+
+    def list_chunks(self, source_id: str, *, status: str = "active") -> list[SourceChunk]:
+        chunk_ids = self._chunks_by_source.get(source_id, [])
+        return [
+            self._chunks[chunk_id]
+            for chunk_id in chunk_ids
+            if chunk_id in self._chunks and self._chunks[chunk_id].status == status
+        ]
+
+    def get_chunk(self, chunk_id: str) -> SourceChunk | None:
+        return self._chunks.get(chunk_id)
+
+    def mark_chunks_stale(self, source_id: str) -> None:
+        for chunk_id in self._chunks_by_source.get(source_id, []):
+            chunk = self._chunks.get(chunk_id)
+            if chunk is not None:
+                chunk.status = "stale"
+        self._chunks_by_source.pop(source_id, None)
+
+    def update_chunk(self, chunk: SourceChunk) -> SourceChunk:
+        if chunk.id not in self._chunks:
+            raise DomainError(f"chunk_not_found: {chunk.id}")
+        self._chunks[chunk.id] = chunk
+        return chunk

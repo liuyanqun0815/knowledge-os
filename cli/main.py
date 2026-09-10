@@ -1,10 +1,19 @@
 import json
+from enum import Enum
 
 import typer
 
 from infra.bootstrap import build_orchestrator_for_kb
+from knowledge.lint import format_lint_report_human, lint_report_to_dict, run_lint
+from wiki.export import export_wiki, resolve_wiki_output_dir, wiki_export_result_to_dict
+from infra.settings import get_settings
 
 app = typer.Typer(help="AKOS — Agent-Native Knowledge Operating System")
+
+
+class LintOutputFormat(str, Enum):
+    text = "text"
+    json = "json"
 
 
 @app.command()
@@ -43,7 +52,10 @@ def ask(
     payload = {
         "text": answer.text,
         "claim_ids": answer.claim_ids,
+        "chunk_ids": answer.chunk_ids,
         "evidence": answer.evidence,
+        "chunk_citations": answer.chunk_citations,
+        "synthesis_used": answer.synthesis_used,
         "confidence": answer.confidence,
         "retrieval_mode": answer.retrieval_mode,
         "verification_status": answer.verification_status,
@@ -53,6 +65,51 @@ def ask(
     if answer.as_of is not None:
         payload["as_of"] = answer.as_of.isoformat()
     typer.echo(json.dumps(payload, ensure_ascii=False))
+
+
+@app.command("lint")
+def lint_kb(
+    kb: str = typer.Option(..., "--kb", help="Knowledge base id"),
+    output_format: LintOutputFormat = typer.Option(
+        LintOutputFormat.text,
+        "--format",
+        help="Output format: text or json",
+    ),
+) -> None:
+    """Scan a knowledge base for conflicts, missing evidence, and other health issues."""
+    orchestrator = build_orchestrator_for_kb(kb)
+    report = run_lint(orchestrator.deps.knowledge, orchestrator.deps.evidence, kb)
+    if output_format == LintOutputFormat.json:
+        typer.echo(json.dumps(lint_report_to_dict(report), ensure_ascii=False))
+        return
+    typer.echo(format_lint_report_human(report))
+
+
+@app.command("wiki-export")
+def wiki_export(
+    kb: str = typer.Option(..., "--kb", help="Knowledge base id"),
+    out: str | None = typer.Option(None, "--out", help="Output directory (default: {data_root}/{kb}/wiki/)"),
+    with_llm_summaries: bool = typer.Option(False, "--with-llm-summaries", help="Generate LLM summaries"),
+) -> None:
+    """Export active claims as Obsidian-friendly markdown wiki pages."""
+    from pathlib import Path
+
+    settings = get_settings()
+    orchestrator = build_orchestrator_for_kb(kb)
+    if out:
+        output_dir = Path(out)
+    else:
+        output_dir = Path(settings.data_root) / kb / "wiki"
+    result = export_wiki(
+        orchestrator.deps.knowledge,
+        orchestrator.deps.evidence,
+        kb,
+        output_dir,
+        use_llm=with_llm_summaries or settings.wiki_llm,
+        llm_client=orchestrator.deps.llm_client,
+        settings=settings,
+    )
+    typer.echo(json.dumps(wiki_export_result_to_dict(result), ensure_ascii=False))
 
 
 @app.command()

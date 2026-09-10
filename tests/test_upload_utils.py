@@ -10,6 +10,7 @@ from infra.upload_utils import (
     directory_from_relative,
     extract_zip_documents,
     fuzzy_match,
+    safe_target_under_kb,
     source_id_from_relative_path,
 )
 
@@ -39,3 +40,11 @@ def test_extract_zip_preserves_directories(tmp_path: Path):
 def test_directory_from_relative():
     assert directory_from_relative(Path("policies/refund.md")) == "/policies"
     assert directory_from_relative(Path("root.md")) == "/"
+
+
+def test_safe_target_under_kb_rejects_path_traversal(tmp_path: Path):
+    assert safe_target_under_kb(tmp_path, "policies/refund.md") == tmp_path / "policies" / "refund.md"
+    with pytest.raises(ValueError):
+        safe_target_under_kb(tmp_path, "../outside.md")
+    with pytest.raises(ValueError):
+        safe_target_under_kb(tmp_path, r"..\outside.md")

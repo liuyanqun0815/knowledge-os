@@ -19,3 +19,9 @@ class InMemoryGraph:
         if predicates is not None:
             edges = [e for e in edges if e.predicate in predicates]
         return edges
+
+    def list_entities(self) -> list[tuple[str, dict]]:
+        return list(self.entities.items())
+
+    def get_entity(self, entity_id: str) -> dict | None:
+        return self.entities.get(entity_id)

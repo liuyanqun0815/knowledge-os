@@ -24,6 +24,7 @@ from memory.ports import MemoryPort
 from ontology.registry import InMemoryOntology
 from orchestrator.service import LangGraphOrchestrator
 from retrieval.hybrid import HybridRetrieval
+from retrieval.chunk_index import ChunkRetrieval
 from verification.service import VerificationService
 
 DEFAULT_IN_MEMORY_KB_ID = "default"
@@ -40,6 +41,7 @@ class OrchestratorDeps:
     compiler: KnowledgeCompiler
     llm_client: OpenAiCompatibleClient
     retrieval: HybridRetrieval
+    chunk_retrieval: ChunkRetrieval
     memory: MemoryPort
     domain: DomainPort
     evolution: EvolutionService
@@ -138,6 +140,9 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     domain.register_ontology(ontology)
     knowledge, graph, evidence, memory = _build_repos(knowledge_base_id, settings)
     retrieval = HybridRetrieval(knowledge, graph)
+    retrieval.warm_index()
+    chunk_retrieval = ChunkRetrieval(knowledge)
+    chunk_retrieval.warm_index()
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
     llm_client = OpenAiCompatibleClient(settings)
     evolution = EvolutionService(knowledge)
@@ -156,6 +161,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         compiler=compiler,
         llm_client=llm_client,
         retrieval=retrieval,
+        chunk_retrieval=chunk_retrieval,
         memory=memory,
         domain=domain,
         evolution=evolution,

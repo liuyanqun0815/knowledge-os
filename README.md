@@ -22,14 +22,58 @@ pytest
 akos ingest samples/refund_policy_v3.md --kb <knowledge_base_id> --type policy
 akos ask "定制商品能否七天无理由退货？" --kb <knowledge_base_id>
 akos inspect <claim_id> --kb <knowledge_base_id>
+akos lint --kb <knowledge_base_id>
+akos lint --kb <knowledge_base_id> --format json
+akos wiki-export --kb <knowledge_base_id> --out ./wiki-out
 ```
 
 启用 PostgreSQL（`AKOS_USE_PG=true`）时，ingest 与 ask 可跨独立 CLI 进程共享持久化数据。
 
+## 知识库 Lint / Wiki 导出
+
+借鉴 [LLM Wiki](https://github.com/luotwo/llm-wiki) 的 **Lint（健康检查）** 与 **Wiki 视图层（只读导出）**；PG Claim 仍为唯一权威，导出的 Markdown 不回写入库。
+
+| 能力 | CLI | Admin API |
+|------|-----|-----------|
+| Lint | `akos lint --kb <id>` | `GET /admin/knowledge-bases/{kb_id}/lint` |
+| Wiki 导出 | `akos wiki-export --kb <id> [--out dir]` | `POST /admin/knowledge-bases/{kb_id}/wiki/export` |
+
+Lint 检查项：`conflict`（同 family 多条 active）、`missing_evidence`、`orphan_source`、`quarantine_backlog`。
+
+Wiki 导出目录结构（Obsidian 友好）：
+
+```
+{output}/
+  index.md              # 文档与实体索引
+  log.md                # 导出时间戳
+  source-{id}.md        # 文档页 + 关联 Claim
+  {subject}.md          # 实体页 + [[wikilink]]
+```
+
+默认导出路径：`{AKOS_DATA_ROOT}/{kb_id}/wiki/`。上传完成后 API 响应含 `ingest_summary`（规则生成，无 LLM）。
+
+**Implementation plan:** [`docs/superpowers/plans/2026-09-09-akos-wiki-lint-export.md`](docs/superpowers/plans/2026-09-09-akos-wiki-lint-export.md)
+
+```bash
+pytest -v tests/test_knowledge_lint.py tests/test_wiki_export.py \
+  tests/test_admin_lint_api.py tests/test_admin_wiki_export_api.py \
+  tests/test_upload_ingest_summary.py
+```
+
+与 LLM Wiki 对照：
+
+| LLM Wiki | AKOS 本计划 |
+|----------|-------------|
+| Lint 口头指令 | `akos lint` + Admin API |
+| wiki/ 目录 | `wiki-export` 从 Claim 生成 |
+| Ingest 更新已有页 | 上传 `ingest_summary`（规则摘要 v1） |
+| Query 回写 | 暂未实现 |
+
 ## API
 
 ```bash
-uvicorn app.main:app --reload
+# 推荐 factory 模式：reload 时重建 app，避免旧代码残留（如 ZIP 上传不生效）
+uvicorn app.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 ```
 
 启动后访问 `http://127.0.0.1:8000/docs` 查看 Swagger 文档。
@@ -42,7 +86,7 @@ React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`�
 
 ```bash
 # 终端 A — 后端
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 
 # 终端 B — 前端
 cd web && npm install && npm run dev
@@ -65,6 +109,10 @@ cp .env.example .env
 | `AKOS_DATA_ROOT` | 本地文件存储根目录 | `./data` |
 | `AKOS_DATABASE_URL` | PostgreSQL 连接串 | `postgresql+psycopg://akos:akos@localhost:5432/akos` |
 | `AKOS_USE_PG` | 启用 PostgreSQL 适配器 | `false` |
+| `AKOS_GRAPH_BACKEND` | 图存储后端 | `memory`（`.env.example` 为 `postgres`） |
+| `AKOS_NEO4J_URI` / `USER` / `PASSWORD` | Neo4j 连接（`graph_backend=neo4j` 时） | 见 `.env.example` |
+| `AKOS_FILES_BACKEND` | 文件存储后端（规划） | `local` |
+| `AKOS_DEFAULT_DOMAIN_TYPE` | 新建知识库默认领域 | `ecommerce_cs` |
 | `AKOS_LLM_BASE_URL` | OpenAI 兼容 API 地址 | `https://api.openai.com/v1` |
 | `AKOS_LLM_API_KEY` | LLM API Key（未配置时跳过 LLM 补抽） | 空 |
 | `AKOS_LLM_MODEL` | LLM 模型名 | `gpt-4o-mini` |
@@ -131,9 +179,6 @@ docker compose up --build
 
 # 开发 overlay（暴露端口 + 源码热重载）
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-
-# 可选 Redis 热读
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile redis up --build
 ```
 
 首次启动 PostgreSQL 后，从宿主机初始化 schema：

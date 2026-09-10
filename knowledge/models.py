@@ -62,3 +62,24 @@ class Answer:
     as_of: datetime | None = None
     procedure_id: str | None = None
     competing_claim_ids: list[str] = field(default_factory=list)
+    chunk_ids: list[str] = field(default_factory=list)
+    chunk_citations: list[dict[str, Any]] = field(default_factory=list)
+    synthesis_used: bool = False
+
+
+@dataclass
+class SourceChunk:
+    id: str
+    source_id: str
+    chunk_index: int
+    title: str | None
+    summary: str | None
+    text: str
+    start: int
+    end: int
+    section_path: list[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
+    token_count: int = 0
+    status: str = "active"
+    content_hash: str = ""
+    created_at: datetime | None = None

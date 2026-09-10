@@ -8,8 +8,12 @@ from typing import Any
 from agents.memory_agent import service as memory_agent
 from agents.retriever_agent import service as retriever_agent
 from agents.verification_agent import service as verification_agent
+from compiler.chunk_service import index_source_chunks
+from infra.settings import get_settings
 from knowledge.models import Answer
 from orchestrator.state import AskState, IngestState
+from orchestrator.synthesis import build_synthesis_context, synthesize_answer
+from retrieval.fusion import fuse_hits, route_fusion_weights
 from retrieval.ports import Hit, RetrievalMode
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
@@ -41,8 +45,27 @@ def compile_node(state: IngestState, deps: Any) -> dict:
     if not source_id:
         return {"error": "no source_id", "report": None}
     staging = bool(state.get("replaces_source_id"))
-    report = deps.compiler.ingest(source_id, staging=staging)
+    report = deps.compiler.ingest(
+        source_id,
+        staging=staging,
+        llm_client=deps.llm_client,
+        domain=deps.domain,
+    )
     return {"report": report}
+
+
+def index_chunks_node(state: IngestState, deps: Any) -> dict:
+    if state.get("error"):
+        return {}
+    source_id = state.get("source_id")
+    if not source_id:
+        return {"error": "no source_id", "chunk_report": None}
+    settings = get_settings()
+    chunk_retrieval = getattr(deps, "chunk_retrieval", None)
+    report = index_source_chunks(deps.knowledge, chunk_retrieval, source_id, settings)
+    if report.errors:
+        return {"chunk_report": report, "error": report.errors[0]}
+    return {"chunk_report": report}
 
 
 def evolve_node(state: IngestState, deps: Any) -> dict:
@@ -176,11 +199,26 @@ def route_mode_node(state: AskState, deps: Any) -> dict:
 def retrieve_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     mode = state.get("retrieval_mode") or RetrievalMode.HYBRID
-    hits = retriever_agent.retrieve(deps.retrieval, question, mode, state.get("as_of"))
+    settings = get_settings()
+    claim_hits = retriever_agent.retrieve(deps.retrieval, question, mode, state.get("as_of"))
+    chunk_hits: list[Hit] = []
+    chunk_retrieval = getattr(deps, "chunk_retrieval", None)
+    if settings.chunk_index and chunk_retrieval is not None:
+        chunk_hits = chunk_retrieval.search(question, {"top_k": settings.retrieval_top_k})
+    fused_hits = fuse_hits(claim_hits, chunk_hits, claim_weight=route_fusion_weights(question))
     mode_value = mode.value if isinstance(mode, RetrievalMode) else str(mode)
     return {
-        "hits": hits,
-        "trace": [{"node": "retrieve", "hit_count": len(hits), "retrieval_mode": mode_value}],
+        "hits": fused_hits,
+        "chunk_hits": chunk_hits,
+        "trace": [
+            {
+                "node": "retrieve",
+                "hit_count": len(fused_hits),
+                "claim_hits": len(claim_hits),
+                "chunk_hits": len(chunk_hits),
+                "retrieval_mode": mode_value,
+            }
+        ],
     }
 
 
@@ -205,36 +243,83 @@ def _claim_ids_from_hits(deps: Any, hits: list[Hit], as_of: datetime | None) -> 
     return claim_ids
 
 
+def _chunk_ids_from_hits(deps: Any, hits: list[Hit]) -> list[str]:
+    chunk_ids: list[str] = []
+    for hit in hits:
+        if hit.hit_type != "chunk" or not hit.chunk_id:
+            continue
+        chunk = deps.knowledge.get_chunk(hit.chunk_id)
+        if chunk is None or chunk.status != "active":
+            continue
+        if hit.chunk_id not in chunk_ids:
+            chunk_ids.append(hit.chunk_id)
+    return chunk_ids
+
+
 def verify_node(state: AskState, deps: Any) -> dict:
     hits = state.get("hits") or []
+    chunk_hits = state.get("chunk_hits") or []
     as_of = state.get("as_of")
     claim_ids = _claim_ids_from_hits(deps, hits, as_of)
-    if not claim_ids:
-        return {"claim_ids": [], "verification": None}
-    verification = verification_agent.verify_claims(
-        deps.verification,
-        deps.knowledge,
-        deps.evidence,
-        claim_ids,
-    )
+    chunk_ids = _chunk_ids_from_hits(deps, hits)
+    if not chunk_ids:
+        chunk_ids = _chunk_ids_from_hits(deps, chunk_hits)
+    verification = None
+    if claim_ids:
+        verification = verification_agent.verify_claims(
+            deps.verification,
+            deps.knowledge,
+            deps.evidence,
+            claim_ids,
+        )
     trace_entry = {
         "node": "verify",
         "claim_ids": claim_ids,
-        "verification_status": verification.verification_status,
+        "chunk_ids": chunk_ids,
+        "verification_status": verification.verification_status if verification else "verified",
     }
-    return {"claim_ids": claim_ids, "verification": verification, "trace": [trace_entry]}
+    if not claim_ids and not chunk_ids:
+        return {"claim_ids": [], "chunk_ids": [], "verification": verification, "trace": [trace_entry]}
+    return {"claim_ids": claim_ids, "chunk_ids": chunk_ids, "verification": verification, "trace": [trace_entry]}
 
 
 def explain_node(state: AskState, deps: Any) -> dict:
     verification = state.get("verification")
     claim_ids = state.get("claim_ids") or []
+    chunk_ids = state.get("chunk_ids") or []
     if verification is None:
         effective_ids = claim_ids
     elif verification.verification_status == "partial":
         effective_ids = claim_ids
     else:
         effective_ids = verification.verified_claim_ids
-    return {"claim_ids": effective_ids}
+    return {"claim_ids": effective_ids, "chunk_ids": chunk_ids}
+
+
+def synthesize_node(state: AskState, deps: Any) -> dict:
+    settings = get_settings()
+    claim_ids = state.get("claim_ids") or []
+    chunk_ids = state.get("chunk_ids") or []
+    question = state.get("normalized_question") or state["question"]
+    if not settings.ask_synthesis:
+        return {"synthesis_skipped_reason": "disabled"}
+    if not claim_ids and not chunk_ids:
+        return {"synthesis_skipped_reason": "no_context"}
+    context = build_synthesis_context(
+        question=question,
+        claim_ids=claim_ids,
+        chunk_ids=chunk_ids,
+        deps=deps,
+        settings=settings,
+    )
+    result = synthesize_answer(context, deps.llm_client, settings)
+    if result is None:
+        return {"synthesis_skipped_reason": "failed"}
+    return {
+        "synthesis_text": result["answer"],
+        "synthesis_citations": result.get("citations", []),
+        "synthesis_skipped_reason": None,
+    }
 
 
 def _retrieval_mode_value(mode: RetrievalMode | None) -> str:
@@ -259,8 +344,53 @@ def _procedure_claim_ids(procedure: Any) -> list[str]:
     return claim_ids
 
 
+def _chunk_citations(deps: Any, chunk_ids: list[str]) -> list[dict]:
+    citations: list[dict] = []
+    for chunk_id in chunk_ids:
+        chunk = deps.knowledge.get_chunk(chunk_id)
+        if chunk is None:
+            continue
+        quote = (chunk.summary or chunk.text)[:120]
+        citations.append({"source_id": chunk.source_id, "chunk_id": chunk_id, "quote": quote})
+    return citations
+
+
+def _build_answer(
+    *,
+    text: str,
+    claim_ids: list[str],
+    chunk_ids: list[str],
+    evidence: list[dict],
+    chunk_citations: list[dict],
+    confidence: float,
+    retrieval_mode: RetrievalMode | None,
+    verification_status: str,
+    competing_claim_ids: list[str],
+    as_of: datetime | None,
+    procedure_id: str | None,
+    synthesis_used: bool = False,
+) -> dict:
+    return {
+        "answer": Answer(
+            text=text,
+            claim_ids=claim_ids,
+            chunk_ids=chunk_ids,
+            evidence=evidence,
+            chunk_citations=chunk_citations,
+            synthesis_used=synthesis_used,
+            confidence=confidence,
+            retrieval_mode=_retrieval_mode_value(retrieval_mode),
+            verification_status=verification_status,
+            competing_claim_ids=competing_claim_ids,
+            as_of=as_of,
+            procedure_id=procedure_id,
+        )
+    }
+
+
 def answer_node(state: AskState, deps: Any) -> dict:
     claim_ids = state.get("claim_ids") or []
+    chunk_ids = state.get("chunk_ids") or []
     retrieval_mode = state.get("retrieval_mode")
     as_of = state.get("as_of")
     verification = state.get("verification")
@@ -269,6 +399,46 @@ def answer_node(state: AskState, deps: Any) -> dict:
     verification_status = verification.verification_status if verification else "verified"
     competing_claim_ids = list(verification.competing_claim_ids) if verification else []
     procedure_id = procedure.id if procedure else None
+    synthesis_text = state.get("synthesis_text")
+    synthesis_citations = state.get("synthesis_citations") or []
+
+    if synthesis_text:
+        evidence = [
+            {
+                "source_id": item.get("source_id"),
+                "quote": item.get("quote"),
+                "weight": 1.0,
+                "claim_id": item.get("claim_id"),
+            }
+            for item in synthesis_citations
+            if item.get("source_id") and item.get("quote")
+        ]
+        confidence = verification.adjusted_confidence if verification else 0.75
+        if not claim_ids and chunk_ids:
+            confidence = min(confidence, 0.7)
+        chunk_citations = [
+            {
+                "source_id": item.get("source_id"),
+                "chunk_id": item.get("chunk_id"),
+                "quote": item.get("quote"),
+            }
+            for item in synthesis_citations
+            if item.get("chunk_id")
+        ] or _chunk_citations(deps, chunk_ids)
+        return _build_answer(
+            text=synthesis_text,
+            claim_ids=claim_ids,
+            chunk_ids=chunk_ids,
+            evidence=evidence,
+            chunk_citations=chunk_citations,
+            confidence=confidence,
+            retrieval_mode=retrieval_mode,
+            verification_status=verification_status,
+            competing_claim_ids=competing_claim_ids,
+            as_of=as_of,
+            procedure_id=procedure_id,
+            synthesis_used=True,
+        )
 
     if procedure is not None:
         procedure_claim_ids = _procedure_claim_ids(procedure)
@@ -298,75 +468,131 @@ def answer_node(state: AskState, deps: Any) -> dict:
             if confidence < 0.4:
                 confidence = 0.8
 
-        return {
-            "answer": Answer(
-                text="\n".join(answer_parts),
-                claim_ids=merged_claim_ids,
-                evidence=evidence,
-                confidence=confidence,
-                retrieval_mode=_retrieval_mode_value(retrieval_mode),
-                verification_status=verification_status,
-                competing_claim_ids=competing_claim_ids,
-                as_of=as_of,
-                procedure_id=procedure_id,
-            )
-        }
-
-    if not claim_ids:
-        return {
-            "answer": Answer(
-                text=low_confidence_message,
-                claim_ids=[],
-                evidence=[],
-                confidence=0.1,
-                retrieval_mode=_retrieval_mode_value(retrieval_mode),
-                verification_status=verification_status,
-                competing_claim_ids=competing_claim_ids,
-                as_of=as_of,
-                procedure_id=procedure_id,
-            )
-        }
-
-    bundle = deps.evidence.explain(claim_ids)
-    confidence = verification.adjusted_confidence if verification else bundle.confidence
-    if confidence < 0.4 or not bundle.items:
-        return {
-            "answer": Answer(
-                text=low_confidence_message,
-                claim_ids=[],
-                evidence=[],
-                confidence=confidence if confidence > 0 else 0.1,
-                retrieval_mode=_retrieval_mode_value(retrieval_mode),
-                verification_status=verification_status,
-                competing_claim_ids=competing_claim_ids,
-                as_of=as_of,
-                procedure_id=procedure_id,
-            )
-        }
-
-    texts = []
-    for claim_id in claim_ids:
-        claim = deps.knowledge.get_claim(claim_id)
-        if claim is not None:
-            texts.append(deps.domain.format_claim(claim))
-    answer_text = "。".join(texts) if texts else bundle.conclusion
-    evidence = [
-        {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]}
-        for item in bundle.items
-    ]
-    return {
-        "answer": Answer(
-            text=answer_text,
-            claim_ids=claim_ids,
+        return _build_answer(
+            text="\n".join(answer_parts),
+            claim_ids=merged_claim_ids,
+            chunk_ids=chunk_ids,
             evidence=evidence,
+            chunk_citations=_chunk_citations(deps, chunk_ids),
             confidence=confidence,
-            retrieval_mode=_retrieval_mode_value(retrieval_mode),
+            retrieval_mode=retrieval_mode,
             verification_status=verification_status,
             competing_claim_ids=competing_claim_ids,
             as_of=as_of,
             procedure_id=procedure_id,
         )
-    }
+
+    if not claim_ids and not chunk_ids:
+        return _build_answer(
+            text=low_confidence_message,
+            claim_ids=[],
+            chunk_ids=[],
+            evidence=[],
+            chunk_citations=[],
+            confidence=0.1,
+            retrieval_mode=retrieval_mode,
+            verification_status=verification_status,
+            competing_claim_ids=competing_claim_ids,
+            as_of=as_of,
+            procedure_id=procedure_id,
+        )
+
+    if claim_ids:
+        bundle = deps.evidence.explain(claim_ids)
+        confidence = verification.adjusted_confidence if verification else bundle.confidence
+        if confidence < 0.4 or not bundle.items:
+            if chunk_ids:
+                chunk_texts = []
+                for chunk_id in chunk_ids:
+                    chunk = deps.knowledge.get_chunk(chunk_id)
+                    if chunk is None:
+                        continue
+                    chunk_texts.append(chunk.summary or chunk.text[:160])
+                if chunk_texts:
+                    return _build_answer(
+                        text="。".join(chunk_texts),
+                        claim_ids=[],
+                        chunk_ids=chunk_ids,
+                        evidence=[],
+                        chunk_citations=_chunk_citations(deps, chunk_ids),
+                        confidence=min(confidence if confidence > 0 else 0.5, 0.7),
+                        retrieval_mode=retrieval_mode,
+                        verification_status=verification_status,
+                        competing_claim_ids=competing_claim_ids,
+                        as_of=as_of,
+                        procedure_id=procedure_id,
+                    )
+            return _build_answer(
+                text=low_confidence_message,
+                claim_ids=[],
+                chunk_ids=[],
+                evidence=[],
+                chunk_citations=[],
+                confidence=confidence if confidence > 0 else 0.1,
+                retrieval_mode=retrieval_mode,
+                verification_status=verification_status,
+                competing_claim_ids=competing_claim_ids,
+                as_of=as_of,
+                procedure_id=procedure_id,
+            )
+
+        texts = []
+        for claim_id in claim_ids:
+            claim = deps.knowledge.get_claim(claim_id)
+            if claim is not None:
+                texts.append(deps.domain.format_claim(claim))
+        answer_text = "。".join(texts) if texts else bundle.conclusion
+        evidence = [
+            {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]}
+            for item in bundle.items
+        ]
+        return _build_answer(
+            text=answer_text,
+            claim_ids=claim_ids,
+            chunk_ids=chunk_ids,
+            evidence=evidence,
+            chunk_citations=_chunk_citations(deps, chunk_ids),
+            confidence=confidence,
+            retrieval_mode=retrieval_mode,
+            verification_status=verification_status,
+            competing_claim_ids=competing_claim_ids,
+            as_of=as_of,
+            procedure_id=procedure_id,
+        )
+
+    chunk_texts = []
+    for chunk_id in chunk_ids:
+        chunk = deps.knowledge.get_chunk(chunk_id)
+        if chunk is None:
+            continue
+        chunk_texts.append(chunk.summary or chunk.text[:160])
+    if not chunk_texts:
+        return _build_answer(
+            text=low_confidence_message,
+            claim_ids=[],
+            chunk_ids=[],
+            evidence=[],
+            chunk_citations=[],
+            confidence=0.1,
+            retrieval_mode=retrieval_mode,
+            verification_status=verification_status,
+            competing_claim_ids=competing_claim_ids,
+            as_of=as_of,
+            procedure_id=procedure_id,
+        )
+    return _build_answer(
+        text="。".join(chunk_texts),
+        claim_ids=[],
+        chunk_ids=chunk_ids,
+        evidence=[],
+        chunk_citations=_chunk_citations(deps, chunk_ids),
+        confidence=0.65,
+        retrieval_mode=retrieval_mode,
+        verification_status=verification_status,
+        competing_claim_ids=competing_claim_ids,
+        as_of=as_of,
+        procedure_id=procedure_id,
+    )
 
 
 def remember_node(state: AskState, deps: Any) -> dict:

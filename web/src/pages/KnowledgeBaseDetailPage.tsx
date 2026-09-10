@@ -199,6 +199,8 @@ export function KnowledgeBaseDetailPage() {
           onSearchChange={setSearchQuery}
           expandedSourceId={expandedSourceId}
           onToggleSource={(sourceId) => setExpandedSourceId((current) => (current === sourceId ? null : sourceId))}
+          onChanged={loadSources}
+          onError={setSourcesError}
         />
       </section>
     </section>

@@ -32,14 +32,6 @@ services:
       - minio_data:/data
     restart: unless-stopped
 
-  redis:
-    image: redis:7
-    profiles:
-      - redis
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
   akos-api:
     build:
       context: ..
@@ -79,5 +71,4 @@ volumes:
   postgres_data:
   neo4j_data:
   minio_data:
-  redis_data:
   akos_data:

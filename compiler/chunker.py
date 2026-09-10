@@ -4,11 +4,28 @@ import re
 from dataclasses import dataclass
 
 _HEADING_RE = re.compile(r"^#{1,6}\s")
+_TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
 
 
 @dataclass(frozen=True)
 class ChunkResult:
     chunks: list[str]
+    truncated: bool
+
+
+@dataclass(frozen=True)
+class DocumentChunkDraft:
+    chunk_index: int
+    title: str | None
+    text: str
+    start: int
+    end: int
+    section_path: list[str]
+
+
+@dataclass(frozen=True)
+class DocumentChunkResult:
+    chunks: list[DocumentChunkDraft]
     truncated: bool
 
 
@@ -62,3 +79,135 @@ def chunk_text(text: str, max_chars: int, max_chunks: int) -> ChunkResult:
         chunks = chunks[:max_chunks]
 
     return ChunkResult(chunks=chunks, truncated=truncated)
+
+
+def _heading_level(line: str) -> int:
+    stripped = line.lstrip()
+    if not stripped.startswith("#"):
+        return 0
+    level = 0
+    for char in stripped:
+        if char == "#":
+            level += 1
+        else:
+            break
+    return level if level <= 6 else 0
+
+
+def _collect_section_spans(text: str) -> list[tuple[int, int, list[str], str | None]]:
+    if not text:
+        return []
+
+    spans: list[tuple[int, int, list[str], str | None]] = []
+    section_path: list[str] = []
+    section_start = 0
+    current_title: str | None = None
+    pos = 0
+
+    for line in text.splitlines(keepends=True):
+        line_start = pos
+        line_end = pos + len(line)
+        pos = line_end
+        stripped = line.strip()
+
+        if _HEADING_RE.match(stripped):
+            if section_start < line_start:
+                spans.append((section_start, line_start, list(section_path), current_title))
+            level = _heading_level(stripped)
+            heading = stripped.lstrip("#").strip()
+            if level > 0:
+                section_path = section_path[: level - 1]
+                section_path.append(heading)
+            current_title = heading or None
+            section_start = line_start
+        elif stripped == "" and section_start < line_start:
+            spans.append((section_start, line_end, list(section_path), current_title))
+            section_start = line_end
+            current_title = None
+
+    if section_start < len(text):
+        spans.append((section_start, len(text), list(section_path), current_title))
+
+    if not spans:
+        return [(0, len(text), [], None)]
+    return spans
+
+
+def _split_span(
+    text: str,
+    start: int,
+    end: int,
+    section_path: list[str],
+    title: str | None,
+    max_chars: int,
+) -> list[tuple[int, int, list[str], str | None]]:
+    span_text = text[start:end]
+    if len(span_text) <= max_chars:
+        return [(start, end, section_path, title)]
+
+    pieces: list[tuple[int, int, list[str], str | None]] = []
+    offset = 0
+    part_index = 0
+    while offset < len(span_text):
+        piece = span_text[offset : offset + max_chars]
+        piece_start = start + offset
+        piece_end = piece_start + len(piece)
+        piece_title = title if part_index == 0 else None
+        pieces.append((piece_start, piece_end, section_path, piece_title))
+        offset += max_chars
+        part_index += 1
+    return pieces
+
+
+def chunk_document(text: str, max_chars: int, max_chunks: int) -> DocumentChunkResult:
+    if not text:
+        return DocumentChunkResult(chunks=[], truncated=False)
+
+    raw_spans: list[tuple[int, int, list[str], str | None]] = []
+    for start, end, section_path, title in _collect_section_spans(text):
+        raw_spans.extend(_split_span(text, start, end, section_path, title, max_chars))
+
+    truncated = len(raw_spans) > max_chunks
+    if truncated:
+        kept = raw_spans[: max_chunks - 1]
+        overflow_start = raw_spans[max_chunks - 1][0]
+        overflow_end = raw_spans[-1][1]
+        overflow_path = raw_spans[max_chunks - 1][2]
+        overflow_title = raw_spans[max_chunks - 1][3]
+        raw_spans = kept + [(overflow_start, overflow_end, overflow_path, overflow_title)]
+
+    drafts = [
+        DocumentChunkDraft(
+            chunk_index=index,
+            title=title,
+            text=text[start:end],
+            start=start,
+            end=end,
+            section_path=section_path,
+        )
+        for index, (start, end, section_path, title) in enumerate(raw_spans)
+    ]
+    validate_chunk_coverage(text, drafts)
+    return DocumentChunkResult(chunks=drafts, truncated=truncated)
+
+
+def validate_chunk_coverage(text: str, chunks: list[DocumentChunkDraft]) -> None:
+    if not text:
+        return
+    if not chunks:
+        raise ValueError("chunk coverage failed: no chunks for non-empty text")
+    ordered = sorted(chunks, key=lambda item: item.chunk_index)
+    if ordered[0].start != 0:
+        raise ValueError("chunk coverage failed: first chunk must start at 0")
+    if ordered[-1].end != len(text):
+        raise ValueError("chunk coverage failed: last chunk must end at text length")
+    for left, right in zip(ordered, ordered[1:]):
+        if left.end != right.start:
+            raise ValueError("chunk coverage failed: gaps or overlaps between chunks")
+    rebuilt = "".join(chunk.text for chunk in ordered)
+    if rebuilt != text:
+        raise ValueError("chunk coverage failed: concatenated text mismatch")
+
+
+def estimate_token_count(text: str) -> int:
+    return len(_TOKEN_PATTERN.findall(text))

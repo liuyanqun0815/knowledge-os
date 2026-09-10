@@ -90,6 +90,7 @@ def _deps(text: str | None, client: MockLlmClient) -> SimpleNamespace:
         compiler=compiler,
         domain=_Domain(),
         llm_client=client,
+        chunk_retrieval=None,
         knowledge_base_id="kb-1",
     )
 

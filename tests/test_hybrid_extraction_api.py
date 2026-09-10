@@ -15,22 +15,24 @@ from knowledge.memory_repo import InMemoryKnowledge
 from knowledge.models import Source
 
 
-def test_upload_schedules_enrichment_without_calling_llm_synchronously(tmp_path, monkeypatch) -> None:
+def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
     monkeypatch.setenv("AKOS_EXTRACT_LLM", "true")
     app = create_app(data_root=str(tmp_path))
     app.state.settings = Settings(data_root=str(tmp_path), extract_llm=True, llm_api_key="test-key")
     scheduled: list[tuple[object, tuple, dict]] = []
+    sync_llm_calls: list[str] = []
 
     def capture_task(self, func, *args, **kwargs) -> None:
         scheduled.append((func, args, kwargs))
 
-    def reject_synchronous_llm(self, text: str) -> list[ExtractedClaim]:
-        raise AssertionError("the synchronous upload path must not call the LLM")
+    def track_sync_llm(self, text: str) -> list[ExtractedClaim]:
+        sync_llm_calls.append(text)
+        return []
 
     monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
-    monkeypatch.setattr(DomainLlmExtractor, "extract", reject_synchronous_llm)
+    monkeypatch.setattr(DomainLlmExtractor, "extract", track_sync_llm)
 
     response = TestClient(app).post(
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
@@ -40,8 +42,11 @@ def test_upload_schedules_enrichment_without_calling_llm_synchronously(tmp_path,
 
     assert response.status_code == 200, response.text
     source_id = response.json()["results"][0]["source_id"]
-    assert len(scheduled) == 1
-    task, args, kwargs = scheduled[0]
+    assert sync_llm_calls, "compile should invoke LLM when extract_llm is enabled"
+    assert len(scheduled) >= 1
+    enrich_tasks = [item for item in scheduled if item[0].__name__ == "enrich_source"]
+    assert len(enrich_tasks) == 1
+    task, args, kwargs = enrich_tasks[0]
     assert task is enrich_source
     assert not args
     assert kwargs["kb_id"] == DEFAULT_IN_MEMORY_KB_ID

@@ -15,12 +15,16 @@ class RetrievalMode(str, Enum):
 
 @dataclass
 class Hit:
-    claim_id: str | None
     score: float
     snippet: str | None
+    hit_type: str = "claim"
+    claim_id: str | None = None
+    chunk_id: str | None = None
+    source_id: str | None = None
     entity_id: str | None = None
 
 
 class RetrievalPort(Protocol):
     def index_claim(self, claim: Claim) -> None: ...
+    def warm_index(self) -> None: ...
     def search(self, query: str, mode: RetrievalMode, filters: dict) -> list[Hit]: ...

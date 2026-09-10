@@ -8,6 +8,7 @@ const navItems = [
   { to: "/sources", label: "文档" },
   { to: "/ask", label: "问答" },
   { to: "/claims", label: "Claim" },
+  { to: "/graph", label: "图谱" },
   { to: "/quarantine", label: "隔离" },
 ];
 

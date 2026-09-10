@@ -80,6 +80,29 @@ class SourceUploadResponse(BaseModel):
     files_skipped: int
     results: list[ZipUploadItemResponse] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    ingest_summary: str | None = None
+
+
+class MoveSourcesRequest(BaseModel):
+    from_path: str
+    to_path: str
+
+
+class DeleteTreeRequest(BaseModel):
+    path: str
+
+
+class DeleteTreeResponse(BaseModel):
+    deleted_count: int
+
+
+class SourceContentResponse(BaseModel):
+    source_id: str
+    title: str
+    relative_path: str
+    content: str
+    size_bytes: int
+    encoding: str = "utf-8"
 
 
 class ZipUploadResponse(SourceUploadResponse):
@@ -172,6 +195,34 @@ class ApproveQuarantineResponse(BaseModel):
     claim: ClaimListItemResponse
 
 
+class LintIssueResponse(BaseModel):
+    code: str
+    severity: str
+    message: str
+    refs: dict[str, str] = Field(default_factory=dict)
+
+
+class LintReportResponse(BaseModel):
+    kb_id: str
+    checked_at: datetime
+    issues: list[LintIssueResponse] = Field(default_factory=list)
+    summary: dict[str, int] = Field(default_factory=dict)
+
+
+class WikiExportRequest(BaseModel):
+    output_dir: str | None = None
+    use_llm: bool = False
+
+
+class WikiExportResponse(BaseModel):
+    kb_id: str
+    output_path: str
+    files_written: int
+    source_pages: int
+    entity_pages: int
+    exported_at: datetime
+
+
 class DebugAskRequest(BaseModel):
     question: str
     session_id: str | None = None
@@ -196,3 +247,30 @@ class GraphNeighborResponse(BaseModel):
     predicate: str
     dst: str
     props: dict = Field(default_factory=dict)
+
+
+class GraphEntityResponse(BaseModel):
+    id: str
+    type: str
+    name: str
+
+
+class GraphEdgeResponse(BaseModel):
+    src: str
+    predicate: str
+    dst: str
+    src_name: str
+    dst_name: str
+
+
+class GraphSnapshotResponse(BaseModel):
+    entities: list[GraphEntityResponse] = Field(default_factory=list)
+    edges: list[GraphEdgeResponse] = Field(default_factory=list)
+    truncated: bool = False
+    entity_total: int = 0
+
+
+class GraphNeighborsResponse(BaseModel):
+    entity_id: str
+    entities: list[GraphEntityResponse] = Field(default_factory=list)
+    edges: list[GraphEdgeResponse] = Field(default_factory=list)
