@@ -75,12 +75,26 @@ class DomainLlmExtractor:
         return self._parse_response(content, text)
 
     def _build_prompt(self, text: str) -> str:
-        configuration = {
-            "allowed_predicates": self._spec.allowed_predicates,
-            "entity_types": self._spec.entity_types,
-            "prompt_locale": self._spec.prompt_locale,
-            "few_shot_hints": self._spec.few_shot_hints or [],
-        }
+        if self._spec.open_predicates:
+            configuration = {
+                "mode": "open",
+                "suggested_predicates": self._spec.allowed_predicates,
+                "suggested_entity_types": self._spec.entity_types,
+                "prompt_locale": self._spec.prompt_locale,
+                "few_shot_hints": self._spec.few_shot_hints or [],
+                "rules": [
+                    "可使用最贴切的中文谓词，不必限于 suggested_predicates",
+                    "quote 必须是原文连续非空子串",
+                    "只输出匹配 json_schema 的 JSON 数组",
+                ],
+            }
+        else:
+            configuration = {
+                "allowed_predicates": self._spec.allowed_predicates,
+                "entity_types": self._spec.entity_types,
+                "prompt_locale": self._spec.prompt_locale,
+                "few_shot_hints": self._spec.few_shot_hints or [],
+            }
         return _PROMPT.format(
             configuration=json.dumps(configuration, ensure_ascii=False),
             json_schema=json.dumps(_CLAIM_JSON_SCHEMA, ensure_ascii=False),

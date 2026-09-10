@@ -85,6 +85,21 @@ def test_prompt_contains_spec_and_json_schema() -> None:
     assert '"start"' not in prompt
 
 
+def test_open_prompt_uses_suggested_predicates_and_allows_novel() -> None:
+    client = FakeLlmClient([])
+    spec = LlmExtractionSpec(
+        allowed_predicates=["倡导", "禁止"],
+        entity_types=["Value", "Behavior"],
+        open_predicates=True,
+    )
+    DomainLlmExtractor(client, spec).extract("公司倡导诚信经营。")
+    prompt = client.messages[0]["content"]
+    assert '"mode": "open"' in prompt
+    assert '"suggested_predicates"' in prompt
+    assert "不必限于" in prompt or "不必限" in prompt
+    assert '"allowed_predicates"' not in prompt
+
+
 def test_claim_with_quote_outside_source_is_discarded() -> None:
     client = FakeLlmClient(
         [
