@@ -5,6 +5,7 @@ from typing import Any
 from compiler.chunker import chunk_text
 from compiler.domain_llm_extractor import DomainLlmExtractor
 from compiler.ports import ExtractedClaim
+from compiler.spec_utils import apply_open_flag
 from infra.settings import Settings
 
 
@@ -32,7 +33,8 @@ def enrich_source(
             max_chars=settings.chunk_max_chars,
             max_chunks=settings.chunk_max_per_doc,
         )
-        extractor = DomainLlmExtractor(client, deps.domain.llm_extraction_spec())
+        spec = apply_open_flag(deps.domain.llm_extraction_spec(), settings)
+        extractor = DomainLlmExtractor(client, spec)
         extracted: list[ExtractedClaim] = []
         failed_chunks = 0
 
@@ -49,6 +51,7 @@ def enrich_source(
             source_id,
             extracted,
             min_confidence=settings.extract_min_confidence,
+            open_predicates=settings.extract_open_predicates,
         )
         failure_ratio = failed_chunks / len(result.chunks) if result.chunks else 0.0
         final_status = "succeeded_partial" if result.truncated or failure_ratio >= 0.5 else "succeeded"

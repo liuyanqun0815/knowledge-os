@@ -49,11 +49,19 @@ def test_upload_schedules_enrichment_without_calling_llm_synchronously(tmp_path,
     assert kwargs["deps"].knowledge.get_source(source_id).status == "enriching"
 
 
-def test_scheduled_enrichment_quarantines_unknown_predicate(tmp_path, monkeypatch) -> None:
+def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("AKOS_EXTRACT_OPEN_PREDICATES", "true")
     app = create_app(data_root=str(tmp_path))
-    app.state.settings = Settings(data_root=str(tmp_path), extract_llm=True, llm_api_key="test-key")
+    open_settings = Settings(
+        data_root=str(tmp_path),
+        extract_rules=False,
+        extract_llm=True,
+        llm_api_key="test-key",
+        extract_open_predicates=True,
+    )
+    app.state.settings = open_settings
     scheduled: list[tuple[object, dict]] = []
 
     def capture_task(self, func, *args, **kwargs) -> None:
@@ -61,6 +69,7 @@ def test_scheduled_enrichment_quarantines_unknown_predicate(tmp_path, monkeypatc
         scheduled.append((func, kwargs))
 
     monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
+    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text: [])
     source_text = "七天无理由由买家承担"
     response = TestClient(app).post(
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
@@ -86,7 +95,9 @@ def test_scheduled_enrichment_quarantines_unknown_predicate(tmp_path, monkeypatc
 
     monkeypatch.setattr(DomainLlmExtractor, "extract", extract_unknown)
     task, kwargs = scheduled[0]
+    kwargs["settings"] = open_settings
     assert kwargs["settings"].extract_llm is True
+    assert kwargs["settings"].extract_open_predicates is True
     assert kwargs["deps"].llm_client.is_configured is True
     assert kwargs["deps"].knowledge.get_source_text(kwargs["source_id"]) == source_text
     task(**kwargs)
@@ -94,7 +105,57 @@ def test_scheduled_enrichment_quarantines_unknown_predicate(tmp_path, monkeypatc
     knowledge = kwargs["deps"].knowledge
     assert extracted_texts == [source_text]
     assert knowledge.get_source(kwargs["source_id"]).status == "succeeded"
-    assert knowledge.list_quarantine()[-1]["reason"] == "invalid_predicate"
+    active = [c for c in knowledge.get_claims_by_status("active") if c.predicate == "unknown_predicate"]
+    assert active
+    assert not any(q["reason"] == "invalid_predicate" for q in knowledge.list_quarantine())
+
+
+def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AKOS_USE_PG", "false")
+    monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("AKOS_EXTRACT_OPEN_PREDICATES", "false")
+    app = create_app(data_root=str(tmp_path))
+    closed_settings = Settings(
+        data_root=str(tmp_path),
+        extract_rules=False,
+        extract_llm=True,
+        llm_api_key="test-key",
+        extract_open_predicates=False,
+    )
+    app.state.settings = closed_settings
+    scheduled: list[tuple[object, dict]] = []
+
+    def capture_task(self, func, *args, **kwargs) -> None:
+        assert not args
+        scheduled.append((func, kwargs))
+
+    monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
+    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text: [])
+    source_text = "七天无理由由买家承担"
+    response = TestClient(app).post(
+        f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
+        files={"file": ("policy.md", source_text.encode(), "text/markdown")},
+    )
+    assert response.status_code == 200, response.text
+
+    def extract_unknown(self, text: str) -> list[ExtractedClaim]:
+        return [
+            ExtractedClaim(
+                subject="七天无理由",
+                predicate="unknown_predicate",
+                object="买家",
+                confidence=0.9,
+                quote=text,
+                start=0,
+                end=len(text),
+            )
+        ]
+
+    monkeypatch.setattr(DomainLlmExtractor, "extract", extract_unknown)
+    task, kwargs = scheduled[0]
+    kwargs["settings"] = closed_settings
+    task(**kwargs)
+    assert kwargs["deps"].knowledge.list_quarantine()[-1]["reason"] == "invalid_predicate"
 
 
 def test_lifespan_retries_only_enriching_sources(tmp_path, monkeypatch) -> None:
