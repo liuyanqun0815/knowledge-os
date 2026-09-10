@@ -105,6 +105,7 @@ def test_apply_extracted_claims_quarantines_invalid_predicate():
     report = compiler.apply_extracted_claims(
         "source-1",
         [_extracted(predicate="未知关系", quote="七天无理由支持未知关系买家")],
+        open_predicates=False,
     )
 
     assert report.quarantined == 1
@@ -112,6 +113,25 @@ def test_apply_extracted_claims_quarantines_invalid_predicate():
     assert entry["reason"] == "invalid_predicate"
     assert entry["raw"]["predicate"] == "未知关系"
     assert entry["raw"]["quote"] == "七天无理由支持未知关系买家"
+
+
+def test_apply_extracted_claims_open_registers_and_writes_novel_predicate():
+    compiler, knowledge, graph, evidence, retrieval = _build_compiler(
+        text="七天无理由支持未知关系买家。"
+    )
+    report = compiler.apply_extracted_claims(
+        "source-1",
+        [_extracted(predicate="未知关系", quote="七天无理由支持未知关系买家")],
+        open_predicates=True,
+    )
+    assert report.claims_created == 1
+    assert report.quarantined == 0
+    assert knowledge.list_quarantine() == []
+    claim = next(c for c in knowledge.get_claims_by_status("active") if c.predicate == "未知关系")
+    assert claim.subject == "七天无理由"
+    assert compiler.ontology.validate_claim("Policy", "未知关系", "Party")
+    hits = retrieval.search("未知关系", RetrievalMode.CLAIM, {})
+    assert any(h.claim_id == claim.id for h in hits)
 
 
 def test_apply_extracted_claims_skips_existing_family_and_object():

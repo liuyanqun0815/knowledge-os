@@ -44,6 +44,10 @@ class KnowledgeCompiler:
         self._extractor = extractor
         self._retrieval = retrieval
 
+    @property
+    def ontology(self) -> OntologyPort:
+        return self._ontology
+
     def ingest(self, source_id: str, staging: bool = False) -> CompileReport:
         text = self._knowledge.get_source_text(source_id)
         if text is None:
@@ -137,6 +141,7 @@ class KnowledgeCompiler:
         staging: bool = False,
         min_confidence: float = 0.5,
         existing_skip: bool = True,
+        open_predicates: bool = False,
     ) -> CompileReport:
         text = self._knowledge.get_source_text(source_id)
         if text is None:
@@ -189,9 +194,12 @@ class KnowledgeCompiler:
                 }
             )
             if not self._ontology.validate_claim(subject_type, candidate.predicate, object_type):
-                self._knowledge.add_quarantine("invalid_predicate", raw)
-                quarantined += 1
-                continue
+                if open_predicates:
+                    self._ontology.register_predicate(subject_type, candidate.predicate, object_type)
+                else:
+                    self._knowledge.add_quarantine("invalid_predicate", raw)
+                    quarantined += 1
+                    continue
 
             family_id = _family_id(subject, candidate.predicate, object_type)
             history = self._knowledge.get_claim_history(family_id)
