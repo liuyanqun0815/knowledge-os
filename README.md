@@ -73,6 +73,7 @@ cp .env.example .env
 | `AKOS_CHUNK_MAX_CHARS` | 单切片最大字符数 | `3000` |
 | `AKOS_CHUNK_MAX_PER_DOC` | 单文档最大切片数 | `40` |
 | `AKOS_EXTRACT_MIN_CONFIDENCE` | LLM Claim 最低置信度 | `0.5` |
+| `AKOS_EXTRACT_OPEN_PREDICATES` | 开放谓词（true=LLM 可自创谓词并懒注册；false=名单外进 quarantine） | `true` |
 | `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
 
 ## Hybrid LLM 抽取（两段式）
