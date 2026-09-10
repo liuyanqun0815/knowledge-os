@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     chunk_max_chars: int = 3000
     chunk_max_per_doc: int = 40
     extract_min_confidence: float = 0.5
+    extract_open_predicates: bool = True
 
 
 @lru_cache

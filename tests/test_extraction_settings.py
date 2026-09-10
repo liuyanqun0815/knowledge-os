@@ -38,3 +38,17 @@ def test_domain_llm_extraction_spec(domain_type: str):
     assert isinstance(spec, LlmExtractionSpec)
     assert isinstance(spec.allowed_predicates, list)
     assert isinstance(spec.entity_types, list)
+
+
+def test_settings_extract_open_predicates_defaults_true(monkeypatch):
+    monkeypatch.delenv("AKOS_EXTRACT_OPEN_PREDICATES", raising=False)
+    from infra.settings import Settings
+
+    assert Settings().extract_open_predicates is True
+
+
+def test_llm_extraction_spec_open_predicates_default_false():
+    from compiler.extraction_spec import LlmExtractionSpec
+
+    spec = LlmExtractionSpec(allowed_predicates=["适用"], entity_types=["Concept"])
+    assert spec.open_predicates is False

@@ -9,3 +9,4 @@ class LlmExtractionSpec:
     entity_types: list[str]
     prompt_locale: str = "zh"
     few_shot_hints: list[str] | None = None
+    open_predicates: bool = False
