@@ -83,3 +83,18 @@ class SourceChunk:
     status: str = "active"
     content_hash: str = ""
     created_at: datetime | None = None
+
+
+@dataclass
+class TopicCluster:
+    id: str
+    knowledge_base_id: str
+    name: str
+    aliases: list[str] = field(default_factory=list)
+    chunk_ids: list[str] = field(default_factory=list)
+    claim_ids: list[str] = field(default_factory=list)
+    source_ids: list[str] = field(default_factory=list)
+    summary: str | None = None
+    status: str = "active"
+    content_hash: str = ""
+    updated_at: datetime | None = None

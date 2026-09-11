@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     wiki_llm_cache: bool = True
     wiki_prompt_version: str = "v1"
 
+    # Topic cluster
+    topic_cluster: bool = True
+    topic_min_chunks: int = 1
+    topic_graph_chunks: bool = True
+    topic_llm_summary: bool = False
+    topic_claim_boost: float = 0.1
+
     # 管理台原文预览
     source_content_max_bytes: int = 1_048_576
 
