@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from knowledge.errors import DomainError
-from knowledge.models import Claim, Event, Source, SourceChunk
+from knowledge.models import Claim, Event, Source, SourceChunk, TopicCluster
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:
@@ -26,6 +26,7 @@ class InMemoryKnowledge:
         self._events: list[Event] = []
         self._chunks: dict[str, SourceChunk] = {}
         self._chunks_by_source: dict[str, list[str]] = {}
+        self._topic_clusters: dict[str, TopicCluster] = {}
 
     def save_source(self, source: Source) -> Source:
         self._sources[source.id] = source
@@ -200,3 +201,18 @@ class InMemoryKnowledge:
             raise DomainError(f"chunk_not_found: {chunk.id}")
         self._chunks[chunk.id] = chunk
         return chunk
+
+    def save_topic_clusters(self, clusters: list[TopicCluster]) -> None:
+        for cluster in clusters:
+            self._topic_clusters[cluster.id] = cluster
+
+    def list_topic_clusters(self, *, status: str = "active") -> list[TopicCluster]:
+        return [cluster for cluster in self._topic_clusters.values() if cluster.status == status]
+
+    def get_topic_cluster(self, cluster_id: str) -> TopicCluster | None:
+        return self._topic_clusters.get(cluster_id)
+
+    def mark_topic_clusters_stale(self) -> None:
+        for cluster in self._topic_clusters.values():
+            if cluster.status == "active":
+                cluster.status = "stale"

@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from knowledge.errors import DomainError
-from knowledge.models import Claim, Event, Source, SourceChunk
+from knowledge.models import Claim, Event, Source, SourceChunk, TopicCluster
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:
@@ -676,6 +676,111 @@ class PgKnowledge:
                 },
             )
         return chunk
+
+    def save_topic_clusters(self, clusters: list[TopicCluster]) -> None:
+        with self._engine.begin() as conn:
+            for cluster in clusters:
+                conn.execute(
+                    text("""
+                        INSERT INTO topic_clusters (
+                            id, knowledge_base_id, name, aliases, chunk_ids, claim_ids,
+                            source_ids, summary, status, content_hash, updated_at
+                        ) VALUES (
+                            :id, :knowledge_base_id, :name, CAST(:aliases AS jsonb),
+                            CAST(:chunk_ids AS jsonb), CAST(:claim_ids AS jsonb),
+                            CAST(:source_ids AS jsonb), :summary, :status, :content_hash, :updated_at
+                        )
+                        ON CONFLICT (id) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            aliases = EXCLUDED.aliases,
+                            chunk_ids = EXCLUDED.chunk_ids,
+                            claim_ids = EXCLUDED.claim_ids,
+                            source_ids = EXCLUDED.source_ids,
+                            summary = EXCLUDED.summary,
+                            status = EXCLUDED.status,
+                            content_hash = EXCLUDED.content_hash,
+                            updated_at = EXCLUDED.updated_at
+                        """),
+                    {
+                        "id": cluster.id,
+                        "knowledge_base_id": self._knowledge_base_id,
+                        "name": cluster.name,
+                        "aliases": json.dumps(cluster.aliases),
+                        "chunk_ids": json.dumps(cluster.chunk_ids),
+                        "claim_ids": json.dumps(cluster.claim_ids),
+                        "source_ids": json.dumps(cluster.source_ids),
+                        "summary": cluster.summary,
+                        "status": cluster.status,
+                        "content_hash": cluster.content_hash,
+                        "updated_at": cluster.updated_at or datetime.now(timezone.utc),
+                    },
+                )
+
+    def list_topic_clusters(self, *, status: str = "active") -> list[TopicCluster]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, knowledge_base_id, name, aliases, chunk_ids, claim_ids,
+                           source_ids, summary, status, content_hash, updated_at
+                    FROM topic_clusters
+                    WHERE knowledge_base_id = :knowledge_base_id AND status = :status
+                    ORDER BY name
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id, "status": status},
+            ).fetchall()
+        return [self._row_to_topic_cluster(row) for row in rows]
+
+    def get_topic_cluster(self, cluster_id: str) -> TopicCluster | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT id, knowledge_base_id, name, aliases, chunk_ids, claim_ids,
+                           source_ids, summary, status, content_hash, updated_at
+                    FROM topic_clusters
+                    WHERE id = :id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                {"id": cluster_id, "knowledge_base_id": self._knowledge_base_id},
+            ).one_or_none()
+        return self._row_to_topic_cluster(row) if row is not None else None
+
+    def mark_topic_clusters_stale(self) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE topic_clusters
+                    SET status = 'stale'
+                    WHERE knowledge_base_id = :knowledge_base_id AND status = 'active'
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id},
+            )
+
+    @staticmethod
+    def _row_to_topic_cluster(row: Any) -> TopicCluster:
+        aliases = row.aliases
+        if isinstance(aliases, str):
+            aliases = json.loads(aliases)
+        chunk_ids = row.chunk_ids
+        if isinstance(chunk_ids, str):
+            chunk_ids = json.loads(chunk_ids)
+        claim_ids = row.claim_ids
+        if isinstance(claim_ids, str):
+            claim_ids = json.loads(claim_ids)
+        source_ids = row.source_ids
+        if isinstance(source_ids, str):
+            source_ids = json.loads(source_ids)
+        return TopicCluster(
+            id=row.id,
+            knowledge_base_id=row.knowledge_base_id,
+            name=row.name,
+            aliases=list(aliases or []),
+            chunk_ids=list(chunk_ids or []),
+            claim_ids=list(claim_ids or []),
+            source_ids=list(source_ids or []),
+            summary=row.summary,
+            status=row.status,
+            content_hash=row.content_hash,
+            updated_at=row.updated_at,
+        )
 
     @staticmethod
     def _row_to_chunk(row: Any) -> SourceChunk:
