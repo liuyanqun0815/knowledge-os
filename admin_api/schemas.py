@@ -224,6 +224,13 @@ class WikiExportResponse(BaseModel):
     exported_at: datetime
 
 
+class TopicRebuildResponse(BaseModel):
+    topics_created: int
+    topics_updated: int
+    topics_stale: int
+    edges: int
+
+
 class DebugAskRequest(BaseModel):
     question: str
     session_id: str | None = None

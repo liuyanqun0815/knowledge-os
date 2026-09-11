@@ -13,6 +13,7 @@ from admin_api.routes_lint import router as lint_router
 from admin_api.routes_wiki import router as wiki_router
 from admin_api.routes_quarantine import router as quarantine_router
 from admin_api.routes_sources import router as sources_router
+from admin_api.routes_topics import router as topics_router
 from app.admin_auth import require_admin_token
 from app.routes import router
 from compiler.enrichment import enrich_source
@@ -76,6 +77,7 @@ def create_app(data_root: str | None = None) -> FastAPI:
     admin_router.include_router(quarantine_router)
     admin_router.include_router(lint_router)
     admin_router.include_router(wiki_router)
+    admin_router.include_router(topics_router)
     admin_router.include_router(evolution_router)
     admin_router.include_router(debug_router)
     admin_router.include_router(graph_router)

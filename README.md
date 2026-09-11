@@ -37,6 +37,7 @@ akos wiki-export --kb <knowledge_base_id> --out ./wiki-out
 |------|-----|-----------|
 | Lint | `akos lint --kb <id>` | `GET /admin/knowledge-bases/{kb_id}/lint` |
 | Wiki 导出 | `akos wiki-export --kb <id> [--out dir]` | `POST /admin/knowledge-bases/{kb_id}/wiki/export` |
+| 主题簇重建 | （enrich / wiki 导出前自动） | `POST /admin/knowledge-bases/{kb_id}/topics/rebuild` |
 
 Lint 检查项：`conflict`（同 family 多条 active）、`missing_evidence`、`orphan_source`、`quarantine_backlog`。
 
@@ -44,11 +45,14 @@ Wiki 导出目录结构（Obsidian 友好）：
 
 ```
 {output}/
-  index.md              # 文档与实体索引
+  index.md              # 文档、主题与实体索引
   log.md                # 导出时间戳
+  topic-{name}.md       # 主题簇页（Claims / 章节 / 相关）
   source-{id}.md        # 文档页 + 关联 Claim
   {subject}.md          # 实体页 + [[wikilink]]
 ```
+
+`AKOS_TOPIC_CLUSTER=true` 时，Wiki 的 `index.md` 含 `## 主题` 区；手动重建：`POST /admin/knowledge-bases/{kb_id}/topics/rebuild`（返回 `topics_created` / `topics_updated` / `topics_stale` / `edges`）。
 
 默认导出路径：`{AKOS_DATA_ROOT}/{kb_id}/wiki/`。上传完成后 API 响应含 `ingest_summary`（规则生成，无 LLM）。
 
@@ -122,6 +126,11 @@ cp .env.example .env
 | `AKOS_CHUNK_MAX_PER_DOC` | 单文档最大切片数 | `40` |
 | `AKOS_EXTRACT_MIN_CONFIDENCE` | LLM Claim 最低置信度 | `0.5` |
 | `AKOS_EXTRACT_OPEN_PREDICATES` | 开放谓词（true=LLM 可自创谓词并懒注册；false=名单外进 quarantine） | `true` |
+| `AKOS_TOPIC_CLUSTER` | 启用主题簇（PG/图/Wiki topic 页） | `true` |
+| `AKOS_TOPIC_MIN_CHUNKS` | 主题簇最少 chunk 数（仅 claim 命中时仍可成簇） | `1` |
+| `AKOS_TOPIC_GRAPH_CHUNKS` | 图同步时写入 Chunk 节点与「包含段落」边 | `true` |
+| `AKOS_TOPIC_LLM_SUMMARY` | 主题摘要 LLM（一期默认关） | `false` |
+| `AKOS_TOPIC_CLAIM_BOOST` | 同簇 claim 检索加权 α（一期未接线，预留） | `0.1` |
 | `ADMIN_API_TOKEN` | 管理 API 令牌（非空时 `/admin/*` 需 `X-Admin-Token`） | 空 |
 
 ## Hybrid LLM 抽取（两段式）
