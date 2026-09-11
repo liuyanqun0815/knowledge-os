@@ -8,7 +8,7 @@ from cli.main import app
 from evidence.memory_repo import InMemoryEvidence
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from knowledge.memory_repo import InMemoryKnowledge
-from knowledge.models import Claim, Source
+from knowledge.models import Claim, Source, SourceChunk, TopicCluster
 from tests.conftest import ROOT
 from wiki.export import _sanitize_filename, export_wiki, resolve_wiki_output_dir
 
@@ -99,6 +99,70 @@ def test_export_wiki_writes_index_log_source_and_entity_pages(tmp_path: Path):
     assert "Wiki Index — legacy" in index_content
     assert "[[source-policy-v3|refund_policy_v3.md]]" in index_content
     assert "[[七天无理由|七天无理由]]" in index_content
+
+
+def test_export_wiki_writes_topic_pages_and_index_section(tmp_path: Path):
+    knowledge = InMemoryKnowledge()
+    evidence = InMemoryEvidence()
+    knowledge.save_source(_source())
+    knowledge.save_source_text("policy-v3", "尺码选择相关说明。")
+    knowledge.save_chunks(
+        "policy-v3",
+        [
+            SourceChunk(
+                id="chunk-1",
+                source_id="policy-v3",
+                chunk_index=0,
+                title="尺码表",
+                summary=None,
+                text="请核对尺码表。",
+                start=0,
+                end=8,
+                topics=["尺码选择"],
+                status="active",
+                created_at=datetime.now(timezone.utc),
+            )
+        ],
+    )
+    claim = _claim("claim-1", "family-1", subject="尺码选择", predicate="建议", object_value="核对尺码表")
+    knowledge.append_claim(claim)
+    knowledge.save_topic_clusters(
+        [
+            TopicCluster(
+                id="topic-1",
+                knowledge_base_id="legacy",
+                name="尺码选择",
+                aliases=["尺码表"],
+                chunk_ids=["chunk-1"],
+                claim_ids=["claim-1"],
+                source_ids=["policy-v3"],
+                summary="尺码相关主题",
+                status="active",
+                content_hash="hash-1",
+                updated_at=datetime.now(timezone.utc),
+            )
+        ]
+    )
+
+    output_dir = tmp_path / "wiki-out"
+    result = export_wiki(knowledge, evidence, "legacy", output_dir)
+
+    assert result.topic_pages == 1
+    topic_path = output_dir / "topic-尺码选择.md"
+    assert topic_path.exists()
+    topic_content = topic_path.read_text(encoding="utf-8")
+    assert "type: topic" in topic_content
+    assert "## Claims" in topic_content
+    assert "建议 → 核对尺码表" in topic_content
+    assert "[[source-policy-v3|refund_policy_v3.md]]" in topic_content
+    assert "[[chunk-policy-v3-0|尺码表]]" in topic_content
+
+    index_content = (output_dir / "index.md").read_text(encoding="utf-8")
+    assert "## 主题" in index_content
+    topics_pos = index_content.index("## 主题")
+    entities_pos = index_content.index("## Entities")
+    assert topics_pos < entities_pos
+    assert "[[topic-尺码选择|尺码选择]]" in index_content
 
 
 def test_export_wiki_sanitizes_source_id_in_filename(tmp_path: Path):

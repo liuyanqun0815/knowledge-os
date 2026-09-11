@@ -220,6 +220,7 @@ class WikiExportResponse(BaseModel):
     files_written: int
     source_pages: int
     entity_pages: int
+    topic_pages: int = 0
     exported_at: datetime
 
 

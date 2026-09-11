@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from evidence.ports import EvidencePort
-from knowledge.models import Claim, Source, SourceChunk
+from knowledge.models import Claim, Source, SourceChunk, TopicCluster
 from knowledge.ports import KnowledgePort
 
-_UNSAFE_FILENAME_CHARS = ('/', '\\', ':', '*', '?', '"', '<', '>', '|')
+_UNSAFE_FILENAME_CHARS = ("/", "\\", ":", "*", "?", '"', "<", ">", "|")
 
 
 @dataclass
@@ -20,6 +20,7 @@ class WikiExportResult:
     source_pages: int
     entity_pages: int
     exported_at: datetime
+    topic_pages: int = 0
 
 
 def _sanitize_filename(name: str) -> str:
@@ -46,6 +47,14 @@ def _entity_page_name(subject: str) -> str:
 
 def _entity_wikilink(subject: str) -> str:
     return f"[[{_entity_page_name(subject)}|{subject}]]"
+
+
+def _topic_page_name(name: str) -> str:
+    return f"topic-{_sanitize_filename(name)}"
+
+
+def _topic_wikilink(name: str) -> str:
+    return f"[[{_topic_page_name(name)}|{name}]]"
 
 
 def _format_frontmatter(tags: list[str], page_type: str, kb_id: str) -> str:
@@ -127,10 +136,7 @@ def _render_source_page(
         lines.append("- （无 active Claim）")
     else:
         for claim in sorted(active_claims, key=lambda item: (item.subject, item.predicate)):
-            lines.append(
-                f"- {_entity_wikilink(claim.subject)}: {claim.predicate} → {claim.object} "
-                f"(`{claim.id}`)"
-            )
+            lines.append(f"- {_entity_wikilink(claim.subject)}: {claim.predicate} → {claim.object} " f"(`{claim.id}`)")
 
     if chunks:
         lines.extend(["", "## 章节"])
@@ -158,10 +164,52 @@ def _render_chunk_page(source: Source, chunk: SourceChunk, kb_id: str) -> str:
     return "\n".join(lines)
 
 
+def _render_topic_page(
+    cluster: TopicCluster,
+    claims_by_id: dict[str, Claim],
+    chunks_by_id: dict[str, SourceChunk],
+    source_titles: dict[str, str],
+    kb_id: str,
+) -> str:
+    lines = [
+        _format_frontmatter(["topic"], "topic", kb_id),
+        f"# {cluster.name}",
+        "",
+    ]
+    if cluster.summary:
+        lines.extend(["## 摘要", f"> {cluster.summary}", ""])
+
+    lines.append("## Claims")
+    claims = [claims_by_id[cid] for cid in cluster.claim_ids if cid in claims_by_id]
+    if not claims:
+        lines.append("- （无 Claim）")
+    else:
+        for claim in sorted(claims, key=lambda item: (item.predicate, item.object)):
+            lines.append(_format_claim_line(claim, source_titles))
+
+    chunks = [chunks_by_id[cid] for cid in cluster.chunk_ids if cid in chunks_by_id]
+    if chunks:
+        lines.extend(["", "## 章节"])
+        for chunk in sorted(chunks, key=lambda item: (item.source_id, item.chunk_index)):
+            label = chunk.title or f"chunk-{chunk.chunk_index}"
+            page = f"chunk-{_sanitize_filename(chunk.source_id)}-{chunk.chunk_index}"
+            lines.append(f"- [[{page}|{label}]]")
+
+    if cluster.source_ids:
+        lines.extend(["", "## 相关"])
+        for source_id in sorted(cluster.source_ids):
+            title = source_titles.get(source_id, source_id)
+            lines.append(f"- {_source_wikilink(source_id, title)}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _render_index_page(
     kb_id: str,
     sources: list[Source],
     subjects: list[str],
+    topics: list[str] | None = None,
 ) -> str:
     lines = [
         _format_frontmatter(["index"], "index", kb_id),
@@ -174,6 +222,12 @@ def _render_index_page(
     else:
         for source in sorted(sources, key=lambda item: item.title):
             lines.append(f"- {_source_wikilink(source.id, source.title)}")
+
+    topic_names = topics or []
+    if topic_names:
+        lines.extend(["", "## 主题"])
+        for name in sorted(topic_names):
+            lines.append(f"- {_topic_wikilink(name)}")
 
     lines.extend(["", "## Entities"])
     if not subjects:
@@ -193,7 +247,8 @@ def _render_log_page(kb_id: str, result: WikiExportResult) -> str:
             "# Export Log",
             "",
             f"- {result.exported_at.isoformat()}: exported {result.files_written} files "
-            f"({result.source_pages} sources, {result.entity_pages} entities)",
+            f"({result.source_pages} sources, {result.entity_pages} entities"
+            f", {result.topic_pages} topics)",
             "",
         ]
     )
@@ -252,6 +307,21 @@ def export_wiki(
     files_written = 0
     source_pages = 0
     entity_pages = 0
+    topic_pages = 0
+
+    clusters = knowledge.list_topic_clusters(status="active")
+    claims_by_id = {claim.id: claim for claim in active_claims}
+    chunks_by_id: dict[str, SourceChunk] = {}
+    for source in sources:
+        for chunk in knowledge.list_chunks(source.id, status="active"):
+            chunks_by_id[chunk.id] = chunk
+
+    for cluster in clusters:
+        page_name = _topic_page_name(cluster.name)
+        content = _render_topic_page(cluster, claims_by_id, chunks_by_id, source_titles, kb_id)
+        (output_dir / f"{page_name}.md").write_text(content, encoding="utf-8")
+        files_written += 1
+        topic_pages += 1
 
     for source in sources:
         claims = knowledge.get_claims_for_source(source.id)
@@ -291,9 +361,15 @@ def export_wiki(
         source_pages=source_pages,
         entity_pages=entity_pages,
         exported_at=exported_at,
+        topic_pages=topic_pages,
     )
 
-    index_content = _render_index_page(kb_id, sources, list(claims_by_subject.keys()))
+    index_content = _render_index_page(
+        kb_id,
+        sources,
+        list(claims_by_subject.keys()),
+        topics=[cluster.name for cluster in clusters],
+    )
     (output_dir / "index.md").write_text(index_content, encoding="utf-8")
     files_written += 1
 
@@ -322,5 +398,6 @@ def wiki_export_result_to_dict(result: WikiExportResult) -> dict:
         "files_written": result.files_written,
         "source_pages": result.source_pages,
         "entity_pages": result.entity_pages,
+        "topic_pages": result.topic_pages,
         "exported_at": result.exported_at.isoformat(),
     }

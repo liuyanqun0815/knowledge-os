@@ -41,5 +41,6 @@ def export_knowledge_base_wiki(
         files_written=result.files_written,
         source_pages=result.source_pages,
         entity_pages=result.entity_pages,
+        topic_pages=result.topic_pages,
         exported_at=result.exported_at,
     )

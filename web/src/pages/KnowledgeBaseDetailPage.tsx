@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getKnowledgeBase, updateKnowledgeBase } from "../api/knowledgeBases";
 import { listSources } from "../api/sources";
+import { exportWiki } from "../api/wiki";
 import type { KnowledgeBase, SourceItem } from "../api/types";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SourceFileBrowser } from "../components/SourceFileBrowser";
@@ -12,6 +13,7 @@ export function KnowledgeBaseDetailPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<SourceItem[]>([]);
@@ -120,6 +122,25 @@ export function KnowledgeBaseDetailPage() {
     }
   }
 
+  async function handleExportWiki() {
+    if (!id) {
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    setIsExporting(true);
+    try {
+      const result = await exportWiki(id);
+      const topicHint =
+        result.topic_pages && result.topic_pages > 0 ? `（含 ${result.topic_pages} 个主题）` : "";
+      setNotice(`Wiki 已导出：${result.files_written} 个文件${topicHint} → ${result.output_path}`);
+    } catch {
+      setError("Wiki 导出失败，请稍后重试。");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   if (error && !knowledgeBase) {
     return <ErrorBanner message={error} />;
   }
@@ -141,6 +162,14 @@ export function KnowledgeBaseDetailPage() {
           <Link className="button button-secondary" to={`/sources?kb=${id}`}>
             管理文档
           </Link>
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={isExporting || isSaving}
+            onClick={() => void handleExportWiki()}
+          >
+            {isExporting ? "正在导出…" : "导出 Wiki"}
+          </button>
           <Link className="button button-primary" to={`/ask?kb=${id}`}>
             开始问答
           </Link>
