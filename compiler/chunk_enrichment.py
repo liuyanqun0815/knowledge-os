@@ -90,4 +90,11 @@ def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) 
         )
         deps.chunk_retrieval.index_chunks([updated])
 
+    if settings.topic_cluster:
+        graph = getattr(deps, "graph", None)
+        if graph is not None:
+            from knowledge.topic_service import rebuild_topic_clusters
+
+            rebuild_topic_clusters(deps.knowledge, graph, kb_id, settings)
+
     logger.info("Chunk enrichment finished for source %s in kb %s", source_id, kb_id)

@@ -208,9 +208,20 @@ def export_wiki(
     use_llm: bool = False,
     llm_client=None,
     settings=None,
+    graph=None,
 ) -> WikiExportResult:
     """Write markdown wiki pages from claims; optional LLM summaries on export."""
     del evidence  # reserved for future evidence excerpts on source pages
+
+    if (
+        settings is not None
+        and getattr(settings, "topic_cluster", False)
+        and graph is not None
+        and not knowledge.list_topic_clusters()
+    ):
+        from knowledge.topic_service import rebuild_topic_clusters
+
+        rebuild_topic_clusters(knowledge, graph, kb_id, settings)
 
     summarizer = None
     cache_dir = None

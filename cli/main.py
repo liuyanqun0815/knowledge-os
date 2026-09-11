@@ -108,6 +108,7 @@ def wiki_export(
         use_llm=with_llm_summaries or settings.wiki_llm,
         llm_client=orchestrator.deps.llm_client,
         settings=settings,
+        graph=orchestrator.deps.graph,
     )
     typer.echo(json.dumps(wiki_export_result_to_dict(result), ensure_ascii=False))
 

@@ -33,6 +33,7 @@ def export_knowledge_base_wiki(
         use_llm=body.use_llm if body else False,
         llm_client=orchestrator.deps.llm_client,
         settings=settings,
+        graph=orchestrator.deps.graph,
     )
     return WikiExportResponse(
         kb_id=result.kb_id,
