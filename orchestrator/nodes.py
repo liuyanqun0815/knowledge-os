@@ -752,8 +752,14 @@ def answer_node(state: AskState, deps: Any) -> dict:
 
 
 def remember_node(state: AskState, deps: Any) -> dict:
-    answer = state.get("answer")
-    session_id = state.get("session_id")
-    if answer and session_id:
-        memory_agent.remember(deps.memory, session_id, {"q": state["question"], "a": answer.text})
-    return {}
+    # Phase: in-memory chat UI — do not persist episodes
+    return {
+        "trace": [
+            trace_step(
+                "remember",
+                status="skipped",
+                summary="本阶段不写入会话记忆",
+                duration_ms=0,
+            )
+        ]
+    }
