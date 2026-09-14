@@ -1,6 +1,7 @@
 import { apiFetch } from "./http";
 import type {
   ClaimListItem,
+  SourceChunkItem,
   SourceContent,
   SourceItem,
   SourceUploadResponse,
@@ -119,6 +120,16 @@ export async function deleteTree(kbId: string, path: string): Promise<{ deleted_
 export async function fetchSourceClaims(kbId: string, sourceId: string): Promise<ClaimListItem[]> {
   const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${sourceId}/claims`);
   return response.json() as Promise<ClaimListItem[]>;
+}
+
+export async function fetchSourceChunks(
+  kbId: string,
+  sourceId: string,
+  status: "active" | "stale" | "all" = "active",
+): Promise<SourceChunkItem[]> {
+  const params = new URLSearchParams({ status });
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${sourceId}/chunks?${params}`);
+  return response.json() as Promise<SourceChunkItem[]>;
 }
 
 export async function fetchSourceContent(kbId: string, sourceId: string): Promise<SourceContent> {

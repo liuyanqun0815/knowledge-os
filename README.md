@@ -37,6 +37,8 @@ akos wiki-export --kb <knowledge_base_id> --out ./wiki-out
 |------|-----|-----------|
 | Lint | `akos lint --kb <id>` | `GET /admin/knowledge-bases/{kb_id}/lint` |
 | Wiki 导出 | `akos wiki-export --kb <id> [--out dir]` | `POST /admin/knowledge-bases/{kb_id}/wiki/export` |
+| Wiki 编译层 | （enrich 后自动，需 `AKOS_WIKI_COMPILE`） | `POST /admin/knowledge-bases/{kb_id}/wiki/compile`（可选 `?source_id=`） |
+| 清理 stale chunks | （`save_chunks` 后自动，需 `AKOS_PURGE_STALE_CHUNKS`） | `POST /admin/knowledge-bases/{kb_id}/chunks/purge-stale` |
 | 主题簇重建 | （enrich / wiki 导出前自动） | `POST /admin/knowledge-bases/{kb_id}/topics/rebuild` |
 
 Lint 检查项：`conflict`（同 family 多条 active）、`missing_evidence`、`orphan_source`、`quarantine_backlog`。
@@ -54,9 +56,13 @@ Wiki 导出目录结构（Obsidian 友好）：
 
 `AKOS_TOPIC_CLUSTER=true` 时，Wiki 的 `index.md` 含 `## 主题` 区；手动重建：`POST /admin/knowledge-bases/{kb_id}/topics/rebuild`（返回 `topics_created` / `topics_updated` / `topics_stale` / `edges`）。
 
-默认导出路径：`{AKOS_DATA_ROOT}/{kb_id}/wiki/`。上传完成后 API 响应含 `ingest_summary`（规则生成，无 LLM）。
+默认导出路径：`{AKOS_DATA_ROOT}/{kb_id}/wiki/`（只读导出视图，不回写）。
 
-**Implementation plan:** [`docs/superpowers/plans/2026-09-09-akos-wiki-lint-export.md`](docs/superpowers/plans/2026-09-09-akos-wiki-lint-export.md)
+**编译层（Ask 三路检索用）**路径：`{AKOS_DATA_ROOT}/kb/{kb_id}/wiki/`（`topic-*.md` + `.meta/pages.json`）。由 `AKOS_WIKI_COMPILE` 在 enrich 后增量更新，或手动 `POST .../wiki/compile`；模板/LLM 由 `AKOS_WIKI_COMPILE_LLM` 控制。与导出路径不同，勿混用。
+
+上传完成后 API 响应含 `ingest_summary`（规则生成，无 LLM）。
+
+**Implementation plan:** [`docs/superpowers/plans/2026-09-09-akos-wiki-lint-export.md`](docs/superpowers/plans/2026-09-09-akos-wiki-lint-export.md) · Compiled wiki [`2026-09-14-akos-compiled-wiki-retrieval.md`](docs/superpowers/plans/2026-09-14-akos-compiled-wiki-retrieval.md)
 
 ```bash
 pytest -v tests/test_knowledge_lint.py tests/test_wiki_export.py \

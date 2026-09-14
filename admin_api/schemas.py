@@ -224,6 +224,20 @@ class WikiExportResponse(BaseModel):
     exported_at: datetime
 
 
+class WikiCompileResponse(BaseModel):
+    kb_id: str
+    wiki_root: str
+    pages_written: int
+    topics: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list)
+
+
+class PurgeStaleChunksResponse(BaseModel):
+    kb_id: str
+    deleted: int
+    sources_purged: int = 0
+
+
 class TopicRebuildResponse(BaseModel):
     topics_created: int
     topics_updated: int

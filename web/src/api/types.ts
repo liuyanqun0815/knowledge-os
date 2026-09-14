@@ -60,6 +60,23 @@ export type SourceContent = {
   encoding: string;
 };
 
+export type SourceChunkItem = {
+  id: string;
+  source_id: string;
+  chunk_index: number;
+  title: string | null;
+  summary: string | null;
+  text: string;
+  start: number;
+  end: number;
+  section_path: string[];
+  topics: string[];
+  token_count: number;
+  status: string;
+  content_hash: string;
+  created_at: string | null;
+};
+
 export type AgentTraceStep = {
   node: string;
   status: "ok" | "error" | "skipped";

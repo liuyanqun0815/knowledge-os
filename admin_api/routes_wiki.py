@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from admin_api.routes_sources import _resolve_active_kb
-from admin_api.schemas import WikiExportRequest, WikiExportResponse
+from admin_api.schemas import PurgeStaleChunksResponse, WikiCompileResponse, WikiExportRequest, WikiExportResponse
 from app.deps import build_orchestrator_for_request
+from wiki.compile import CompileReport, compile_topics_for_source
 from wiki.export import export_wiki, resolve_wiki_output_dir
+from wiki.paths import compile_wiki_root
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-wiki"])
 
@@ -44,3 +46,83 @@ def export_knowledge_base_wiki(
         topic_pages=result.topic_pages,
         exported_at=result.exported_at,
     )
+
+
+@router.post("/{kb_id}/wiki/compile", response_model=WikiCompileResponse)
+def compile_knowledge_base_wiki(
+    kb_id: str,
+    request: Request,
+    source_id: str | None = Query(default=None),
+    _: None = Depends(_resolve_active_kb),
+) -> WikiCompileResponse:
+    orchestrator = build_orchestrator_for_request(kb_id, request)
+    deps = orchestrator.deps
+    settings = request.app.state.settings
+    knowledge = deps.knowledge
+
+    if source_id is not None:
+        if knowledge.get_source(source_id) is None:
+            raise HTTPException(status_code=404, detail=f"source_not_found: {source_id}")
+        source_ids = [source_id]
+    else:
+        source_ids = [source.id for source in knowledge.list_sources()]
+
+    aggregate = CompileReport()
+    compiled_sources: list[str] = []
+    for sid in source_ids:
+        report = compile_topics_for_source(
+            knowledge,
+            kb_id,
+            sid,
+            settings.data_root,
+            settings,
+            graph=deps.graph,
+            llm_client=deps.llm_client,
+        )
+        if report.pages_written or report.topics:
+            compiled_sources.append(sid)
+        aggregate.pages_written += report.pages_written
+        for topic in report.topics:
+            if topic not in aggregate.topics:
+                aggregate.topics.append(topic)
+
+    wiki_root = compile_wiki_root(settings.data_root, kb_id)
+    wiki_retrieval = getattr(deps, "wiki_retrieval", None)
+    if wiki_retrieval is not None and wiki_root.exists():
+        wiki_retrieval.index_wiki_root(wiki_root)
+
+    return WikiCompileResponse(
+        kb_id=kb_id,
+        wiki_root=str(wiki_root),
+        pages_written=aggregate.pages_written,
+        topics=aggregate.topics,
+        source_ids=compiled_sources or source_ids,
+    )
+
+
+@router.post("/{kb_id}/chunks/purge-stale", response_model=PurgeStaleChunksResponse)
+def purge_stale_chunks(
+    kb_id: str,
+    request: Request,
+    source_id: str | None = Query(default=None),
+    _: None = Depends(_resolve_active_kb),
+) -> PurgeStaleChunksResponse:
+    orchestrator = build_orchestrator_for_request(kb_id, request)
+    knowledge = orchestrator.deps.knowledge
+
+    if source_id is not None:
+        if knowledge.get_source(source_id) is None:
+            raise HTTPException(status_code=404, detail=f"source_not_found: {source_id}")
+        source_ids = [source_id]
+    else:
+        source_ids = [source.id for source in knowledge.list_sources()]
+
+    deleted = 0
+    sources_purged = 0
+    for sid in source_ids:
+        count = knowledge.purge_stale_chunks(sid)
+        if count:
+            sources_purged += 1
+        deleted += count
+
+    return PurgeStaleChunksResponse(kb_id=kb_id, deleted=deleted, sources_purged=sources_purged)
