@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,13 +19,14 @@ const answer = {
   claim_ids: ["c1"],
   evidence: [{ claim_id: "c1", span: "定制商品不适用七天无理由" }],
   confidence: 0.9,
-  retrieval_mode: "hybrid",
+  retrieval_mode: "HYBRID",
   verification_status: "verified",
   competing_claim_ids: [],
   procedure_id: null,
   as_of: null,
   request_id: "r1",
-  trace: [{ node: "retrieve", status: "ok" as const, summary: "ok" }],
+  duration_ms: 1500,
+  trace: [{ node: "retrieve", status: "ok" as const, summary: "ok", duration_ms: 800 }],
 };
 
 describe("AskPage", () => {
@@ -46,7 +47,7 @@ describe("AskPage", () => {
     expect(screen.getByText(/请先选择知识库/)).toBeInTheDocument();
   });
 
-  it("shows answer text, evidence, and response trace after asking", async () => {
+  it("shows answer, sessionId, confidence, mode, duration; evidence only after expand", async () => {
     const user = userEvent.setup();
     render(<AskPage />);
 
@@ -54,13 +55,26 @@ describe("AskPage", () => {
     await user.click(screen.getByRole("button", { name: "提问" }));
 
     expect(await screen.findByText("不可退货")).toBeInTheDocument();
+    expect(askQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        knowledgeBaseId: "kb-1",
+        question: "定制商品可以退货吗？",
+        includeTrace: true,
+        sessionId: expect.any(String),
+      }),
+    );
+
+    expect(screen.queryByText("定制商品不适用七天无理由")).not.toBeInTheDocument();
+    expect(screen.queryByText(/已核验/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/核验状态/)).not.toBeInTheDocument();
+
+    expect(screen.getByText("90%")).toBeInTheDocument();
+    expect(screen.getByText("HYBRID")).toBeInTheDocument();
+    expect(screen.getByText(/1\.50 秒|1500/)).toBeInTheDocument();
+    expect(screen.getByText(/混合检索|retrieve/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /混合检索|retrieve/ }));
     expect(screen.getByText("定制商品不适用七天无理由")).toBeInTheDocument();
-    expect(screen.getByText("retrieve")).toBeInTheDocument();
-    expect(askQuestion).toHaveBeenCalledWith({
-      knowledgeBaseId: "kb-1",
-      question: "定制商品可以退货吗？",
-      includeTrace: true,
-    });
   });
 
   it("sends as_of as ISO when datetime-local is set", async () => {
@@ -76,12 +90,13 @@ describe("AskPage", () => {
       knowledgeBaseId: "kb-1",
       question: "历史政策是什么？",
       includeTrace: true,
+      sessionId: expect.any(String),
       asOf: new Date("2024-06-15T14:30").toISOString(),
     });
     expect(screen.queryByText("时间点查询将在后续版本开放")).not.toBeInTheDocument();
   });
 
-  it("displays AnswerV2 meta fields after asking", async () => {
+  it("does not show verification summary after asking", async () => {
     const user = userEvent.setup();
     askQuestion.mockResolvedValue({
       ...answer,
@@ -95,9 +110,31 @@ describe("AskPage", () => {
     await user.type(screen.getByLabelText("问题"), "运费谁承担？");
     await user.click(screen.getByRole("button", { name: "提问" }));
 
-    expect(await screen.findByText("存在冲突")).toBeInTheDocument();
-    expect(screen.getByText("c2, c3")).toBeInTheDocument();
-    expect(screen.getByText("proc-42")).toBeInTheDocument();
+    expect(await screen.findByText("不可退货")).toBeInTheDocument();
+    expect(screen.queryByText("存在冲突")).not.toBeInTheDocument();
+    expect(screen.queryByText(/已核验/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/核验状态/)).not.toBeInTheDocument();
+    expect(screen.queryByText("c2, c3")).not.toBeInTheDocument();
+    expect(screen.getByText("90%")).toBeInTheDocument();
+    expect(screen.getByText("HYBRID")).toBeInTheDocument();
+  });
+
+  it("appends a second ask so two user questions are visible", async () => {
+    const user = userEvent.setup();
+    render(<AskPage />);
+
+    await user.type(screen.getByLabelText("问题"), "第一个问题");
+    await user.click(screen.getByRole("button", { name: "提问" }));
+    expect(await screen.findByText("不可退货")).toBeInTheDocument();
+
+    askQuestion.mockResolvedValue({ ...answer, text: "第二个回答" });
+    await user.type(screen.getByLabelText("问题"), "第二个问题");
+    await user.click(screen.getByRole("button", { name: "提问" }));
+
+    expect(await screen.findByText("第二个回答")).toBeInTheDocument();
+    const log = screen.getByRole("log");
+    expect(within(log).getByText("第一个问题")).toBeInTheDocument();
+    expect(within(log).getByText("第二个问题")).toBeInTheDocument();
   });
 
   it("shows unavailable trace fallback when response trace is empty", async () => {
@@ -122,21 +159,23 @@ describe("AskPage", () => {
     await user.type(screen.getByLabelText("问题"), "问题");
     await user.click(screen.getByRole("button", { name: "提问" }));
 
-    expect(await screen.findByText("answer")).toBeInTheDocument();
+    expect(await screen.findByText(/生成回答|answer/)).toBeInTheDocument();
     expect(fetchTrace).toHaveBeenCalledWith("kb-1", "r1");
   });
 
-  it("clears the previous result when kbId changes", async () => {
+  it("clears messages when kbId changes", async () => {
     const user = userEvent.setup();
     const view = render(<AskPage />);
-    await user.type(screen.getByLabelText("问题"), "问题");
+    await user.type(screen.getByLabelText("问题"), "换库前的问题");
     await user.click(screen.getByRole("button", { name: "提问" }));
     expect(await screen.findByText("不可退货")).toBeInTheDocument();
+    expect(within(screen.getByRole("log")).getByText("换库前的问题")).toBeInTheDocument();
 
     useKb.mockReturnValue({ kbId: "kb-2", setKbId: vi.fn(), clearKb: vi.fn() });
     view.rerender(<AskPage />);
 
     expect(screen.queryByText("不可退货")).not.toBeInTheDocument();
+    expect(screen.queryByText("换库前的问题")).not.toBeInTheDocument();
   });
 
   it("ignores a pending answer after kbId changes", async () => {

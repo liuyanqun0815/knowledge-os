@@ -70,6 +70,47 @@ describe("askQuestion", () => {
     );
   });
 
+  it("includes session_id in body when sessionId is provided", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            text: "ok",
+            claim_ids: [],
+            evidence: [],
+            confidence: 0.5,
+            retrieval_mode: "hybrid",
+            verification_status: "verified",
+            competing_claim_ids: [],
+            procedure_id: null,
+            request_id: null,
+            trace: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    const { askQuestion } = await import("./ask");
+    await askQuestion({
+      knowledgeBaseId: "kb-1",
+      question: "q",
+      sessionId: "sess-42",
+      includeTrace: true,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/ask?include_trace=true",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          knowledge_base_id: "kb-1",
+          question: "q",
+          session_id: "sess-42",
+        }),
+      }),
+    );
+  });
+
   it("fetches trace by knowledge base and request id", async () => {
     vi.stubGlobal(
       "fetch",
