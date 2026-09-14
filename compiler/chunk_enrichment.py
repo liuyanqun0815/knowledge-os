@@ -62,6 +62,7 @@ def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Sett
         data_root,
         settings,
         graph=getattr(deps, "graph", None),
+        llm_client=getattr(deps, "llm_client", None),
     )
 
 
