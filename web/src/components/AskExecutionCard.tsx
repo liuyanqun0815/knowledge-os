@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type { AgentTraceStep } from "../api/types";
+import { EvidenceList } from "./EvidenceList";
 import { TraceStepDetail } from "./TraceStepDetail";
 
 export type AskExecutionCardProps = {
   steps: AgentTraceStep[];
   unavailableReason?: string;
+  evidence?: Record<string, unknown>[];
 };
 
 const NODE_LABELS: Record<string, string> = {
@@ -46,6 +48,7 @@ function statusIcon(status: AgentTraceStep["status"]): string {
 export function AskExecutionCard({
   steps,
   unavailableReason = "轨迹暂不可用",
+  evidence,
 }: AskExecutionCardProps): JSX.Element {
   const [cardOpen, setCardOpen] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
@@ -116,6 +119,14 @@ export function AskExecutionCard({
                         <TraceStepDetail node={step.node} detail={step.detail as Record<string, unknown>} />
                       ) : step.detail !== undefined ? (
                         <pre>{JSON.stringify(step.detail, null, 2)}</pre>
+                      ) : null}
+                      {(step.node === "retrieve" || step.node === "verify") &&
+                      evidence &&
+                      evidence.length > 0 ? (
+                        <div className="ask-exec-step-evidence">
+                          <h3>证据</h3>
+                          <EvidenceList evidence={evidence} />
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

@@ -1,83 +1,86 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { askQuestion, fetchTrace } from "../api/ask";
-import type { AskResponse } from "../api/types";
 import { useKb } from "../app/KbContext";
+import { AskMessageBubble } from "../components/AskMessageBubble";
 import { EmptyState } from "../components/EmptyState";
-import { ErrorBanner } from "../components/ErrorBanner";
-import { EvidenceList } from "../components/EvidenceList";
-import { TraceTimeline } from "../components/TraceTimeline";
-
-const verificationStatusLabels: Record<string, string> = {
-  verified: "已核验",
-  partial: "部分核验",
-  unverified: "未核验",
-  conflict: "存在冲突",
-};
-
-function verificationBadgeClass(status: string): string {
-  switch (status) {
-    case "verified":
-      return "verification-badge verification-badge-verified";
-    case "partial":
-      return "verification-badge verification-badge-partial";
-    case "conflict":
-      return "verification-badge verification-badge-conflict";
-    default:
-      return "verification-badge verification-badge-unverified";
-  }
-}
-
-function formatAsOf(value: string | null | undefined): string {
-  if (!value) {
-    return "—";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString("zh-CN");
-}
+import type { AskChatMessage } from "./askTypes";
 
 function toIsoAsOf(localValue: string): string {
   return new Date(localValue).toISOString();
 }
 
+function newMessageId(): string {
+  return crypto.randomUUID();
+}
+
 export function AskPage() {
   const { kbId } = useKb();
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [messages, setMessages] = useState<AskChatMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [asOfLocal, setAsOfLocal] = useState("");
-  const [result, setResult] = useState<AskResponse | null>(null);
   const [isAsking, setIsAsking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     requestSequence.current += 1;
-    setResult(null);
-    setError(null);
+    setSessionId(crypto.randomUUID());
+    setMessages([]);
     setIsAsking(false);
   }, [kbId]);
 
+  useEffect(() => {
+    const el = messagesEndRef.current;
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!kbId || !question.trim()) {
+    if (!kbId || !question.trim() || isAsking) {
       return;
     }
 
-    setIsAsking(true);
-    setError(null);
+    const trimmed = question.trim();
+    const now = new Date().toISOString();
+    const userId = newMessageId();
+    const assistantId = newMessageId();
     const requestId = requestSequence.current + 1;
     requestSequence.current = requestId;
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: userId,
+        role: "user",
+        text: trimmed,
+        createdAt: now,
+      },
+      {
+        id: assistantId,
+        role: "assistant",
+        text: "",
+        createdAt: now,
+        status: "pending",
+      },
+    ]);
+    setQuestion("");
+    setIsAsking(true);
+
     try {
       const response = await askQuestion({
         knowledgeBaseId: kbId,
-        question: question.trim(),
+        question: trimmed,
+        sessionId,
         includeTrace: true,
         ...(asOfLocal ? { asOf: toIsoAsOf(asOfLocal) } : {}),
       });
       if (requestSequence.current !== requestId) {
         return;
       }
+
       let trace = response.trace ?? [];
       if (trace.length === 0 && response.request_id) {
         try {
@@ -86,14 +89,40 @@ export function AskPage() {
           trace = [];
         }
       }
-      if (requestSequence.current === requestId) {
-        setResult({ ...response, trace });
+      if (requestSequence.current !== requestId) {
+        return;
       }
+
+      const result = { ...response, trace };
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                text: result.text,
+                status: "ok",
+                result,
+                createdAt: new Date().toISOString(),
+              }
+            : message,
+        ),
+      );
     } catch {
-      if (requestSequence.current === requestId) {
-        setResult(null);
-        setError("提问失败，请稍后重试。");
+      if (requestSequence.current !== requestId) {
+        return;
       }
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                status: "error",
+                error: "提问失败，请稍后重试。",
+                createdAt: new Date().toISOString(),
+              }
+            : message,
+        ),
+      );
     } finally {
       if (requestSequence.current === requestId) {
         setIsAsking(false);
@@ -106,21 +135,28 @@ export function AskPage() {
   }
 
   return (
-    <section className="page-section">
+    <section className="page-section ask-chat-page">
       <div className="page-header">
         <div>
           <h1>知识问答</h1>
-          <p>基于当前知识库提问，并核验回答证据和执行轨迹。</p>
+          <p>基于当前知识库多轮提问，查看执行步骤与回答。</p>
         </div>
       </div>
 
-      {error ? <ErrorBanner message={error} /> : null}
+      <div className="ask-chat-messages" role="log" aria-live="polite">
+        {messages.length === 0 ? (
+          <p className="ask-chat-empty">输入问题开始对话。切换知识库会清空当前会话。</p>
+        ) : (
+          messages.map((message) => <AskMessageBubble key={message.id} message={message} />)
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-      <form className="form-card ask-form" onSubmit={handleSubmit}>
+      <form className="ask-chat-composer" onSubmit={handleSubmit}>
         <label htmlFor="ask-question">问题</label>
         <textarea
           id="ask-question"
-          rows={4}
+          rows={3}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="请输入要查询的问题"
@@ -140,53 +176,6 @@ export function AskPage() {
           </button>
         </div>
       </form>
-
-      {result ? (
-        <div className="ask-result">
-          <article className="result-card">
-            <h2>回答</h2>
-            <p className="answer-text">{result.text}</p>
-            <dl className="answer-meta">
-              <div>
-                <dt>核验状态</dt>
-                <dd>
-                  <span className={verificationBadgeClass(result.verification_status)}>
-                    {verificationStatusLabels[result.verification_status] ?? result.verification_status}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>置信度</dt>
-                <dd>{Math.round(result.confidence * 100)}%</dd>
-              </div>
-              <div>
-                <dt>检索模式</dt>
-                <dd>{result.retrieval_mode}</dd>
-              </div>
-              <div>
-                <dt>查询时点</dt>
-                <dd>{formatAsOf(result.as_of)}</dd>
-              </div>
-              <div>
-                <dt>竞争 Claim</dt>
-                <dd>{result.competing_claim_ids.length > 0 ? result.competing_claim_ids.join(", ") : "无"}</dd>
-              </div>
-              <div>
-                <dt>流程 ID</dt>
-                <dd>{result.procedure_id ?? "—"}</dd>
-              </div>
-            </dl>
-          </article>
-          <section className="result-card" aria-labelledby="evidence-title">
-            <h2 id="evidence-title">证据</h2>
-            <EvidenceList evidence={result.evidence} />
-          </section>
-          <section className="result-card" aria-labelledby="trace-title">
-            <h2 id="trace-title">Agent 轨迹</h2>
-            <TraceTimeline steps={result.trace ?? []} unavailableReason="轨迹暂不可用" />
-          </section>
-        </div>
-      ) : null}
     </section>
   );
 }
