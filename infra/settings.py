@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     chunk_llm_enrich: bool = True
     chunk_embedding: bool = False
     retrieval_top_k: int = 8
+    # save_chunks 后硬删 stale 行（默认开）
+    purge_stale_chunks: bool = True
 
     # Ask synthesis
     ask_synthesis: bool = True
@@ -77,10 +79,20 @@ class Settings(BaseSettings):
     ask_synthesis_max_chunks: int = 5
     ask_synthesis_max_tokens: int = 1024
 
+    # 三路检索权重（Claim / Wiki 主题页 / 原文 Chunk）
+    retrieval_claim_weight: float = 1.0
+    retrieval_wiki_weight: float = 0.9
+    retrieval_chunk_weight: float = 0.8
+
     # Wiki LLM
     wiki_llm: bool = False
     wiki_llm_cache: bool = True
     wiki_prompt_version: str = "v1"
+    # 同库编译层增量更新；false 时 Ask 仍为双路
+    wiki_compile: bool = True
+    wiki_compile_llm: bool = True
+    # 一期默认关：不沿 [[wikilink]] 扩展检索
+    wiki_link_expand: bool = False
 
     # Topic cluster
     topic_cluster: bool = True

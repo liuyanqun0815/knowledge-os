@@ -126,6 +126,13 @@ cp .env.example .env
 | `AKOS_CHUNK_MAX_PER_DOC` | 单文档最大切片数 | `40` |
 | `AKOS_EXTRACT_MIN_CONFIDENCE` | LLM Claim 最低置信度 | `0.5` |
 | `AKOS_EXTRACT_OPEN_PREDICATES` | 开放谓词（true=LLM 可自创谓词并懒注册；false=名单外进 quarantine） | `true` |
+| `AKOS_PURGE_STALE_CHUNKS` | save_chunks 后硬删 stale 行 | `true` |
+| `AKOS_WIKI_COMPILE` | 同库编译层增量更新（false 时 Ask 仍为双路） | `true` |
+| `AKOS_WIKI_COMPILE_LLM` | 主题页 LLM 合并（false 则确定性模板） | `true` |
+| `AKOS_RETRIEVAL_CLAIM_WEIGHT` | 三路融合 Claim 权重 | `1.0` |
+| `AKOS_RETRIEVAL_WIKI_WEIGHT` | 三路融合 Wiki 主题页权重 | `0.9` |
+| `AKOS_RETRIEVAL_CHUNK_WEIGHT` | 三路融合原文 Chunk 权重 | `0.8` |
+| `AKOS_WIKI_LINK_EXPAND` | 沿 `[[wikilink]]` 扩展检索（一期默认关） | `false` |
 | `AKOS_TOPIC_CLUSTER` | 启用主题簇（PG/图/Wiki topic 页） | `true` |
 | `AKOS_TOPIC_MIN_CHUNKS` | 主题簇最少 chunk 数（仅 claim 命中时仍可成簇） | `1` |
 | `AKOS_TOPIC_GRAPH_CHUNKS` | 图同步时写入 Chunk 节点与「包含段落」边 | `true` |
