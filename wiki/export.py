@@ -25,7 +25,11 @@ _source_wikilink = source_wikilink
 _entity_page_name = entity_page_name
 _entity_wikilink = entity_wikilink
 _topic_page_name = topic_page_name
-_topic_wikilink = topic_wikilink
+
+
+def _topic_wikilink(name: str) -> str:
+    """Flat topic- links until export adopts hierarchy paths."""
+    return topic_wikilink(name, hierarchy_enabled=False)
 
 
 @dataclass

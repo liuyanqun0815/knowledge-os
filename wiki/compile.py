@@ -19,6 +19,11 @@ from wiki.prompts import build_topic_merge_prompt
 logger = logging.getLogger(__name__)
 
 
+def _flat_topic_wikilink(name: str) -> str:
+    """Flat topic- links until compile adopts hierarchy paths (Task 4)."""
+    return topic_wikilink(name, hierarchy_enabled=False)
+
+
 @dataclass
 class CompileReport:
     pages_written: int = 0
@@ -137,7 +142,7 @@ def _render_topic_page(
         lines.append("- （无相关主题）")
     else:
         for name in related_topics:
-            lines.append(f"- {topic_wikilink(name)}")
+            lines.append(f"- {_flat_topic_wikilink(name)}")
     lines.append("")
     return "\n".join(lines)
 
@@ -223,7 +228,7 @@ def _required_links_for_cluster(
         if claim.object:
             links.append(entity_wikilink(claim.object))
     for name in related_topics:
-        links.append(topic_wikilink(name))
+        links.append(_flat_topic_wikilink(name))
     # de-dupe preserve order
     seen: set[str] = set()
     ordered: list[str] = []
@@ -282,7 +287,7 @@ def _upsert_index_topics(wiki_root: Path, kb_id: str, topic_names: list[str]) ->
     topic_block_lines = ["## 主题"]
     if topic_names:
         for name in sorted(set(topic_names)):
-            topic_block_lines.append(f"- {topic_wikilink(name)}")
+            topic_block_lines.append(f"- {_flat_topic_wikilink(name)}")
     else:
         topic_block_lines.append("- （无主题）")
     topic_block = "\n".join(topic_block_lines) + "\n"

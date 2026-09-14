@@ -30,11 +30,37 @@ def entity_wikilink(subject: str) -> str:
 
 
 def topic_page_name(name: str) -> str:
+    """Legacy flat page id: ``topic-{name}``."""
     return f"topic-{sanitize_filename(name)}"
 
 
-def topic_wikilink(name: str) -> str:
-    return f"[[{topic_page_name(name)}|{name}]]"
+def topic_page_path(hub: str, leaf: str | None = None) -> str:
+    """Hierarchy-relative page path without ``.md`` suffix."""
+    hub_part = sanitize_filename(hub)
+    if leaf is None:
+        return f"{hub_part}/_index"
+    return f"{hub_part}/{sanitize_filename(leaf)}"
+
+
+def topic_wikilink(
+    hub_or_name: str,
+    leaf: str | None = None,
+    label: str | None = None,
+    *,
+    hierarchy_enabled: bool = True,
+) -> str:
+    """Path-based wikilink when hierarchy is on; legacy ``topic-`` when off."""
+    if not hierarchy_enabled:
+        name = hub_or_name
+        return f"[[{topic_page_name(name)}|{label or name}]]"
+    path = topic_page_path(hub_or_name, leaf)
+    if label is not None:
+        display = label
+    elif leaf is not None:
+        display = leaf
+    else:
+        display = hub_or_name
+    return f"[[{path}|{display}]]"
 
 
 def chunk_page_name(source_id: str, chunk_index: int) -> str:
