@@ -151,7 +151,12 @@ def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
         ]
     )
     client = FakeLlmClient(json.dumps({"markdown": llm_body}, ensure_ascii=False))
-    settings = Settings(wiki_compile=True, wiki_compile_llm=True, data_root=str(tmp_path))
+    settings = Settings(
+        wiki_compile=True,
+        wiki_compile_llm=True,
+        wiki_hierarchy=False,
+        data_root=str(tmp_path),
+    )
 
     report = compile_topics_for_source(
         knowledge,
@@ -180,7 +185,12 @@ def test_compile_falls_back_to_template_on_llm_parse_failure(tmp_path: Path):
     _seed_kb(knowledge)
 
     client = FakeLlmClient("not-json{{{")
-    settings = Settings(wiki_compile=True, wiki_compile_llm=True, data_root=str(tmp_path))
+    settings = Settings(
+        wiki_compile=True,
+        wiki_compile_llm=True,
+        wiki_hierarchy=False,
+        data_root=str(tmp_path),
+    )
 
     report = compile_topics_for_source(
         knowledge,
@@ -210,7 +220,12 @@ def test_compile_skips_llm_when_flag_false(tmp_path: Path):
     _seed_kb(knowledge)
 
     client = FakeLlmClient(json.dumps({"markdown": "SHOULD_NOT_APPEAR"}, ensure_ascii=False))
-    settings = Settings(wiki_compile=True, wiki_compile_llm=False, data_root=str(tmp_path))
+    settings = Settings(
+        wiki_compile=True,
+        wiki_compile_llm=False,
+        wiki_hierarchy=False,
+        data_root=str(tmp_path),
+    )
 
     compile_topics_for_source(
         knowledge,

@@ -14,6 +14,8 @@ class WikiPageMeta:
     content_hash: str
     source_ids: list[str] = field(default_factory=list)
     updated_at: datetime | None = None
+    hub: str | None = None
+    role: str | None = None
 
 
 def _meta_dir(wiki_root: Path) -> Path:
@@ -54,6 +56,8 @@ def load_pages_meta(wiki_root: Path | str) -> dict[str, WikiPageMeta]:
             content_hash=str(payload.get("content_hash", "")),
             source_ids=list(payload.get("source_ids") or []),
             updated_at=_parse_updated_at(payload.get("updated_at")),
+            hub=payload.get("hub"),
+            role=payload.get("role"),
         )
     return result
 
@@ -63,8 +67,9 @@ def save_pages_meta(wiki_root: Path | str, pages: dict[str, WikiPageMeta]) -> Pa
     meta_dir = _meta_dir(root)
     meta_dir.mkdir(parents=True, exist_ok=True)
     path = _pages_meta_path(root)
-    payload = {
-        page_id: {
+    payload = {}
+    for page_id, meta in pages.items():
+        entry = {
             "path": meta.path,
             "title": meta.title,
             "kind": meta.kind,
@@ -72,7 +77,10 @@ def save_pages_meta(wiki_root: Path | str, pages: dict[str, WikiPageMeta]) -> Pa
             "source_ids": list(meta.source_ids),
             "updated_at": _serialize_updated_at(meta.updated_at),
         }
-        for page_id, meta in pages.items()
-    }
+        if meta.hub is not None:
+            entry["hub"] = meta.hub
+        if meta.role is not None:
+            entry["role"] = meta.role
+        payload[page_id] = entry
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path

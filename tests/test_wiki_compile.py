@@ -76,7 +76,12 @@ def test_compile_topics_two_sources_share_topic_file(tmp_path: Path):
     knowledge.append_claim(_claim("claim-a", source_ids=["src-a"]))
     knowledge.append_claim(_claim("claim-b", source_ids=["src-b"]))
 
-    settings = Settings(wiki_compile=True, wiki_compile_llm=False, data_root=str(tmp_path))
+    settings = Settings(
+        wiki_compile=True,
+        wiki_compile_llm=False,
+        wiki_hierarchy=False,
+        data_root=str(tmp_path),
+    )
 
     # First source alone
     knowledge.save_topic_clusters(
