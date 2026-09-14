@@ -77,6 +77,25 @@ export type SourceChunkItem = {
   created_at: string | null;
 };
 
+export type TraceChunkHit = {
+  hit_type?: string;
+  chunk_id?: string;
+  source_id?: string;
+  chunk_index?: number;
+  title?: string | null;
+  score?: number;
+  snippet?: string;
+};
+
+export type TraceChunkItem = {
+  chunk_id: string;
+  source_id?: string;
+  chunk_index?: number;
+  title?: string | null;
+  excerpt?: string;
+  status?: string;
+};
+
 export type AgentTraceStep = {
   node: string;
   status: "ok" | "error" | "skipped";
