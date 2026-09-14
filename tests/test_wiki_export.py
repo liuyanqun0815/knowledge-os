@@ -165,6 +165,53 @@ def test_export_wiki_writes_topic_pages_and_index_section(tmp_path: Path):
     assert "[[topic-尺码选择|尺码选择]]" in index_content
 
 
+def test_export_wiki_writes_topic_pages_to_hub_paths_when_hierarchy_on(tmp_path: Path):
+    from infra.settings import Settings
+
+    knowledge = InMemoryKnowledge()
+    evidence = InMemoryEvidence()
+    knowledge.save_source(_source())
+    claim = _claim("claim-1", "family-1", subject="客服沟通", predicate="要求", object_value="礼貌清晰")
+    knowledge.append_claim(claim)
+    knowledge.save_topic_clusters(
+        [
+            TopicCluster(
+                id="topic-cs",
+                knowledge_base_id="legacy",
+                name="客服沟通",
+                aliases=[],
+                chunk_ids=[],
+                claim_ids=["claim-1"],
+                source_ids=["policy-v3"],
+                summary="沟通规范要点",
+                status="active",
+                content_hash="hash-cs",
+                updated_at=datetime.now(timezone.utc),
+            )
+        ]
+    )
+
+    output_dir = tmp_path / "wiki-out"
+    result = export_wiki(
+        knowledge,
+        evidence,
+        "legacy",
+        output_dir,
+        settings=Settings(wiki_hierarchy=True),
+    )
+
+    assert result.topic_pages == 1
+    nested = output_dir / "客服话术" / "沟通规范.md"
+    assert nested.exists()
+    assert not (output_dir / "topic-客服沟通.md").exists()
+    content = nested.read_text(encoding="utf-8")
+    assert "# 客服沟通" in content or "# 沟通规范" in content
+    assert "礼貌清晰" in content
+
+    index_content = (output_dir / "index.md").read_text(encoding="utf-8")
+    assert "[[客服话术/沟通规范|" in index_content
+
+
 def test_export_wiki_sanitizes_source_id_in_filename(tmp_path: Path):
     knowledge = InMemoryKnowledge()
     evidence = InMemoryEvidence()

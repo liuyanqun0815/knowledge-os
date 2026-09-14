@@ -85,19 +85,23 @@ class WikiPageRetrieval:
                 )
             return
 
-        for file_path in sorted(wiki_root.glob("*.md")):
-            if file_path.name == "index.md":
+        for file_path in sorted(wiki_root.rglob("*.md")):
+            if ".meta" in file_path.parts:
                 continue
-            if not file_path.name.startswith(_INDEXABLE_PREFIXES):
+            rel = file_path.relative_to(wiki_root).as_posix()
+            if rel in {"index.md", "log.md"}:
                 continue
-            page_id = file_path.stem
+            # Flat legacy: only topic-/entity- at root; nested hierarchy pages always indexable
+            if "/" not in rel and not file_path.name.startswith(_INDEXABLE_PREFIXES):
+                continue
+            page_id = rel.removesuffix(".md")
             text = file_path.read_text(encoding="utf-8")
-            title = _title_from_markdown(text) or page_id
+            title = _title_from_markdown(text) or Path(page_id).name
             index_text = f"{title} {text}".strip()
             self._pages[page_id] = _IndexedPage(
                 page_id=page_id,
                 title=title,
-                path=file_path.name,
+                path=rel,
                 text=text,
                 vector=_char_hash_vector(index_text),
             )

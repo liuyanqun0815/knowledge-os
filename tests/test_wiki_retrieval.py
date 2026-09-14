@@ -113,3 +113,33 @@ def test_wiki_page_retrieval_respects_top_k(tmp_path: Path):
     hits = retrieval.search("节假日发货顺延", top_k=1)
     assert len(hits) == 1
     assert hits[0].ref_id in {"topic-a", "topic-b"}
+
+
+def test_wiki_page_retrieval_indexes_nested_hierarchy_pages(tmp_path: Path):
+    """Nested hub/leaf pages (no pages.json) must be searchable via rglob."""
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    nested = wiki_root / "客服话术"
+    nested.mkdir(parents=True)
+    _write_topic_page(
+        nested,
+        "沟通规范.md",
+        "沟通规范",
+        "客服应答须礼貌清晰，禁止推诿与敷衍。",
+    )
+    # Non-indexable noise under .meta must be skipped
+    meta_dir = wiki_root / ".meta"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "noise.md").write_text("# noise\n不应被索引的元数据。\n", encoding="utf-8")
+
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("客服应答礼貌禁止推诿", top_k=3)
+
+    assert hits
+    top = hits[0]
+    assert top.hit_type == "wiki"
+    assert top.path == "客服话术/沟通规范.md"
+    assert "沟通规范" in (top.title or "")
+    assert all(h.path != ".meta/noise.md" for h in hits)

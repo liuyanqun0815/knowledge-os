@@ -8,6 +8,7 @@ from pathlib import Path
 from evidence.ports import EvidencePort
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
 from knowledge.ports import KnowledgePort
+from wiki.hierarchy import HierarchyAssignment, assign_wiki_hierarchy
 from wiki.links import (
     entity_page_name,
     entity_wikilink,
@@ -15,6 +16,7 @@ from wiki.links import (
     source_page_name,
     source_wikilink,
     topic_page_name,
+    topic_page_path,
     topic_wikilink,
 )
 
@@ -27,9 +29,30 @@ _entity_wikilink = entity_wikilink
 _topic_page_name = topic_page_name
 
 
-def _topic_wikilink(name: str) -> str:
-    """Flat topic- links until export adopts hierarchy paths."""
+def _topic_wikilink(
+    name: str, *, hierarchy_enabled: bool = False, assignment: HierarchyAssignment | None = None
+) -> str:
+    """Topic wikilink: flat ``topic-`` or hub/leaf path when hierarchy is on."""
+    if not hierarchy_enabled:
+        return topic_wikilink(name, hierarchy_enabled=False)
+    if assignment is not None:
+        if assignment.role == "snippet":
+            return topic_wikilink(assignment.hub, assignment.target_leaf, label=name)
+        return topic_wikilink(assignment.hub, assignment.leaf, label=name)
     return topic_wikilink(name, hierarchy_enabled=False)
+
+
+def _export_topic_rel_path(
+    cluster_name: str, assignment: HierarchyAssignment | None, *, hierarchy_enabled: bool
+) -> str:
+    """Relative path without ``.md`` for a topic cluster page."""
+    if not hierarchy_enabled or assignment is None:
+        return topic_page_name(cluster_name)
+    if assignment.role == "snippet":
+        return topic_page_path(assignment.hub, assignment.target_leaf)
+    if assignment.role == "hub" or assignment.leaf is None:
+        return topic_page_path(assignment.hub, None)
+    return topic_page_path(assignment.hub, assignment.leaf)
 
 
 @dataclass
@@ -196,6 +219,9 @@ def _render_index_page(
     sources: list[Source],
     subjects: list[str],
     topics: list[str] | None = None,
+    *,
+    hierarchy_enabled: bool = False,
+    assignments: dict[str, HierarchyAssignment] | None = None,
 ) -> str:
     lines = [
         _format_frontmatter(["index"], "index", kb_id),
@@ -213,7 +239,8 @@ def _render_index_page(
     if topic_names:
         lines.extend(["", "## 主题"])
         for name in sorted(topic_names):
-            lines.append(f"- {_topic_wikilink(name)}")
+            assignment = (assignments or {}).get(name)
+            lines.append(f"- {_topic_wikilink(name, hierarchy_enabled=hierarchy_enabled, assignment=assignment)}")
 
     lines.extend(["", "## Entities"])
     if not subjects:
@@ -302,10 +329,27 @@ def export_wiki(
         for chunk in knowledge.list_chunks(source.id, status="active"):
             chunks_by_id[chunk.id] = chunk
 
+    hierarchy_enabled = bool(settings is not None and getattr(settings, "wiki_hierarchy", False))
+    assignments: dict[str, HierarchyAssignment] = {}
+    if hierarchy_enabled and clusters:
+        from domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
+
+        plan = assign_wiki_hierarchy([c.name for c in clusters], seeds=get_ecommerce_wiki_seeds())
+        assignments = plan.assignments
+
+    written_topic_paths: set[str] = set()
     for cluster in clusters:
-        page_name = _topic_page_name(cluster.name)
+        assignment = assignments.get(cluster.name)
+        rel = _export_topic_rel_path(cluster.name, assignment, hierarchy_enabled=hierarchy_enabled)
+        # Snippets fold into target pages; skip duplicate writes to same path
+        if hierarchy_enabled and assignment is not None and assignment.role == "snippet":
+            if rel in written_topic_paths:
+                continue
         content = _render_topic_page(cluster, claims_by_id, chunks_by_id, source_titles, kb_id)
-        (output_dir / f"{page_name}.md").write_text(content, encoding="utf-8")
+        out_path = output_dir / f"{rel}.md"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(content, encoding="utf-8")
+        written_topic_paths.add(rel)
         files_written += 1
         topic_pages += 1
 
@@ -355,6 +399,8 @@ def export_wiki(
         sources,
         list(claims_by_subject.keys()),
         topics=[cluster.name for cluster in clusters],
+        hierarchy_enabled=hierarchy_enabled,
+        assignments=assignments,
     )
     (output_dir / "index.md").write_text(index_content, encoding="utf-8")
     files_written += 1
