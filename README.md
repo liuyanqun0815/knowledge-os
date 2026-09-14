@@ -58,7 +58,7 @@ Wiki 导出目录结构（Obsidian 友好）：
 
 默认导出路径：`{AKOS_DATA_ROOT}/{kb_id}/wiki/`（只读导出视图，不回写）。
 
-**编译层（Ask 三路检索用）**路径：`{AKOS_DATA_ROOT}/kb/{kb_id}/wiki/`（`topic-*.md` + `.meta/pages.json`）。由 `AKOS_WIKI_COMPILE` 在 enrich 后增量更新，或手动 `POST .../wiki/compile`；模板/LLM 由 `AKOS_WIKI_COMPILE_LLM` 控制。与导出路径不同，勿混用。
+**编译层（Ask 三路检索用）**路径：`{AKOS_DATA_ROOT}/kb/{kb_id}/wiki/`。默认 `AKOS_WIKI_HIERARCHY=true` 时为目录层级：`{hub}/_index.md`（hub 首页）、`{hub}/{leaf}.md`（叶子页），短语级 snippet 并入目标页而不单独建文件；`.meta/pages.json` 记录路径与 hub/role。`AKOS_WIKI_HIERARCHY=false` 时仍写平铺 `topic-*.md`。由 `AKOS_WIKI_COMPILE` 在 enrich 后增量更新，或手动 `POST .../wiki/compile`；模板/LLM 由 `AKOS_WIKI_COMPILE_LLM` 控制。与导出路径不同，勿混用。
 
 上传完成后 API 响应含 `ingest_summary`（规则生成，无 LLM）。
 

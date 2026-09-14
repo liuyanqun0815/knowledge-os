@@ -135,8 +135,15 @@ def test_admin_wiki_compile_writes_compile_layer(admin_client, tmp_path: Path):
 
     wiki_root = compile_wiki_root(tmp_path, kb_id)
     assert (wiki_root / "index.md").exists()
-    topic_files = list(wiki_root.glob("topic-*.md"))
-    assert topic_files, "expected compiled topic-*.md under kb/{kb_id}/wiki"
+    # Default wiki_hierarchy: hub folders (`{hub}/_index.md`), not flat topic-*.md
+    hub_indexes = list(wiki_root.glob("*/_index.md"))
+    nested_md = [
+        p
+        for p in wiki_root.rglob("*.md")
+        if p.name != "index.md" and ".meta" not in p.parts
+    ]
+    assert hub_indexes or nested_md, "expected hierarchical wiki pages under kb/{kb_id}/wiki"
+    assert not list(wiki_root.glob("topic-*.md"))
 
 
 def test_admin_wiki_compile_all_sources(admin_client, tmp_path: Path):
