@@ -179,12 +179,14 @@ class InMemoryKnowledge:
         self._chunks_by_source[source_id] = chunk_ids
 
     def list_chunks(self, source_id: str, *, status: str = "active") -> list[SourceChunk]:
-        chunk_ids = self._chunks_by_source.get(source_id, [])
-        return [
-            self._chunks[chunk_id]
-            for chunk_id in chunk_ids
-            if chunk_id in self._chunks and self._chunks[chunk_id].status == status
-        ]
+        return sorted(
+            [
+                chunk
+                for chunk in self._chunks.values()
+                if chunk.source_id == source_id and chunk.status == status
+            ],
+            key=lambda chunk: chunk.chunk_index,
+        )
 
     def get_chunk(self, chunk_id: str) -> SourceChunk | None:
         return self._chunks.get(chunk_id)
@@ -195,6 +197,20 @@ class InMemoryKnowledge:
             if chunk is not None:
                 chunk.status = "stale"
         self._chunks_by_source.pop(source_id, None)
+
+    def purge_stale_chunks(self, source_id: str) -> int:
+        stale_ids = [
+            chunk_id
+            for chunk_id, chunk in self._chunks.items()
+            if chunk.source_id == source_id and chunk.status == "stale"
+        ]
+        for chunk_id in stale_ids:
+            self._chunks.pop(chunk_id, None)
+        if source_id in self._chunks_by_source:
+            self._chunks_by_source[source_id] = [
+                chunk_id for chunk_id in self._chunks_by_source[source_id] if chunk_id not in stale_ids
+            ]
+        return len(stale_ids)
 
     def update_chunk(self, chunk: SourceChunk) -> SourceChunk:
         if chunk.id not in self._chunks:

@@ -653,6 +653,40 @@ class PgKnowledge:
                 {"knowledge_base_id": self._knowledge_base_id, "source_id": source_id},
             )
 
+    def purge_stale_chunks(self, source_id: str) -> int:
+        params = {"knowledge_base_id": self._knowledge_base_id, "source_id": source_id}
+        with self._engine.begin() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id
+                    FROM source_chunks
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_id = :source_id
+                      AND status = 'stale'
+                    """),
+                params,
+            ).fetchall()
+            chunk_ids = [row.id for row in rows]
+            if not chunk_ids:
+                return 0
+            conn.execute(
+                text("""
+                    DELETE FROM embeddings
+                    WHERE ref_type = 'chunk' AND ref_id = ANY(CAST(:chunk_ids AS text[]))
+                    """),
+                {"chunk_ids": chunk_ids},
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM source_chunks
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_id = :source_id
+                      AND status = 'stale'
+                    """),
+                params,
+            )
+        return len(chunk_ids)
+
     def update_chunk(self, chunk: SourceChunk) -> SourceChunk:
         with self._engine.begin() as conn:
             conn.execute(

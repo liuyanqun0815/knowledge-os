@@ -62,6 +62,8 @@ def index_source_chunks(
     try:
         chunks, truncated = build_source_chunks(source_id, text, settings)
         knowledge.save_chunks(source_id, chunks)
+        if settings.purge_stale_chunks:
+            knowledge.purge_stale_chunks(source_id)
         if chunk_retrieval is not None:
             chunk_retrieval.remove_source(source_id)
             chunk_retrieval.index_chunks(chunks)
