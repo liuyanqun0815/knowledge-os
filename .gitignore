@@ -27,6 +27,7 @@ Thumbs.db
 
 # Runtime / local data
 data/
+models/
 uploads/
 *.db
 .coverage
@@ -38,3 +39,5 @@ htmlcov/
 # Web frontend
 web/node_modules/
 web/dist/
+
+.worktrees/
