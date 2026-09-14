@@ -9,20 +9,46 @@ def rrf_score(rank: int, k: int = _RRF_K) -> float:
     return 1.0 / (k + rank)
 
 
-def fuse_hits(claim_hits: list[Hit], chunk_hits: list[Hit], *, claim_weight: float = 0.5) -> list[Hit]:
-    chunk_weight = 1.0 - claim_weight
+def fuse_hits(
+    claim_hits: list[Hit],
+    chunk_hits: list[Hit],
+    wiki_hits: list[Hit] | None = None,
+    *,
+    claim_weight: float = 0.5,
+    wiki_weight: float = 0.9,
+    chunk_weight: float | None = None,
+) -> list[Hit]:
+    """Fuse claim / wiki / chunk ranked lists with weighted RRF.
+
+    Two-way callers that omit ``wiki_hits`` and ``chunk_weight`` keep the
+    legacy split ``chunk_weight = 1.0 - claim_weight``.
+    """
+    wiki_list = wiki_hits or []
+    if chunk_weight is None:
+        if wiki_list:
+            chunk_weight = 0.8
+        else:
+            chunk_weight = 1.0 - claim_weight
+
     scores: dict[str, Hit] = {}
     totals: dict[str, float] = {}
 
-    for rank, hit in enumerate(claim_hits):
-        key = f"claim:{hit.claim_id or hit.snippet}"
-        totals[key] = totals.get(key, 0.0) + rrf_score(rank) * claim_weight
-        scores[key] = hit
+    def _accumulate(hits: list[Hit], prefix: str, weight: float) -> None:
+        if weight <= 0:
+            return
+        for rank, hit in enumerate(hits):
+            if prefix == "claim":
+                key = f"claim:{hit.claim_id or hit.snippet}"
+            elif prefix == "chunk":
+                key = f"chunk:{hit.chunk_id or hit.snippet}"
+            else:
+                key = f"wiki:{hit.ref_id or hit.path or hit.snippet}"
+            totals[key] = totals.get(key, 0.0) + rrf_score(rank) * weight
+            scores[key] = hit
 
-    for rank, hit in enumerate(chunk_hits):
-        key = f"chunk:{hit.chunk_id or hit.snippet}"
-        totals[key] = totals.get(key, 0.0) + rrf_score(rank) * chunk_weight
-        scores[key] = hit
+    _accumulate(claim_hits, "claim", claim_weight)
+    _accumulate(wiki_list, "wiki", wiki_weight if wiki_list else 0.0)
+    _accumulate(chunk_hits, "chunk", chunk_weight)
 
     fused: list[Hit] = []
     for key, total in sorted(totals.items(), key=lambda item: item[1], reverse=True):
@@ -36,6 +62,9 @@ def fuse_hits(claim_hits: list[Hit], chunk_hits: list[Hit], *, claim_weight: flo
                 chunk_id=hit.chunk_id,
                 source_id=hit.source_id,
                 entity_id=hit.entity_id,
+                ref_id=hit.ref_id,
+                title=hit.title,
+                path=hit.path,
             )
         )
     return fused

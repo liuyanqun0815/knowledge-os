@@ -30,8 +30,10 @@ class AskState(TypedDict):
     retrieval_mode: RetrievalMode | None
     hits: list[Hit]
     chunk_hits: list[Hit]
+    wiki_hits: NotRequired[list[Hit]]
     claim_ids: list[str]
     chunk_ids: list[str]
+    wiki_pages: NotRequired[list[dict]]
     verification: VerificationResult | None
     synthesis_text: str | None
     synthesis_citations: list[dict]

@@ -8,6 +8,7 @@ from knowledge.errors import DomainError
 from knowledge.models import Answer
 from orchestrator.graphs.ask_graph import build_ask_graph
 from orchestrator.graphs.ingest_graph import build_ingest_graph
+from orchestrator.trace_utils import normalize_agent_trace
 
 
 @dataclass
@@ -55,9 +56,7 @@ class LangGraphOrchestrator:
             raise DomainError(f"source_not_found: {old_source_id}")
 
         staging_claims = [
-            claim
-            for claim in self.deps.knowledge.get_claims_for_source(new_source_id)
-            if claim.status == "staging"
+            claim for claim in self.deps.knowledge.get_claims_for_source(new_source_id) if claim.status == "staging"
         ]
         if not staging_claims:
             self.deps.compiler.ingest(new_source_id, staging=True)
@@ -126,8 +125,10 @@ class LangGraphOrchestrator:
                 "retrieval_mode": None,
                 "hits": [],
                 "chunk_hits": [],
+                "wiki_hits": [],
                 "claim_ids": [],
                 "chunk_ids": [],
+                "wiki_pages": [],
                 "verification": None,
                 "synthesis_text": None,
                 "synthesis_citations": [],
@@ -139,5 +140,5 @@ class LangGraphOrchestrator:
         )
         answer = state["answer"]
         if include_trace:
-            return AskResult(answer=answer, trace=state.get("trace") or [])
+            return AskResult(answer=answer, trace=normalize_agent_trace(state.get("trace") or []))
         return answer

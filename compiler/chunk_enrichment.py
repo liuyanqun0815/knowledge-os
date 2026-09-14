@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import replace
 from typing import Any
 
 from langsmith import traceable
 
+from compiler.chunk_segmentation import (
+    apply_segmentation_plan,
+    build_segmented_source_chunks,
+    request_segmentation_plan,
+    spans_from_chunks,
+)
 from infra.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -47,6 +52,17 @@ def _parse_enrichment(raw: str, chunk_index: int) -> dict[str, Any] | None:
     }
 
 
+def _rebuild_topic_clusters(deps: Any, kb_id: str, settings: Settings) -> None:
+    if not settings.topic_cluster:
+        return
+    graph = getattr(deps, "graph", None)
+    if graph is None:
+        return
+    from knowledge.topic_service import rebuild_topic_clusters
+
+    rebuild_topic_clusters(deps.knowledge, graph, kb_id, settings)
+
+
 def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
     if not getattr(settings, "wiki_compile", False):
         return
@@ -54,6 +70,7 @@ def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Sett
     if not data_root:
         return
     from wiki.compile import compile_topics_for_source
+    from wiki.paths import compile_wiki_root
 
     compile_topics_for_source(
         deps.knowledge,
@@ -64,15 +81,49 @@ def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Sett
         graph=getattr(deps, "graph", None),
         llm_client=getattr(deps, "llm_client", None),
     )
+    wiki_retrieval = getattr(deps, "wiki_retrieval", None)
+    if wiki_retrieval is not None:
+        wiki_retrieval.index_wiki_root(compile_wiki_root(data_root, kb_id))
 
 
-@traceable(name="akos.enrich_chunks", run_type="chain")
-def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
-    client = getattr(deps, "llm_client", None)
-    if not settings.chunk_llm_enrich or client is None or not client.is_configured:
-        return
-    if getattr(deps, "chunk_retrieval", None) is None:
-        return
+def _replace_with_segmented_chunks(
+    *,
+    kb_id: str,
+    source_id: str,
+    text: str,
+    deps: Any,
+    settings: Settings,
+    client: Any,
+) -> bool:
+    chunks = deps.knowledge.list_chunks(source_id, status="active")
+    if not chunks:
+        return False
+    spans = spans_from_chunks(chunks)
+    sections = request_segmentation_plan(client, spans, settings)
+    if sections is None:
+        return False
+
+    drafts = apply_segmentation_plan(text, spans, sections)
+    merged_chunks = build_segmented_source_chunks(source_id, text, drafts, sections)
+    deps.knowledge.save_chunks(source_id, merged_chunks)
+    if settings.purge_stale_chunks:
+        deps.knowledge.purge_stale_chunks(source_id)
+    deps.chunk_retrieval.remove_source(source_id)
+    deps.chunk_retrieval.index_chunks(merged_chunks)
+    _rebuild_topic_clusters(deps, kb_id, settings)
+    _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+    logger.info(
+        "Chunk segmentation finished for source %s in kb %s (%s -> %s chunks)",
+        source_id,
+        kb_id,
+        len(chunks),
+        len(merged_chunks),
+    )
+    return True
+
+
+def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settings: Settings, client: Any) -> None:
+    from dataclasses import replace
 
     chunks = deps.knowledge.list_chunks(source_id, status="active")
     if not chunks:
@@ -109,12 +160,34 @@ def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) 
         )
         deps.chunk_retrieval.index_chunks([updated])
 
-    if settings.topic_cluster:
-        graph = getattr(deps, "graph", None)
-        if graph is not None:
-            from knowledge.topic_service import rebuild_topic_clusters
-
-            rebuild_topic_clusters(deps.knowledge, graph, kb_id, settings)
-
+    _rebuild_topic_clusters(deps, kb_id, settings)
     _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
     logger.info("Chunk enrichment finished for source %s in kb %s", source_id, kb_id)
+
+
+@traceable(name="akos.enrich_chunks", run_type="chain")
+def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
+    client = getattr(deps, "llm_client", None)
+    if getattr(deps, "chunk_retrieval", None) is None:
+        return
+    if client is None or not client.is_configured:
+        return
+
+    text = deps.knowledge.get_source_text(source_id)
+
+    if settings.chunk_llm_segment and text is not None:
+        if _replace_with_segmented_chunks(
+            kb_id=kb_id,
+            source_id=source_id,
+            text=text,
+            deps=deps,
+            settings=settings,
+            client=client,
+        ):
+            return
+        logger.warning("Chunk segmentation failed for source %s in kb %s; falling back", source_id, kb_id)
+    elif settings.chunk_llm_segment and text is None:
+        logger.warning("Chunk segmentation skipped for source %s in kb %s: source text missing", source_id, kb_id)
+
+    if settings.chunk_llm_enrich:
+        _enrich_chunks_individually(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings, client=client)

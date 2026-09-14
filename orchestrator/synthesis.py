@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from langsmith import traceable
@@ -16,6 +17,7 @@ def build_synthesis_context(
     chunk_ids: list[str],
     deps: Any,
     settings: Settings,
+    wiki_pages: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     claims = []
     evidence = []
@@ -50,7 +52,14 @@ def build_synthesis_context(
             continue
         chunks.append(_chunk_payload(chunk))
 
-    return {"question": question, "claims": claims, "evidence": evidence, "chunks": chunks}
+    pages = list(wiki_pages or [])[: settings.ask_synthesis_max_chunks]
+    return {
+        "question": question,
+        "claims": claims,
+        "evidence": evidence,
+        "chunks": chunks,
+        "wiki_pages": pages,
+    }
 
 
 def _chunk_payload(chunk: SourceChunk) -> dict[str, Any]:
@@ -66,17 +75,65 @@ def _chunk_payload(chunk: SourceChunk) -> dict[str, Any]:
 
 
 def _build_prompt(context: dict[str, Any]) -> str:
+    question = context.get("question", "")
+    if not isinstance(question, str):
+        question = str(question)
+    wiki_pages = context.get("wiki_pages") or []
+    knowledge_context = {
+        "claims": context.get("claims", []),
+        "evidence": context.get("evidence", []),
+        "chunks": context.get("chunks", []),
+        "wiki_pages": wiki_pages,
+    }
+    wiki_section = ""
+    if wiki_pages:
+        wiki_section = (
+            "## Wiki 主题页\n"
+            "以下为主题页结构与综述摘录，可用于组织回答脉络；"
+            "数字与规则以 Claim/原文为准；Wiki 仅作结构与综述。\n"
+            f"{json.dumps(wiki_pages, ensure_ascii=False)}\n\n"
+        )
     return (
-        "你是 AKOS 知识库问答助手。仅根据提供的 claims、evidence 与 chunks 回答，禁止编造。\n"
-        "要求：\n"
-        "1. 用中文自然语言回答用户问题\n"
-        "2. 每个事实句末标注引用 [source_id:简短quote]\n"
-        "3. 若 claims 冲突，说明冲突并列出双方\n"
-        "4. 若信息不足，明确说「依据不足」\n"
-        "只输出 JSON："
-        '{"answer":"...", "citations":[{"source_id":"...","quote":"...","claim_id":null,"chunk_id":null}]}\n'
-        f"上下文:\n{json.dumps(context, ensure_ascii=False)}"
+        "你是 AKOS 知识库问答助手。仅根据下方「参考知识」中的 claims、evidence、chunks、wiki_pages 作答，"
+        "禁止编造、禁止引入参考知识以外的内容。\n\n"
+        "## 回答原则\n"
+        "1. 语言：使用简洁、专业、面向业务用户的中文自然语言\n"
+        "2. 聚焦：直接回应「用户问题」，优先使用与问题最相关的 claims 与 chunks；"
+        "Wiki 主题页仅作结构与综述，不可单独作为数字/规则依据\n"
+        "3. 结构：先给出结论，再补充适用条件、例外情形或操作要点；必要时使用短列表\n"
+        "4. 数值与规则：涉及天数、金额、比例等须与 Claim/原文（claims、evidence、chunks）一致，"
+        "不可四舍五入或自行推断；数字与规则以 Claim/原文为准；Wiki 仅作结构与综述\n"
+        "5. 冲突：若 claims 对同一问题给出不同结论，说明存在冲突并分别陈述双方依据\n"
+        "6. 不足：若参考知识无法支撑可靠结论，answer 仅输出「依据不足」，citations 输出空数组 []\n"
+        "7. 引用分工：answer 正文必须是纯文本结论，不得出现任何引用标注"
+        "（禁止 [source_id:...]、[1]、脚注、括号来源等）；所有可追溯引用仅写入 citations 数组\n\n"
+        "## citations 填写规则\n"
+        "- 每条 citation 必须包含 source_id 与 quote（quote 须为参考知识原文的可核对摘录，可短摘）\n"
+        "- 依据来自 claim 时填写 claim_id，来自 chunk 时填写 chunk_id；"
+        "引用 wiki 时 source_id 填 path 或 title，claim_id/chunk_id 填 null\n"
+        "- 引用类型可为 claim | chunk | wiki\n"
+        "- 仅收录 answer 中实际用到的依据，不要堆砌无关 citation\n"
+        "- 同一 source 的多条依据可拆成多条 citation\n\n"
+        "## 输出格式\n"
+        "只输出一个 JSON 对象，不要 markdown 代码块，不要前后说明文字：\n"
+        '{"answer":"...","citations":[{"source_id":"...","quote":"...","claim_id":null,"chunk_id":null}]}\n\n'
+        f"## 用户问题\n{question.strip()}\n\n"
+        f"{wiki_section}"
+        f"## 参考知识\n{json.dumps(knowledge_context, ensure_ascii=False)}"
     )
+
+
+_INLINE_CITATION_PATTERN = re.compile(r"\[[^\[\]:]+:[^\[\]]+\]")
+_FOOTNOTE_CITATION_PATTERN = re.compile(r"\[\d+\]")
+
+
+def _strip_inline_citations(answer: str) -> str:
+    cleaned = _INLINE_CITATION_PATTERN.sub("", answer)
+    cleaned = _FOOTNOTE_CITATION_PATTERN.sub("", cleaned)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r" {2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([。；，、！？])", r"\1", cleaned)
+    return cleaned.strip()
 
 
 def _parse_json_response(raw: str) -> dict[str, Any]:
@@ -108,6 +165,15 @@ def _context_texts_for_source(context: dict[str, Any], source_id: str) -> list[s
             value = item.get(field)
             if isinstance(value, str) and value:
                 texts.append(value)
+    for item in context.get("wiki_pages", []):
+        path = item.get("path")
+        title = item.get("title")
+        if source_id not in {path, title, item.get("ref_id")}:
+            continue
+        for field in ("excerpt", "title", "path"):
+            value = item.get(field)
+            if isinstance(value, str) and value:
+                texts.append(value)
     return texts
 
 
@@ -127,6 +193,11 @@ def _quote_allowed(quote: str, context: dict[str, Any], source_id: str | None = 
                 value = item.get(field)
                 if isinstance(value, str):
                     candidates.append(value)
+        for item in context.get("wiki_pages", []):
+            for field in ("excerpt", "title"):
+                value = item.get(field)
+                if isinstance(value, str):
+                    candidates.append(value)
     for candidate in candidates:
         if quote in candidate or candidate in quote:
             return True
@@ -143,6 +214,10 @@ def _answer_grounded_in_context(answer: str, context: dict[str, Any]) -> bool:
             text = item.get(field)
             if isinstance(text, str) and len(text) >= 12 and text[: min(40, len(text))] in answer:
                 return True
+    for item in context.get("wiki_pages", []):
+        excerpt = item.get("excerpt")
+        if isinstance(excerpt, str) and len(excerpt) >= 12 and excerpt[: min(40, len(excerpt))] in answer:
+            return True
     return False
 
 
@@ -150,6 +225,9 @@ def sanitize_synthesis_payload(context: dict[str, Any], payload: dict[str, Any])
     """Keep LLM answer; drop invalid citations instead of rejecting the whole synthesis."""
     answer = payload.get("answer")
     if not isinstance(answer, str) or not answer.strip():
+        return None
+    answer = _strip_inline_citations(answer)
+    if not answer:
         return None
 
     raw_citations = payload.get("citations")
@@ -166,7 +244,7 @@ def sanitize_synthesis_payload(context: dict[str, Any], payload: dict[str, Any])
                 citations.append(citation)
 
     if citations or _answer_grounded_in_context(answer, context):
-        return {"answer": answer.strip(), "citations": citations}
+        return {"answer": answer, "citations": citations}
     return None
 
 
@@ -178,7 +256,7 @@ def validate_synthesis_result(context: dict[str, Any], payload: dict[str, Any]) 
 def synthesize_answer(context: dict[str, Any], llm_client, settings: Settings) -> dict[str, Any] | None:
     if not settings.ask_synthesis or llm_client is None or not llm_client.is_configured:
         return None
-    if not context.get("claims") and not context.get("chunks"):
+    if not context.get("claims") and not context.get("chunks") and not context.get("wiki_pages"):
         return None
     try:
         raw = llm_client.chat_completions(

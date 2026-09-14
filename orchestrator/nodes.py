@@ -13,8 +13,14 @@ from infra.settings import get_settings
 from knowledge.models import Answer
 from orchestrator.state import AskState, IngestState
 from orchestrator.synthesis import build_synthesis_context, synthesize_answer
+from orchestrator.trace_utils import (
+    serialize_chunks_for_trace,
+    serialize_hits_for_trace,
+    trace_step,
+)
 from retrieval.fusion import fuse_hits, route_fusion_weights
 from retrieval.ports import Hit, RetrievalMode
+
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
 _PROCEDURE_KEYWORDS = ("怎么做", "流程", "步骤", "怎么走")
@@ -193,7 +199,20 @@ def route_mode_node(state: AskState, deps: Any) -> dict:
     procedure = None
     if any(keyword in question for keyword in _PROCEDURE_KEYWORDS):
         procedure = deps.memory.get_procedure(question)
-    return {"retrieval_mode": mode, "procedure": procedure}
+    return {
+        "retrieval_mode": mode,
+        "procedure": procedure,
+        "trace": [
+            trace_step(
+                "route_mode",
+                summary=f"检索模式 {mode.value if isinstance(mode, RetrievalMode) else mode}",
+                detail={
+                    "retrieval_mode": mode.value if isinstance(mode, RetrievalMode) else str(mode),
+                    "procedure_id": procedure.id if procedure is not None else None,
+                },
+            )
+        ],
+    }
 
 
 def retrieve_node(state: AskState, deps: Any) -> dict:
@@ -205,19 +224,45 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
     chunk_retrieval = getattr(deps, "chunk_retrieval", None)
     if settings.chunk_index and chunk_retrieval is not None:
         chunk_hits = chunk_retrieval.search(question, {"top_k": settings.retrieval_top_k})
-    fused_hits = fuse_hits(claim_hits, chunk_hits, claim_weight=route_fusion_weights(question))
+    wiki_hits: list[Hit] = []
+    wiki_retrieval = getattr(deps, "wiki_retrieval", None)
+    if settings.wiki_compile and wiki_retrieval is not None:
+        wiki_hits = wiki_retrieval.search(question, top_k=settings.retrieval_top_k)
+    if wiki_hits:
+        fused_hits = fuse_hits(
+            claim_hits,
+            chunk_hits,
+            wiki_hits,
+            claim_weight=settings.retrieval_claim_weight,
+            wiki_weight=settings.retrieval_wiki_weight,
+            chunk_weight=settings.retrieval_chunk_weight,
+        )
+    else:
+        fused_hits = fuse_hits(claim_hits, chunk_hits, claim_weight=route_fusion_weights(question))
     mode_value = mode.value if isinstance(mode, RetrievalMode) else str(mode)
     return {
         "hits": fused_hits,
         "chunk_hits": chunk_hits,
+        "wiki_hits": wiki_hits,
         "trace": [
-            {
-                "node": "retrieve",
-                "hit_count": len(fused_hits),
-                "claim_hits": len(claim_hits),
-                "chunk_hits": len(chunk_hits),
-                "retrieval_mode": mode_value,
-            }
+            trace_step(
+                "retrieve",
+                summary=(
+                    f"命中 {len(fused_hits)} 条"
+                    f"（Claim {len(claim_hits)} / Wiki {len(wiki_hits)} / Chunk {len(chunk_hits)}）"
+                ),
+                detail={
+                    "hit_count": len(fused_hits),
+                    "claim_hits": len(claim_hits),
+                    "wiki_hits": len(wiki_hits),
+                    "chunk_hits": len(chunk_hits),
+                    "retrieval_mode": mode_value,
+                    "fused_hits": serialize_hits_for_trace(fused_hits, deps.knowledge),
+                    "claim_hit_items": serialize_hits_for_trace(claim_hits, deps.knowledge),
+                    "wiki_hit_items": serialize_hits_for_trace(wiki_hits, deps.knowledge),
+                    "chunk_hit_items": serialize_hits_for_trace(chunk_hits, deps.knowledge),
+                },
+            )
         ],
     }
 
@@ -256,14 +301,42 @@ def _chunk_ids_from_hits(deps: Any, hits: list[Hit]) -> list[str]:
     return chunk_ids
 
 
+def _wiki_pages_from_hits(hits: list[Hit], *, limit: int = 5) -> list[dict[str, Any]]:
+    pages: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for hit in hits:
+        if hit.hit_type != "wiki":
+            continue
+        key = hit.ref_id or hit.path or hit.snippet or ""
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        pages.append(
+            {
+                "title": hit.title or hit.ref_id or "",
+                "excerpt": hit.snippet or "",
+                "path": hit.path or "",
+                "links": [],
+                "ref_id": hit.ref_id,
+            }
+        )
+        if len(pages) >= limit:
+            break
+    return pages
+
+
 def verify_node(state: AskState, deps: Any) -> dict:
     hits = state.get("hits") or []
     chunk_hits = state.get("chunk_hits") or []
+    wiki_hits = state.get("wiki_hits") or []
     as_of = state.get("as_of")
     claim_ids = _claim_ids_from_hits(deps, hits, as_of)
     chunk_ids = _chunk_ids_from_hits(deps, hits)
     if not chunk_ids:
         chunk_ids = _chunk_ids_from_hits(deps, chunk_hits)
+    wiki_pages = _wiki_pages_from_hits(hits)
+    if not wiki_pages:
+        wiki_pages = _wiki_pages_from_hits(wiki_hits)
     verification = None
     if claim_ids:
         verification = verification_agent.verify_claims(
@@ -272,53 +345,122 @@ def verify_node(state: AskState, deps: Any) -> dict:
             deps.evidence,
             claim_ids,
         )
-    trace_entry = {
-        "node": "verify",
+    verification_status = verification.verification_status if verification else "verified"
+    trace_entry = trace_step(
+        "verify",
+        status="skipped" if not claim_ids and not chunk_ids and not wiki_pages else "ok",
+        summary=(
+            f"核验 {verification_status}，"
+            f"{len(claim_ids)} 条 Claim / {len(wiki_pages)} 页 Wiki / {len(chunk_ids)} 条 Chunk"
+            if claim_ids or chunk_ids or wiki_pages
+            else "无可用 Claim/Wiki/Chunk，跳过核验"
+        ),
+        detail={
+            "claim_ids": claim_ids,
+            "chunk_ids": chunk_ids,
+            "wiki_pages": wiki_pages,
+            "verification_status": verification_status,
+            "chunks": serialize_chunks_for_trace(deps.knowledge, chunk_ids),
+        },
+    )
+    if not claim_ids and not chunk_ids and not wiki_pages:
+        return {
+            "claim_ids": [],
+            "chunk_ids": [],
+            "wiki_pages": [],
+            "verification": verification,
+            "trace": [trace_entry],
+        }
+    return {
         "claim_ids": claim_ids,
         "chunk_ids": chunk_ids,
-        "verification_status": verification.verification_status if verification else "verified",
+        "wiki_pages": wiki_pages,
+        "verification": verification,
+        "trace": [trace_entry],
     }
-    if not claim_ids and not chunk_ids:
-        return {"claim_ids": [], "chunk_ids": [], "verification": verification, "trace": [trace_entry]}
-    return {"claim_ids": claim_ids, "chunk_ids": chunk_ids, "verification": verification, "trace": [trace_entry]}
 
 
 def explain_node(state: AskState, deps: Any) -> dict:
     verification = state.get("verification")
     claim_ids = state.get("claim_ids") or []
     chunk_ids = state.get("chunk_ids") or []
+    wiki_pages = state.get("wiki_pages") or []
     if verification is None:
         effective_ids = claim_ids
     elif verification.verification_status == "partial":
         effective_ids = claim_ids
     else:
         effective_ids = verification.verified_claim_ids
-    return {"claim_ids": effective_ids, "chunk_ids": chunk_ids}
+    return {"claim_ids": effective_ids, "chunk_ids": chunk_ids, "wiki_pages": wiki_pages}
 
 
 def synthesize_node(state: AskState, deps: Any) -> dict:
     settings = get_settings()
     claim_ids = state.get("claim_ids") or []
     chunk_ids = state.get("chunk_ids") or []
+    wiki_pages = state.get("wiki_pages") or []
     question = state.get("normalized_question") or state["question"]
     if not settings.ask_synthesis:
-        return {"synthesis_skipped_reason": "disabled"}
-    if not claim_ids and not chunk_ids:
-        return {"synthesis_skipped_reason": "no_context"}
+        return {
+            "synthesis_skipped_reason": "disabled",
+            "trace": [
+                trace_step(
+                    "synthesize",
+                    status="skipped",
+                    summary="LLM 综合已关闭",
+                    detail={"skipped_reason": "disabled"},
+                )
+            ],
+        }
+    if not claim_ids and not chunk_ids and not wiki_pages:
+        return {
+            "synthesis_skipped_reason": "no_context",
+            "trace": [
+                trace_step(
+                    "synthesize",
+                    status="skipped",
+                    summary="无检索上下文，跳过综合",
+                    detail={"skipped_reason": "no_context"},
+                )
+            ],
+        }
     context = build_synthesis_context(
         question=question,
         claim_ids=claim_ids,
         chunk_ids=chunk_ids,
+        wiki_pages=wiki_pages,
         deps=deps,
         settings=settings,
     )
     result = synthesize_answer(context, deps.llm_client, settings)
     if result is None:
-        return {"synthesis_skipped_reason": "failed"}
+        return {
+            "synthesis_skipped_reason": "failed",
+            "trace": [
+                trace_step(
+                    "synthesize",
+                    status="error",
+                    summary="LLM 综合失败",
+                    detail={"skipped_reason": "failed"},
+                )
+            ],
+        }
+    citations = result.get("citations", [])
     return {
         "synthesis_text": result["answer"],
-        "synthesis_citations": result.get("citations", []),
+        "synthesis_citations": citations,
         "synthesis_skipped_reason": None,
+        "trace": [
+            trace_step(
+                "synthesize",
+                summary=f"LLM 综合完成，{len(citations)} 条引用",
+                detail={
+                    "citation_count": len(citations),
+                    "answer_chars": len(result["answer"]),
+                    "citations": citations[:10],
+                },
+            )
+        ],
     }
 
 
@@ -370,21 +512,36 @@ def _build_answer(
     procedure_id: str | None,
     synthesis_used: bool = False,
 ) -> dict:
+    answer = Answer(
+        text=text,
+        claim_ids=claim_ids,
+        chunk_ids=chunk_ids,
+        evidence=evidence,
+        chunk_citations=chunk_citations,
+        synthesis_used=synthesis_used,
+        confidence=confidence,
+        retrieval_mode=_retrieval_mode_value(retrieval_mode),
+        verification_status=verification_status,
+        competing_claim_ids=competing_claim_ids,
+        as_of=as_of,
+        procedure_id=procedure_id,
+    )
     return {
-        "answer": Answer(
-            text=text,
-            claim_ids=claim_ids,
-            chunk_ids=chunk_ids,
-            evidence=evidence,
-            chunk_citations=chunk_citations,
-            synthesis_used=synthesis_used,
-            confidence=confidence,
-            retrieval_mode=_retrieval_mode_value(retrieval_mode),
-            verification_status=verification_status,
-            competing_claim_ids=competing_claim_ids,
-            as_of=as_of,
-            procedure_id=procedure_id,
-        )
+        "answer": answer,
+        "trace": [
+            trace_step(
+                "answer",
+                summary=f"生成回答，置信度 {confidence:.0%}",
+                detail={
+                    "confidence": confidence,
+                    "verification_status": verification_status,
+                    "claim_count": len(claim_ids),
+                    "chunk_count": len(chunk_ids),
+                    "synthesis_used": synthesis_used,
+                    "answer_chars": len(text),
+                },
+            )
+        ],
     }
 
 
@@ -543,8 +700,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                 texts.append(deps.domain.format_claim(claim))
         answer_text = "。".join(texts) if texts else bundle.conclusion
         evidence = [
-            {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]}
-            for item in bundle.items
+            {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]} for item in bundle.items
         ]
         return _build_answer(
             text=answer_text,
