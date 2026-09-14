@@ -25,7 +25,9 @@ from ontology.registry import InMemoryOntology
 from orchestrator.service import LangGraphOrchestrator
 from retrieval.hybrid import HybridRetrieval
 from retrieval.chunk_index import ChunkRetrieval
+from retrieval.wiki_index import WikiPageRetrieval
 from verification.service import VerificationService
+from wiki.paths import compile_wiki_root
 
 DEFAULT_IN_MEMORY_KB_ID = "default"
 LEGACY_PG_KB_ID = "legacy"
@@ -47,6 +49,7 @@ class OrchestratorDeps:
     evolution: EvolutionService
     verification: VerificationService
     knowledge_base_id: str
+    wiki_retrieval: WikiPageRetrieval | None = None
 
 
 def build_pg_knowledge(knowledge_base_id: str = LEGACY_PG_KB_ID) -> PgKnowledge:
@@ -143,6 +146,12 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     retrieval.warm_index()
     chunk_retrieval = ChunkRetrieval(knowledge)
     chunk_retrieval.warm_index()
+    wiki_retrieval: WikiPageRetrieval | None = None
+    if settings.wiki_compile:
+        wiki_retrieval = WikiPageRetrieval()
+        wiki_root = compile_wiki_root(settings.data_root, knowledge_base_id)
+        if wiki_root.is_dir():
+            wiki_retrieval.index_wiki_root(wiki_root)
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
     llm_client = OpenAiCompatibleClient(settings)
     evolution = EvolutionService(knowledge)
@@ -167,6 +176,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         evolution=evolution,
         verification=verification,
         knowledge_base_id=knowledge_base_id,
+        wiki_retrieval=wiki_retrieval,
     )
 
 

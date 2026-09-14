@@ -22,6 +22,10 @@ class Hit:
     chunk_id: str | None = None
     source_id: str | None = None
     entity_id: str | None = None
+    # Wiki topic-page hits (ref_type alias via hit_type="wiki")
+    ref_id: str | None = None
+    title: str | None = None
+    path: str | None = None
 
 
 class RetrievalPort(Protocol):
