@@ -1,5 +1,7 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from infra.bootstrap import build_orchestrator_for_kb
 from orchestrator.nodes import remember_node
 
 
@@ -21,3 +23,22 @@ def test_remember_node_skips_persistence():
     assert len(steps) == 1
     assert steps[0]["node"] == "remember"
     assert steps[0]["status"] == "skipped"
+    assert steps[0]["duration_ms"] == 0
+
+
+def test_ask_trace_steps_include_non_negative_duration_ms(seeded_kb_id):
+    orchestrator = build_orchestrator_for_kb(seeded_kb_id)
+    report = orchestrator.ingest(str(Path("samples/refund_policy_v3.md")), "policy")
+    assert report.claims_created >= 1
+
+    result = orchestrator.ask("定制商品能否七天无理由退货？", include_trace=True)
+
+    assert result.trace
+    for step in result.trace:
+        assert "duration_ms" in step, f"missing duration_ms on node={step.get('node')}"
+        assert isinstance(step["duration_ms"], int)
+        assert step["duration_ms"] >= 0
+
+    node_names = {entry["node"] for entry in result.trace}
+    for required in ("route_mode", "retrieve", "verify", "answer", "remember"):
+        assert required in node_names

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
@@ -24,6 +25,10 @@ from retrieval.ports import Hit, RetrievalMode
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
 _PROCEDURE_KEYWORDS = ("怎么做", "流程", "步骤", "怎么走")
+
+
+def _node_duration_ms(started: float) -> int:
+    return max(0, int((time.perf_counter() - started) * 1000))
 
 
 def store_source_node(state: IngestState, deps: Any) -> dict:
@@ -160,8 +165,17 @@ def verify_sample_node(state: IngestState, deps: Any) -> dict:
 
 
 def recall_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     memory_agent.recall(deps.memory, state["question"], state.get("session_id"))
-    return {}
+    return {
+        "trace": [
+            trace_step(
+                "recall",
+                summary="会话回忆",
+                duration_ms=_node_duration_ms(started),
+            )
+        ],
+    }
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -171,29 +185,48 @@ def _ensure_utc(value: datetime) -> datetime:
 
 
 def parse_time_node(state: AskState, deps: Any) -> dict:
-    if state.get("as_of") is not None:
-        return {}
-    question = state["question"]
-    match = _YEAR_PATTERN.search(question)
-    if match:
-        year = int(match.group(1))
-        return {"as_of": datetime(year, 6, 30, tzinfo=timezone.utc)}
-    if any(word in question for word in _TEMPORAL_WORDS):
-        now = datetime.now(timezone.utc)
-        return {"as_of": datetime(now.year - 1, 6, 30, tzinfo=timezone.utc)}
-    return {}
+    started = time.perf_counter()
+    result: dict[str, Any] = {}
+    if state.get("as_of") is None:
+        question = state["question"]
+        match = _YEAR_PATTERN.search(question)
+        if match:
+            year = int(match.group(1))
+            result["as_of"] = datetime(year, 6, 30, tzinfo=timezone.utc)
+        elif any(word in question for word in _TEMPORAL_WORDS):
+            now = datetime.now(timezone.utc)
+            result["as_of"] = datetime(now.year - 1, 6, 30, tzinfo=timezone.utc)
+    result["trace"] = [
+        trace_step(
+            "parse_time",
+            summary="时间解析",
+            duration_ms=_node_duration_ms(started),
+        )
+    ]
+    return result
 
 
 def normalize_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     question = state["question"]
     normalized = question
     for alias in deps.domain.get_aliases():
         if alias in normalized:
             normalized = normalized.replace(alias, deps.ontology.normalize_term(alias))
-    return {"normalized_question": normalized}
+    return {
+        "normalized_question": normalized,
+        "trace": [
+            trace_step(
+                "normalize",
+                summary="问题归一化",
+                duration_ms=_node_duration_ms(started),
+            )
+        ],
+    }
 
 
 def route_mode_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     question = state.get("normalized_question") or state["question"]
     mode = retriever_agent.route_mode(question)
     procedure = None
@@ -210,12 +243,14 @@ def route_mode_node(state: AskState, deps: Any) -> dict:
                     "retrieval_mode": mode.value if isinstance(mode, RetrievalMode) else str(mode),
                     "procedure_id": procedure.id if procedure is not None else None,
                 },
+                duration_ms=_node_duration_ms(started),
             )
         ],
     }
 
 
 def retrieve_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     question = state.get("normalized_question") or state["question"]
     mode = state.get("retrieval_mode") or RetrievalMode.HYBRID
     settings = get_settings()
@@ -262,6 +297,7 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
                     "wiki_hit_items": serialize_hits_for_trace(wiki_hits, deps.knowledge),
                     "chunk_hit_items": serialize_hits_for_trace(chunk_hits, deps.knowledge),
                 },
+                duration_ms=_node_duration_ms(started),
             )
         ],
     }
@@ -326,6 +362,7 @@ def _wiki_pages_from_hits(hits: list[Hit], *, limit: int = 5) -> list[dict[str, 
 
 
 def verify_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     hits = state.get("hits") or []
     chunk_hits = state.get("chunk_hits") or []
     wiki_hits = state.get("wiki_hits") or []
@@ -362,6 +399,7 @@ def verify_node(state: AskState, deps: Any) -> dict:
             "verification_status": verification_status,
             "chunks": serialize_chunks_for_trace(deps.knowledge, chunk_ids),
         },
+        duration_ms=_node_duration_ms(started),
     )
     if not claim_ids and not chunk_ids and not wiki_pages:
         return {
@@ -381,6 +419,7 @@ def verify_node(state: AskState, deps: Any) -> dict:
 
 
 def explain_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     verification = state.get("verification")
     claim_ids = state.get("claim_ids") or []
     chunk_ids = state.get("chunk_ids") or []
@@ -391,10 +430,23 @@ def explain_node(state: AskState, deps: Any) -> dict:
         effective_ids = claim_ids
     else:
         effective_ids = verification.verified_claim_ids
-    return {"claim_ids": effective_ids, "chunk_ids": chunk_ids, "wiki_pages": wiki_pages}
+    return {
+        "claim_ids": effective_ids,
+        "chunk_ids": chunk_ids,
+        "wiki_pages": wiki_pages,
+        "trace": [
+            trace_step(
+                "explain",
+                summary=f"解释筛选 {len(effective_ids)} 条 Claim",
+                detail={"claim_ids": effective_ids, "chunk_ids": chunk_ids},
+                duration_ms=_node_duration_ms(started),
+            )
+        ],
+    }
 
 
 def synthesize_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     settings = get_settings()
     claim_ids = state.get("claim_ids") or []
     chunk_ids = state.get("chunk_ids") or []
@@ -409,6 +461,7 @@ def synthesize_node(state: AskState, deps: Any) -> dict:
                     status="skipped",
                     summary="LLM 综合已关闭",
                     detail={"skipped_reason": "disabled"},
+                    duration_ms=_node_duration_ms(started),
                 )
             ],
         }
@@ -421,6 +474,7 @@ def synthesize_node(state: AskState, deps: Any) -> dict:
                     status="skipped",
                     summary="无检索上下文，跳过综合",
                     detail={"skipped_reason": "no_context"},
+                    duration_ms=_node_duration_ms(started),
                 )
             ],
         }
@@ -442,6 +496,7 @@ def synthesize_node(state: AskState, deps: Any) -> dict:
                     status="error",
                     summary="LLM 综合失败",
                     detail={"skipped_reason": "failed"},
+                    duration_ms=_node_duration_ms(started),
                 )
             ],
         }
@@ -459,6 +514,7 @@ def synthesize_node(state: AskState, deps: Any) -> dict:
                     "answer_chars": len(result["answer"]),
                     "citations": citations[:10],
                 },
+                duration_ms=_node_duration_ms(started),
             )
         ],
     }
@@ -511,6 +567,7 @@ def _build_answer(
     as_of: datetime | None,
     procedure_id: str | None,
     synthesis_used: bool = False,
+    duration_ms: int = 0,
 ) -> dict:
     answer = Answer(
         text=text,
@@ -540,12 +597,14 @@ def _build_answer(
                     "synthesis_used": synthesis_used,
                     "answer_chars": len(text),
                 },
+                duration_ms=duration_ms,
             )
         ],
     }
 
 
 def answer_node(state: AskState, deps: Any) -> dict:
+    started = time.perf_counter()
     claim_ids = state.get("claim_ids") or []
     chunk_ids = state.get("chunk_ids") or []
     retrieval_mode = state.get("retrieval_mode")
@@ -558,6 +617,9 @@ def answer_node(state: AskState, deps: Any) -> dict:
     procedure_id = procedure.id if procedure else None
     synthesis_text = state.get("synthesis_text")
     synthesis_citations = state.get("synthesis_citations") or []
+
+    def _answer(**kwargs: Any) -> dict:
+        return _build_answer(duration_ms=_node_duration_ms(started), **kwargs)
 
     if synthesis_text:
         evidence = [
@@ -582,7 +644,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
             for item in synthesis_citations
             if item.get("chunk_id")
         ] or _chunk_citations(deps, chunk_ids)
-        return _build_answer(
+        return _answer(
             text=synthesis_text,
             claim_ids=claim_ids,
             chunk_ids=chunk_ids,
@@ -625,7 +687,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
             if confidence < 0.4:
                 confidence = 0.8
 
-        return _build_answer(
+        return _answer(
             text="\n".join(answer_parts),
             claim_ids=merged_claim_ids,
             chunk_ids=chunk_ids,
@@ -640,7 +702,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
         )
 
     if not claim_ids and not chunk_ids:
-        return _build_answer(
+        return _answer(
             text=low_confidence_message,
             claim_ids=[],
             chunk_ids=[],
@@ -666,7 +728,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                         continue
                     chunk_texts.append(chunk.summary or chunk.text[:160])
                 if chunk_texts:
-                    return _build_answer(
+                    return _answer(
                         text="。".join(chunk_texts),
                         claim_ids=[],
                         chunk_ids=chunk_ids,
@@ -679,7 +741,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
                         as_of=as_of,
                         procedure_id=procedure_id,
                     )
-            return _build_answer(
+            return _answer(
                 text=low_confidence_message,
                 claim_ids=[],
                 chunk_ids=[],
@@ -702,7 +764,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
         evidence = [
             {"source_id": item["source_id"], "quote": item["quote"], "weight": item["weight"]} for item in bundle.items
         ]
-        return _build_answer(
+        return _answer(
             text=answer_text,
             claim_ids=claim_ids,
             chunk_ids=chunk_ids,
@@ -723,7 +785,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
             continue
         chunk_texts.append(chunk.summary or chunk.text[:160])
     if not chunk_texts:
-        return _build_answer(
+        return _answer(
             text=low_confidence_message,
             claim_ids=[],
             chunk_ids=[],
@@ -736,7 +798,7 @@ def answer_node(state: AskState, deps: Any) -> dict:
             as_of=as_of,
             procedure_id=procedure_id,
         )
-    return _build_answer(
+    return _answer(
         text="。".join(chunk_texts),
         claim_ids=[],
         chunk_ids=chunk_ids,
