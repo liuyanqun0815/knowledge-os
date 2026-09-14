@@ -65,6 +65,7 @@ class Answer:
     chunk_ids: list[str] = field(default_factory=list)
     chunk_citations: list[dict[str, Any]] = field(default_factory=list)
     synthesis_used: bool = False
+    duration_ms: int | None = None
 
 
 @dataclass

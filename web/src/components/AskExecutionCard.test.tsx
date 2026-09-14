@@ -28,4 +28,23 @@ describe("AskExecutionCard", () => {
     await user.click(screen.getByRole("button", { name: /混合检索|retrieve/ }));
     expect(screen.getByText("命中 3 条")).toBeInTheDocument();
   });
+
+  it("shows evidence only under verify, not retrieve", async () => {
+    const user = userEvent.setup();
+    render(
+      <AskExecutionCard
+        steps={[
+          { node: "retrieve", status: "ok", summary: "命中", duration_ms: 100 },
+          { node: "verify", status: "ok", summary: "核验", duration_ms: 50 },
+        ]}
+        evidence={[{ claim_id: "c1", quote: "仅在 verify 展示" }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /混合检索|retrieve/ }));
+    expect(screen.queryByText("仅在 verify 展示")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Claim 核验|verify/ }));
+    expect(screen.getByText("仅在 verify 展示")).toBeInTheDocument();
+  });
 });

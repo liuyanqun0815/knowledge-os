@@ -6,7 +6,14 @@ type EvidenceListProps = {
 
 function evidenceLabel(item: Record<string, unknown>, index: number): string {
   const span = item.span;
-  return typeof span === "string" && span.trim() ? span : `证据 ${index + 1}`;
+  if (typeof span === "string" && span.trim()) {
+    return span;
+  }
+  const quote = item.quote;
+  if (typeof quote === "string" && quote.trim()) {
+    return quote;
+  }
+  return `证据 ${index + 1}`;
 }
 
 export function EvidenceList({ evidence }: EvidenceListProps) {

@@ -20,4 +20,10 @@ describe("EvidenceList", () => {
     await user.click(screen.getByRole("button", { name: /证据 1/ }));
     expect(screen.getByText(/"claim_id": "c1"/)).toBeInTheDocument();
   });
+
+  it("falls back to quote when span is missing", () => {
+    render(<EvidenceList evidence={[{ claim_id: "c2", quote: "生产侧引用原文" }]} />);
+
+    expect(screen.getByText("生产侧引用原文")).toBeInTheDocument();
+  });
 });

@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime
 
@@ -107,6 +108,7 @@ class LangGraphOrchestrator:
         as_of: datetime | None = None,
         include_trace: bool = False,
     ) -> Answer | AskResult:
+        started = time.perf_counter()
         config = build_run_config(
             run_name="akos.ask",
             metadata={
@@ -139,6 +141,9 @@ class LangGraphOrchestrator:
             config=config,
         )
         answer = state["answer"]
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        if answer is not None:
+            answer = replace(answer, duration_ms=duration_ms)
         if include_trace:
             return AskResult(answer=answer, trace=normalize_agent_trace(state.get("trace") or []))
         return answer

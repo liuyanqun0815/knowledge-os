@@ -120,9 +120,7 @@ export function AskExecutionCard({
                       ) : step.detail !== undefined ? (
                         <pre>{JSON.stringify(step.detail, null, 2)}</pre>
                       ) : null}
-                      {(step.node === "retrieve" || step.node === "verify") &&
-                      evidence &&
-                      evidence.length > 0 ? (
+                      {step.node === "verify" && evidence && evidence.length > 0 ? (
                         <div className="ask-exec-step-evidence">
                           <h3>证据</h3>
                           <EvidenceList evidence={evidence} />

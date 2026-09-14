@@ -48,6 +48,7 @@ class AskResponse(BaseModel):
     procedure_id: str | None = None
     as_of: datetime | None = None
     request_id: str | None = None
+    duration_ms: int | None = None
     trace: list[dict] | None = None
 
 
@@ -115,6 +116,7 @@ def ask(
         procedure_id=answer.procedure_id,
         as_of=answer.as_of,
         request_id=None,
+        duration_ms=answer.duration_ms,
         trace=trace if want_trace else None,
     )
 

@@ -26,7 +26,10 @@ const answer = {
   as_of: null,
   request_id: "r1",
   duration_ms: 1500,
-  trace: [{ node: "retrieve", status: "ok" as const, summary: "ok", duration_ms: 800 }],
+  trace: [
+    { node: "retrieve", status: "ok" as const, summary: "ok", duration_ms: 800 },
+    { node: "verify", status: "ok" as const, summary: "verified", duration_ms: 200 },
+  ],
 };
 
 describe("AskPage", () => {
@@ -72,8 +75,12 @@ describe("AskPage", () => {
     expect(screen.getByText("HYBRID")).toBeInTheDocument();
     expect(screen.getByText(/1\.50 秒|1500/)).toBeInTheDocument();
     expect(screen.getByText(/混合检索|retrieve/)).toBeInTheDocument();
+    expect(screen.getByText(/Claim 核验|verify/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /混合检索|retrieve/ }));
+    expect(screen.queryByText("定制商品不适用七天无理由")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Claim 核验|verify/ }));
     expect(screen.getByText("定制商品不适用七天无理由")).toBeInTheDocument();
   });
 
