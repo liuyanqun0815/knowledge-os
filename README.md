@@ -139,6 +139,10 @@ cp .env.example .env
 | `AKOS_RETRIEVAL_WIKI_WEIGHT` | 三路融合 Wiki 主题页权重 | `0.9` |
 | `AKOS_RETRIEVAL_CHUNK_WEIGHT` | 三路融合原文 Chunk 权重 | `0.8` |
 | `AKOS_WIKI_LINK_EXPAND` | 沿 `[[wikilink]]` 扩展检索（一期默认关） | `false` |
+| `AKOS_WIKI_HIERARCHY` | 启用 Wiki 目录层级（hub/leaf/snippet）；false 保持平铺 `topic-` | `true` |
+| `AKOS_WIKI_HIERARCHY_LLM` | LLM 辅助选父主题（一期默认关） | `false` |
+| `AKOS_WIKI_MIGRATE_FLAT` | 编译时清理根目录旧 `topic-*.md` | `true` |
+| `AKOS_WIKI_MAX_RELATED` | 相关主题上限（同 hub 优先） | `12` |
 | `AKOS_TOPIC_CLUSTER` | 启用主题簇（PG/图/Wiki topic 页） | `true` |
 | `AKOS_TOPIC_MIN_CHUNKS` | 主题簇最少 chunk 数（仅 claim 命中时仍可成簇） | `1` |
 | `AKOS_TOPIC_GRAPH_CHUNKS` | 图同步时写入 Chunk 节点与「包含段落」边 | `true` |

@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     wiki_compile_llm: bool = True
     # 一期默认关：不沿 [[wikilink]] 扩展检索
     wiki_link_expand: bool = False
+    # Wiki 目录层级（hub/leaf/snippet）；false 时保持平铺 topic- 行为
+    wiki_hierarchy: bool = True
+    wiki_hierarchy_llm: bool = False
+    wiki_migrate_flat: bool = True
+    wiki_max_related: int = 12
 
     # Topic cluster
     topic_cluster: bool = True
