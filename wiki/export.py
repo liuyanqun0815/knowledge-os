@@ -8,8 +8,24 @@ from pathlib import Path
 from evidence.ports import EvidencePort
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
 from knowledge.ports import KnowledgePort
+from wiki.links import (
+    entity_page_name,
+    entity_wikilink,
+    sanitize_filename,
+    source_page_name,
+    source_wikilink,
+    topic_page_name,
+    topic_wikilink,
+)
 
-_UNSAFE_FILENAME_CHARS = ("/", "\\", ":", "*", "?", '"', "<", ">", "|")
+# Backward-compatible aliases for tests / callers that import private helpers.
+_sanitize_filename = sanitize_filename
+_source_page_name = source_page_name
+_source_wikilink = source_wikilink
+_entity_page_name = entity_page_name
+_entity_wikilink = entity_wikilink
+_topic_page_name = topic_page_name
+_topic_wikilink = topic_wikilink
 
 
 @dataclass
@@ -21,40 +37,6 @@ class WikiExportResult:
     entity_pages: int
     exported_at: datetime
     topic_pages: int = 0
-
-
-def _sanitize_filename(name: str) -> str:
-    result = name
-    for char in _UNSAFE_FILENAME_CHARS:
-        result = result.replace(char, "_")
-    result = result.strip()
-    return result or "unnamed"
-
-
-def _source_page_name(source_id: str) -> str:
-    return f"source-{_sanitize_filename(source_id)}"
-
-
-def _source_wikilink(source_id: str, title: str | None = None) -> str:
-    page = _source_page_name(source_id)
-    label = title or source_id
-    return f"[[{page}|{label}]]"
-
-
-def _entity_page_name(subject: str) -> str:
-    return _sanitize_filename(subject)
-
-
-def _entity_wikilink(subject: str) -> str:
-    return f"[[{_entity_page_name(subject)}|{subject}]]"
-
-
-def _topic_page_name(name: str) -> str:
-    return f"topic-{_sanitize_filename(name)}"
-
-
-def _topic_wikilink(name: str) -> str:
-    return f"[[{_topic_page_name(name)}|{name}]]"
 
 
 def _format_frontmatter(tags: list[str], page_type: str, kb_id: str) -> str:

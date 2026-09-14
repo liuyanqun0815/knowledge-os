@@ -47,6 +47,24 @@ def _parse_enrichment(raw: str, chunk_index: int) -> dict[str, Any] | None:
     }
 
 
+def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
+    if not getattr(settings, "wiki_compile", False):
+        return
+    data_root = getattr(settings, "data_root", None) or getattr(deps, "data_root", None)
+    if not data_root:
+        return
+    from wiki.compile import compile_topics_for_source
+
+    compile_topics_for_source(
+        deps.knowledge,
+        kb_id,
+        source_id,
+        data_root,
+        settings,
+        graph=getattr(deps, "graph", None),
+    )
+
+
 @traceable(name="akos.enrich_chunks", run_type="chain")
 def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
     client = getattr(deps, "llm_client", None)
@@ -97,4 +115,5 @@ def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) 
 
             rebuild_topic_clusters(deps.knowledge, graph, kb_id, settings)
 
+    _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
     logger.info("Chunk enrichment finished for source %s in kb %s", source_id, kb_id)
