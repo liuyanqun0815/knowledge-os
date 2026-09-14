@@ -108,8 +108,11 @@ def test_compile_topics_two_sources_share_topic_file(tmp_path: Path):
     assert "## Chunks" in body_a or "## 相关 Chunk" in body_a
     assert "## Claims" in body_a
     assert "## 相关原文" in body_a
+    assert "## 相关实体" in body_a
     assert "## 相关主题" in body_a
     assert "[[source-src-a|policy_a.md]]" in body_a
+    assert "[[退款|退款]]" in body_a
+    assert "[[7天|7天]]" in body_a
 
     # Second source joins the same topic
     knowledge.save_topic_clusters(

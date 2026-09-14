@@ -117,6 +117,21 @@ def _render_topic_page(
             lines.append(f"- {source_wikilink(source_id, title)}")
     lines.append("")
 
+    entities: set[str] = set()
+    for claim in claims:
+        if claim.subject:
+            entities.add(claim.subject)
+        if claim.object:
+            entities.add(claim.object)
+
+    lines.extend(["## 相关实体"])
+    if not entities:
+        lines.append("- （无相关实体）")
+    else:
+        for name in sorted(entities):
+            lines.append(f"- {entity_wikilink(name)}")
+    lines.append("")
+
     lines.extend(["## 相关主题"])
     if not related_topics:
         lines.append("- （无相关主题）")
@@ -203,7 +218,10 @@ def _required_links_for_cluster(
     for source_id in sorted(cluster.source_ids):
         links.append(source_wikilink(source_id, source_titles.get(source_id, source_id)))
     for claim in claims:
-        links.append(entity_wikilink(claim.subject))
+        if claim.subject:
+            links.append(entity_wikilink(claim.subject))
+        if claim.object:
+            links.append(entity_wikilink(claim.object))
     for name in related_topics:
         links.append(topic_wikilink(name))
     # de-dupe preserve order
@@ -251,7 +269,7 @@ def _try_llm_merge(
         return None
     if not _required_wikilinks_present(markdown, source_links):
         return None
-    for section in ("## 相关原文", "## 相关主题"):
+    for section in ("## 相关原文", "## 相关实体", "## 相关主题"):
         if section not in markdown:
             return None
     return markdown

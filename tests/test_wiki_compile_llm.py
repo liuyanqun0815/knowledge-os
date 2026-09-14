@@ -113,6 +113,7 @@ def test_topic_merge_prompt_has_structured_sections():
     assert "## 输出" in prompt
     assert "## 上下文" in prompt
     assert "只合并" in prompt or "不编造" in prompt
+    assert "相关实体" in prompt
     assert "wikilink" in prompt.lower() or "[[source-" in prompt
 
 
@@ -168,6 +169,7 @@ def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
     assert "LLM 合并后的摘要" in body
     assert "[[source-src-a|policy_a.md]]" in body
     assert "## 相关原文" in body
+    assert "## 相关实体" in body
     assert "## 相关主题" in body
 
 
@@ -196,6 +198,8 @@ def test_compile_falls_back_to_template_on_llm_parse_failure(tmp_path: Path):
     assert "LLM 合并后的摘要" not in body
     assert "## Chunks" in body or "## 相关 Chunk" in body
     assert "## Claims" in body
+    assert "## 相关实体" in body
+    assert "[[退款|退款]]" in body
     assert "[[source-src-a|policy_a.md]]" in body
 
 
