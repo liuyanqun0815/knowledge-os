@@ -1,6 +1,6 @@
 # Wiki Hierarchy Task 5 Report
 
-**Commit:** `81d16d2` (`feat: index nested wiki pages and align export paths`)
+**Commit:** `9627aaa` (`feat: index nested wiki pages and align export paths`)
 
 ## Done
 - `retrieval/wiki_index.py`: fallback index uses `rglob("*.md")`, skips `.meta`, stores relative paths with `/`; nested hub/leaf pages indexable without `topic-` prefix
