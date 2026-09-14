@@ -1,6 +1,6 @@
 # Wiki Hierarchy Task 3 Report
 
-**Commit:** (filled after commit) (`feat: use path-based wiki topic links without topic- prefix`)
+**Commit:** `1137152` (`feat: use path-based wiki topic links without topic- prefix`)
 
 ## Done
 - `wiki/links.py`: `topic_page_path(hub, leaf=None)` → `hub/_index` or `hub/leaf` (no `topic-` prefix)
