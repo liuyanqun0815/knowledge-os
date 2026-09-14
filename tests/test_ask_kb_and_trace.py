@@ -26,6 +26,7 @@ class FakeOrchestrator:
             competing_claim_ids=[],
             procedure_id=None,
             as_of=as_of,
+            duration_ms=12,
         )
         if include_trace:
             return AskResult(

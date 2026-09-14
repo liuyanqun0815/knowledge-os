@@ -116,7 +116,7 @@ def ask(
         procedure_id=answer.procedure_id,
         as_of=answer.as_of,
         request_id=None,
-        duration_ms=answer.duration_ms,
+        duration_ms=getattr(answer, "duration_ms", None),
         trace=trace if want_trace else None,
     )
 
