@@ -15,8 +15,10 @@ def resolve_wiki_page_path(wiki_root: Path, page_id: str) -> Path:
     root = wiki_root.resolve()
     raw = "index.md" if page_id in {"", "index"} else f"{page_id}.md"
     target = (root / raw).resolve()
-    if not str(target).startswith(str(root)):
-        raise ValueError("path_escape")
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise ValueError("path_escape") from None
     if not target.is_file():
         raise FileNotFoundError(page_id)
     return target
@@ -151,5 +153,6 @@ def search_wiki_pages(wiki_root: Path, query: str, *, limit: int = 50) -> dict:
         scored.append((rank, meta.title or page_id, hit))
 
     scored.sort(key=lambda item: (-item[0], item[1]))
-    hits = [item[2] for item in scored[:limit]]
+    effective_limit = max(1, min(limit, 100))
+    hits = [item[2] for item in scored[:effective_limit]]
     return {"query": query, "total": len(scored), "hits": hits}

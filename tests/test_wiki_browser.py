@@ -60,3 +60,79 @@ def test_search_matches_body_snippet(tmp_path: Path):
     assert result["total"] >= 1
     assert result["hits"][0]["page_id"] == "售后/七天无理由退货"
     assert any("退款" in s for s in result["hits"][0]["snippets"])
+
+
+def test_search_empty_query(tmp_path: Path):
+    from wiki.browser import search_wiki_pages
+
+    wiki = tmp_path / "wiki"
+    _seed(wiki)
+    for query in ("", "   "):
+        result = search_wiki_pages(wiki, query)
+        assert result["total"] == 0
+        assert result["hits"] == []
+
+
+def test_build_tree_hub_description(tmp_path: Path):
+    from wiki.browser import build_wiki_tree
+
+    wiki = tmp_path / "wiki"
+    _seed(wiki)
+    tree = build_wiki_tree(wiki)
+    assert tree["hubs"][0]["description"] == "涵盖七天无理由退货。"
+
+
+def test_search_title_ranks_above_body(tmp_path: Path):
+    from wiki.browser import search_wiki_pages
+
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    (wiki / "a.md").write_text("# body only\n\nuniquebodyword here.\n", encoding="utf-8")
+    (wiki / "b.md").write_text("# Title\n\nother content.\n", encoding="utf-8")
+    save_pages_meta(
+        wiki,
+        {
+            "a": WikiPageMeta(
+                path="a.md",
+                title="Other Title",
+                kind="source_page",
+                content_hash="h1",
+                source_ids=["s1"],
+                summary="no match",
+            ),
+            "b": WikiPageMeta(
+                path="b.md",
+                title="uniquebodyword Match",
+                kind="source_page",
+                content_hash="h2",
+                source_ids=["s2"],
+                summary="no match",
+            ),
+        },
+    )
+    result = search_wiki_pages(wiki, "uniquebodyword")
+    assert result["total"] == 2
+    assert result["hits"][0]["page_id"] == "b"
+    assert result["hits"][1]["page_id"] == "a"
+
+
+def test_search_clamps_limit_to_100(tmp_path: Path):
+    from wiki.browser import search_wiki_pages
+
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    meta: dict[str, WikiPageMeta] = {}
+    for i in range(150):
+        name = f"page{i}"
+        (wiki / f"{name}.md").write_text(f"# {name}\n\ncommonneedle\n", encoding="utf-8")
+        meta[name] = WikiPageMeta(
+            path=f"{name}.md",
+            title=name,
+            kind="source_page",
+            content_hash=f"h{i}",
+            source_ids=[f"s{i}"],
+        )
+    save_pages_meta(wiki, meta)
+    result = search_wiki_pages(wiki, "commonneedle", limit=200)
+    assert result["total"] == 150
+    assert len(result["hits"]) == 100
