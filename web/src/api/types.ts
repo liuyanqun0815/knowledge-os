@@ -158,9 +158,8 @@ export type AskResponse = {
   procedure_id?: string | null;
   as_of?: string | null;
   request_id?: string | null;
-  duration_ms?: number;
-  trace?: AgentTraceStep[] | null;
   duration_ms?: number | null;
+  trace?: AgentTraceStep[] | null;
 };
 
 export type GraphEntity = {
