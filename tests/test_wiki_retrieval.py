@@ -98,12 +98,12 @@ def test_search_title_outweighs_body_only(tmp_path: Path):
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
-    _write_page(wiki_root, "政策/运费政策", "运费政策", "普通说明不含特殊词")
+    _write_page(wiki_root, "政策/包邮政策", "包邮政策", "普通说明不含特殊词")
     _write_page(wiki_root, "规则/其它", "其它", "正文多次提到包邮包邮包邮")
     _write_index(
         wiki_root,
         [
-            ("政策/运费政策", "运费政策", "包邮规则"),
+            ("政策/包邮政策", "包邮政策", "包邮规则"),
             ("规则/其它", "其它", "包邮相关"),
         ],
     )
@@ -111,4 +111,6 @@ def test_search_title_outweighs_body_only(tmp_path: Path):
     retrieval.index_wiki_root(wiki_root)
     hits = retrieval.search("包邮", top_k=5)
     assert hits
-    assert hits[0].ref_id == "政策/运费政策"
+    assert hits[0].ref_id == "政策/包邮政策"
+    assert len(hits) >= 2
+    assert hits[0].score > hits[1].score

@@ -55,7 +55,6 @@ def _score_candidates(
     root: Path,
     keywords: list[str],
     candidate_rels: list[str],
-    index_by_path: dict[str, dict[str, str]] | None = None,
 ) -> list[Hit]:
     scored: list[tuple[float, Hit]] = []
     for rel in candidate_rels:
@@ -68,10 +67,8 @@ def _score_candidates(
             continue
         title = _title_from_markdown(text) or rel.split("/")[-1]
         path = f"{rel}.md"
-        entry = (index_by_path or {}).get(rel, {})
-        title_hay = f"{rel} {title} {entry.get('title', '')} {entry.get('blurb', '')}"
-        title_hits = _keyword_count(keywords, title_hay)
-        body_hits = sum(1 for kw in keywords if kw and kw in text and kw not in title_hay)
+        title_hits = _keyword_count(keywords, f"{rel} {title}")
+        body_hits = _keyword_count(keywords, text)
         raw = 2 * title_hits + body_hits
         if raw <= 0:
             continue
@@ -149,6 +146,5 @@ class WikiPageRetrieval:
             candidates = list(dict.fromkeys(seeds))
         else:
             candidates = []
-        index_by_path = {entry["path"]: entry for entry in entries}
-        hits = _score_candidates(root, keywords, candidates, index_by_path)
+        hits = _score_candidates(root, keywords, candidates)
         return hits[:limit]
