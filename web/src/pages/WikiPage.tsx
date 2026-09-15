@@ -257,7 +257,25 @@ export function WikiPage() {
     return <EmptyState title="请先选择知识库" description="选择知识库后即可浏览编译 Wiki。" />;
   }
 
+  const trimmedQuery = queryParam.trim();
+  const inSearchMode = Boolean(trimmedQuery);
   const isLoading = isLoadingTree || isLoadingPage || isSearching;
+  const wikiEmpty = Boolean(tree) && !isLoadingTree && hubs.length === 0 && !inSearchMode;
+
+  if (wikiEmpty) {
+    return (
+      <section className="page-section wiki-page">
+        <div className="page-header">
+          <div>
+            <h1>Wiki</h1>
+            <p>浏览当前知识库的编译 Wiki，支持目录跳转与关键字检索。</p>
+          </div>
+        </div>
+        {error ? <ErrorBanner message={error} /> : null}
+        <EmptyState title="暂无 Wiki" description="尚未编译 Wiki，请先完成知识库编译后再浏览。" />
+      </section>
+    );
+  }
 
   return (
     <section className="page-section wiki-page">
@@ -297,8 +315,9 @@ export function WikiPage() {
           <WikiSidebar
             hubs={hubs}
             activePageId={activePageId}
-            searchHits={queryParam.trim() ? searchHits : null}
+            searchHits={inSearchMode ? searchHits : null}
             searchTotal={searchTotal}
+            isSearching={inSearchMode && (isSearching || searchHits === null)}
             onSelectPage={selectPage}
           />
         </aside>
@@ -308,7 +327,7 @@ export function WikiPage() {
             <WikiMarkdown
               markdown={article.markdown}
               pageIds={pageIds}
-              highlightQuery={queryParam.trim() || undefined}
+              highlightQuery={trimmedQuery || undefined}
               onNavigate={selectPage}
             />
           ) : !isLoading && !error ? (

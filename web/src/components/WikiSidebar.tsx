@@ -6,6 +6,7 @@ export type WikiSidebarProps = {
   activePageId: string | null;
   searchHits: WikiSearchHit[] | null;
   searchTotal?: number;
+  isSearching?: boolean;
   onSelectPage: (pageId: string) => void;
 };
 
@@ -14,6 +15,7 @@ export function WikiSidebar({
   activePageId,
   searchHits,
   searchTotal,
+  isSearching = false,
   onSelectPage,
 }: WikiSidebarProps) {
   const [expandedHubs, setExpandedHubs] = useState<Set<string>>(() => new Set());
@@ -44,17 +46,28 @@ export function WikiSidebar({
     });
   }
 
-  if (searchHits) {
+  if (searchHits !== null || isSearching) {
+    if (isSearching && searchHits === null) {
+      return (
+        <div className="wiki-tree wiki-search-results">
+          <p className="wiki-search-meta" role="status">
+            正在搜索…
+          </p>
+        </div>
+      );
+    }
+
+    const hits = searchHits ?? [];
     return (
       <div className="wiki-tree wiki-search-results">
         <p className="wiki-search-meta" role="status">
-          命中 {searchTotal ?? searchHits.length} 篇
+          命中 {searchTotal ?? hits.length} 篇
         </p>
-        {searchHits.length === 0 ? (
+        {hits.length === 0 ? (
           <p className="wiki-search-empty">未找到匹配页面</p>
         ) : (
           <ul className="wiki-hit-list">
-            {searchHits.map((hit) => (
+            {hits.map((hit) => (
               <li key={hit.page_id}>
                 <button
                   type="button"

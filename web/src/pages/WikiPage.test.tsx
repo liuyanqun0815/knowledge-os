@@ -101,6 +101,68 @@ describe("WikiPage", () => {
     );
   });
 
+  it("shows search hits and highlights query in article", async () => {
+    const user = userEvent.setup();
+    renderWiki();
+
+    expect(await screen.findByRole("button", { name: "七天无理由退货" })).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/搜索|关键字/), "退款");
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByText(/命中/)).toBeInTheDocument();
+    await waitFor(() => expect(searchWiki).toHaveBeenCalledWith("kb1", "退款"));
+
+    await user.click(screen.getByRole("button", { name: /七天无理由退货/ }));
+    expect(await screen.findByText("退款")).toBeVisible();
+    expect(document.querySelector("mark")?.textContent).toBe("退款");
+  });
+
+  it("shows empty state when wiki has no hubs", async () => {
+    fetchWikiTree.mockResolvedValue({ kb_id: "kb1", wiki_root: "/tmp", hubs: [] });
+
+    renderWiki();
+
+    expect(await screen.findByRole("heading", { name: /暂无 Wiki/ })).toBeInTheDocument();
+    expect(screen.getByText(/尚未编译/)).toBeInTheDocument();
+  });
+
+  it("clears search query and restores tree mode", async () => {
+    const user = userEvent.setup();
+    renderWiki("/wiki?kb=kb1&q=%E9%80%80%E6%AC%BE");
+
+    expect(await screen.findByText(/命中/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "清空" }));
+
+    expect(await screen.findByRole("button", { name: "七天无理由退货" })).toBeInTheDocument();
+    expect(screen.queryByText(/命中/)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/搜索|关键字/)).toHaveValue("");
+  });
+
+  it("does not flash tree while search hits are loading", async () => {
+    let resolveSearch!: (value: unknown) => void;
+    searchWiki.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSearch = resolve;
+        }),
+    );
+
+    renderWiki("/wiki?kb=kb1&q=%E9%80%80%E6%AC%BE");
+
+    expect(await screen.findByText(/正在搜索/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "七天无理由退货" })).not.toBeInTheDocument();
+
+    resolveSearch({
+      query: "退款",
+      total: 1,
+      hits: [{ page_id: "售后/七天无理由退货", title: "七天无理由退货", snippets: ["可申请退款"] }],
+    });
+
+    expect(await screen.findByText(/命中/)).toBeInTheDocument();
+  });
+
   it("resets page when knowledge base changes", async () => {
     const kb2Tree = {
       kb_id: "kb2",
