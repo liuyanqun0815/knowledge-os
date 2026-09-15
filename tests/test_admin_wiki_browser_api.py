@@ -13,6 +13,7 @@ def test_wiki_tree_and_page_and_search(tmp_path, monkeypatch):
     wiki = compile_wiki_root(tmp_path, kb_id)
     (wiki / "售后").mkdir(parents=True)
     (wiki / "售后" / "退款到账时效.md").write_text("# 退款\n\n退款时效说明\n", encoding="utf-8")
+    (wiki / "index.md").write_text("# Wiki 总览\n\n目录。\n", encoding="utf-8")
     save_pages_meta(
         wiki,
         {
@@ -30,7 +31,15 @@ def test_wiki_tree_and_page_and_search(tmp_path, monkeypatch):
 
     tree = client.get(f"/admin/knowledge-bases/{kb_id}/wiki/tree")
     assert tree.status_code == 200
-    assert tree.json()["hubs"][0]["pages"][0]["page_id"] == "售后/退款到账时效"
+    hubs = tree.json()["hubs"]
+    page_ids = [p["page_id"] for h in hubs for p in h["pages"]]
+    assert "index" in page_ids
+    assert "售后/退款到账时效" in page_ids
+
+    index_page = client.get(f"/admin/knowledge-bases/{kb_id}/wiki/pages/index")
+    assert index_page.status_code == 200
+    assert index_page.json()["page_id"] == "index"
+    assert index_page.json()["title"] == "Wiki 总览"
 
     page = client.get(f"/admin/knowledge-bases/{kb_id}/wiki/pages/售后/退款到账时效")
     assert page.status_code == 200

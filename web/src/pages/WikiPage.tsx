@@ -259,7 +259,7 @@ export function WikiPage() {
 
   const trimmedQuery = queryParam.trim();
   const inSearchMode = Boolean(trimmedQuery);
-  const isLoading = isLoadingTree || isLoadingPage || isSearching;
+  const isLoading = isLoadingTree || isLoadingPage;
   const wikiEmpty = Boolean(tree) && !isLoadingTree && hubs.length === 0 && !inSearchMode;
 
   if (wikiEmpty) {
