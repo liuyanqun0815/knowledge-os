@@ -146,14 +146,14 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     retrieval.warm_index()
     chunk_retrieval = ChunkRetrieval(knowledge)
     chunk_retrieval.warm_index()
+    compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
+    llm_client = OpenAiCompatibleClient(settings)
     wiki_retrieval: WikiPageRetrieval | None = None
     if settings.wiki_compile:
-        wiki_retrieval = WikiPageRetrieval()
+        wiki_retrieval = WikiPageRetrieval(llm_client=llm_client)
         wiki_root = compile_wiki_root(settings.data_root, knowledge_base_id)
         if wiki_root.is_dir():
             wiki_retrieval.index_wiki_root(wiki_root)
-    compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
-    llm_client = OpenAiCompatibleClient(settings)
     evolution = EvolutionService(knowledge)
     verification = VerificationService()
     files = LocalFileStore(settings.data_root)

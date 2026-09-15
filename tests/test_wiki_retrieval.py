@@ -169,3 +169,54 @@ def test_full_scan_when_index_misses_keywords(tmp_path: Path):
     assert hits
     assert hits[0].ref_id == "政策/发票政策"
     assert {h.ref_id for h in hits} == {"政策/发票政策"}
+
+
+def test_llm_fallback_selects_paths(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = '{"paths": ["政策/发票政策", "不存在/页"]}'
+
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
+    llm.chat_completions.assert_called_once()
+
+
+def test_llm_fallback_bad_json_returns_empty(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "abc")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "xyz")])
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = "not-json"
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    assert retrieval.search("zzz无关词", top_k=5) == []
+
+
+def test_top_k_capped_at_five(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    entries = []
+    for i in range(6):
+        rel = f"政策/页{i}"
+        _write_page(wiki_root, rel, f"页{i}", f"共同关键词阿尔法 {i}")
+        entries.append((rel, f"页{i}", f"阿尔法摘要{i}"))
+    _write_index(wiki_root, entries)
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("阿尔法", top_k=8)
+    assert len(hits) == 5

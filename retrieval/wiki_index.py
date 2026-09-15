@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -103,6 +104,66 @@ def _score_candidates(
     return hits
 
 
+def _hits_from_paths(root: Path, paths: list[str], limit: int) -> list[Hit]:
+    hits: list[Hit] = []
+    for index, rel in enumerate(paths[:limit]):
+        rel = rel.strip().replace("\\", "/").removesuffix(".md")
+        if not rel or ".." in rel.split("/"):
+            continue
+        file_path = root / f"{rel}.md"
+        try:
+            text = file_path.read_text(encoding="utf-8") if file_path.is_file() else None
+        except OSError:
+            text = None
+        if text is None:
+            continue
+        title = _title_from_markdown(text) or rel.split("/")[-1]
+        score = 1.0 - index * 0.01
+        hits.append(
+            Hit(
+                score=score,
+                snippet=_excerpt(text),
+                hit_type="wiki",
+                ref_id=rel,
+                title=title,
+                path=f"{rel}.md",
+            )
+        )
+    return hits
+
+
+def _llm_select_paths(llm_client, question: str, index_text: str, limit: int) -> list[str]:
+    if llm_client is None or not getattr(llm_client, "is_configured", False):
+        return []
+    prompt = (
+        "你是 Wiki 路由助手。根据用户问题，从 index.md 中选择最相关的页面路径。"
+        f"最多返回 {limit} 条。只输出 JSON：{{\"paths\": [\"hub/leaf\", ...]}}。\n\n"
+        f"## 用户问题\n{question}\n\n## index.md\n{index_text}\n"
+    )
+    try:
+        raw = llm_client.chat_completions(
+            [{"role": "user", "content": prompt}],
+            temperature=0.0,
+            timeout=60.0,
+        )
+    except Exception:
+        return []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    paths = payload.get("paths") if isinstance(payload, dict) else None
+    if not isinstance(paths, list):
+        return []
+    out: list[str] = []
+    for item in paths:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+        if len(out) >= limit:
+            break
+    return out
+
+
 class WikiPageRetrieval:
     """Index-routed wiki retrieval (on-disk reads; no body cache)."""
 
@@ -170,4 +231,5 @@ class WikiPageRetrieval:
         hits = _score_candidates(root, keywords, candidates)
         if hits:
             return hits[:limit]
-        return []
+        paths = _llm_select_paths(self._llm_client, query, index_text, limit)
+        return _hits_from_paths(root, paths, limit)
