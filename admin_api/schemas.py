@@ -185,6 +185,42 @@ class ClaimListItemResponse(ClaimHistoryItemResponse):
         )
 
 
+class SourceChunkResponse(BaseModel):
+    id: str
+    source_id: str
+    chunk_index: int
+    title: str | None = None
+    summary: str | None = None
+    text: str
+    start: int
+    end: int
+    section_path: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
+    token_count: int = 0
+    status: str = "active"
+    content_hash: str = ""
+    created_at: datetime | None = None
+
+    @classmethod
+    def from_chunk(cls, chunk) -> SourceChunkResponse:
+        return cls(
+            id=chunk.id,
+            source_id=chunk.source_id,
+            chunk_index=chunk.chunk_index,
+            title=chunk.title,
+            summary=chunk.summary,
+            text=chunk.text,
+            start=chunk.start,
+            end=chunk.end,
+            section_path=list(chunk.section_path),
+            topics=list(chunk.topics),
+            token_count=chunk.token_count,
+            status=chunk.status,
+            content_hash=chunk.content_hash,
+            created_at=chunk.created_at,
+        )
+
+
 class QuarantineItemResponse(BaseModel):
     id: int
     reason: str
@@ -193,6 +229,18 @@ class QuarantineItemResponse(BaseModel):
 
 class ApproveQuarantineResponse(BaseModel):
     claim: ClaimListItemResponse
+
+
+class ApproveAllQuarantineFailure(BaseModel):
+    id: int
+    detail: str
+
+
+class ApproveAllQuarantineResponse(BaseModel):
+    approved_count: int
+    failed_count: int
+    claims: list[ClaimListItemResponse] = Field(default_factory=list)
+    failures: list[ApproveAllQuarantineFailure] = Field(default_factory=list)
 
 
 class LintIssueResponse(BaseModel):
@@ -232,6 +280,43 @@ class WikiCompileResponse(BaseModel):
     source_ids: list[str] = Field(default_factory=list)
 
 
+class WikiTreePageItem(BaseModel):
+    page_id: str
+    title: str
+    summary: str | None = None
+
+
+class WikiTreeHubItem(BaseModel):
+    name: str
+    description: str | None = None
+    pages: list[WikiTreePageItem] = Field(default_factory=list)
+
+
+class WikiTreeResponse(BaseModel):
+    kb_id: str
+    wiki_root: str
+    hubs: list[WikiTreeHubItem] = Field(default_factory=list)
+
+
+class WikiPageResponse(BaseModel):
+    page_id: str
+    title: str
+    path: str
+    markdown: str
+
+
+class WikiSearchHit(BaseModel):
+    page_id: str
+    title: str
+    snippets: list[str] = Field(default_factory=list)
+
+
+class WikiSearchResponse(BaseModel):
+    query: str
+    total: int
+    hits: list[WikiSearchHit] = Field(default_factory=list)
+
+
 class PurgeStaleChunksResponse(BaseModel):
     kb_id: str
     deleted: int
@@ -262,6 +347,7 @@ class DebugAskResponse(BaseModel):
     procedure_id: str | None = None
     as_of: datetime | None = None
     trace: list[dict] = Field(default_factory=list)
+    duration_ms: int | None = None
 
 
 class GraphNeighborResponse(BaseModel):

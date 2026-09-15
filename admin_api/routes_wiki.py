@@ -3,13 +3,66 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from admin_api.routes_sources import _resolve_active_kb
-from admin_api.schemas import PurgeStaleChunksResponse, WikiCompileResponse, WikiExportRequest, WikiExportResponse
+from admin_api.schemas import (
+    PurgeStaleChunksResponse,
+    WikiCompileResponse,
+    WikiExportRequest,
+    WikiExportResponse,
+    WikiPageResponse,
+    WikiSearchResponse,
+    WikiTreeResponse,
+)
 from app.deps import build_orchestrator_for_request
+from wiki.browser import build_wiki_tree, read_wiki_page, search_wiki_pages
 from wiki.compile import CompileReport, compile_topics_for_source
 from wiki.export import export_wiki, resolve_wiki_output_dir
 from wiki.paths import compile_wiki_root
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-wiki"])
+
+
+@router.get("/{kb_id}/wiki/tree", response_model=WikiTreeResponse)
+def get_wiki_tree(kb_id: str, request: Request, _: None = Depends(_resolve_active_kb)) -> WikiTreeResponse:
+    settings = request.app.state.settings
+    wiki_root = compile_wiki_root(settings.data_root, kb_id)
+    if not wiki_root.is_dir():
+        return WikiTreeResponse(kb_id=kb_id, wiki_root=str(wiki_root), hubs=[])
+    payload = build_wiki_tree(wiki_root)
+    return WikiTreeResponse(kb_id=kb_id, wiki_root=str(wiki_root), hubs=payload["hubs"])
+
+
+@router.get("/{kb_id}/wiki/pages/{page_id:path}", response_model=WikiPageResponse)
+def get_wiki_page(
+    kb_id: str,
+    page_id: str,
+    request: Request,
+    _: None = Depends(_resolve_active_kb),
+) -> WikiPageResponse:
+    settings = request.app.state.settings
+    wiki_root = compile_wiki_root(settings.data_root, kb_id)
+    try:
+        payload = read_wiki_page(wiki_root, page_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid_page_id") from None
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="wiki_page_not_found") from None
+    return WikiPageResponse(**payload)
+
+
+@router.get("/{kb_id}/wiki/search", response_model=WikiSearchResponse)
+def search_wiki(
+    kb_id: str,
+    request: Request,
+    q: str = Query(""),
+    limit: int = Query(50, ge=1, le=100),
+    _: None = Depends(_resolve_active_kb),
+) -> WikiSearchResponse:
+    settings = request.app.state.settings
+    wiki_root = compile_wiki_root(settings.data_root, kb_id)
+    if not wiki_root.is_dir():
+        return WikiSearchResponse(query=q, total=0, hits=[])
+    payload = search_wiki_pages(wiki_root, q, limit=limit)
+    return WikiSearchResponse(**payload)
 
 
 @router.post("/{kb_id}/wiki/export", response_model=WikiExportResponse)
