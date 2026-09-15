@@ -220,3 +220,84 @@ def test_top_k_capped_at_five(tmp_path: Path):
     retrieval.index_wiki_root(wiki_root)
     hits = retrieval.search("阿尔法", top_k=8)
     assert len(hits) == 5
+
+
+def test_llm_fallback_drops_index_path(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = '{"paths": ["index", "政策/发票政策"]}'
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
+    assert all(h.path != "index.md" for h in hits)
+
+
+def test_llm_fallback_accepts_fenced_json(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = '```json\n{"paths": ["政策/发票政策"]}\n```'
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
+
+
+def test_index_source_entries_are_not_seeds(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "普通正文")
+    (wiki_root / "source-政策__发票政策.md").write_text("# 源文件\n源标题命中词\n", encoding="utf-8")
+    index_lines = [
+        "---",
+        "type: index",
+        "---",
+        "",
+        "# Wiki Index",
+        "",
+        "## 主题",
+        "- [[政策/发票政策|发票政策]] — 电子普通发票说明",
+        "",
+        "## Sources",
+        "- [[source-政策__发票政策|源文件]] — 源标题命中词",
+        "",
+    ]
+    (wiki_root / "index.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("源标题命中词", top_k=5)
+    assert all(not (h.ref_id or "").startswith("source-") for h in hits)
+    assert all(h.path != "source-政策__发票政策.md" for h in hits)
+
+
+def test_llm_rejects_path_escaping_wiki_root(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+    outside = tmp_path / "outside.md"
+    outside.write_text("# leak\n", encoding="utf-8")
+    llm = MagicMock()
+    llm.is_configured = True
+    # Absolute-ish escape via .. from wiki_root
+    llm.chat_completions.return_value = '{"paths": ["../outside", "政策/发票政策"]}'
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]

@@ -12,6 +12,8 @@ _INDEX_ENTRY_RE = re.compile(
     r"- \[\[([^\]|#]+)(?:\|([^\]]+))?\]\]\s*(?:—|-)?\s*(.*)$"
 )
 _WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:\|[^\]]+)?\]\]")
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
+_SKIP_PAGE_NAMES = frozenset({"index", "log"})
 
 
 def _excerpt(text: str, limit: int = 160) -> str:
@@ -35,13 +37,46 @@ def _keyword_count(keywords: list[str], haystack: str) -> int:
     return sum(1 for kw in keywords if kw and kw in haystack)
 
 
+def _normalize_rel(rel: str) -> str:
+    return rel.strip().replace("\\", "/").removesuffix(".md").lstrip("/")
+
+
+def _is_blocked_rel(rel: str) -> bool:
+    if not rel:
+        return True
+    if rel.startswith(("source-", "chunk-")):
+        return True
+    name = Path(rel).name
+    if name in _SKIP_PAGE_NAMES:
+        return True
+    if ".." in Path(rel).parts:
+        return True
+    return False
+
+
+def _safe_page_path(root: Path, rel: str) -> Path | None:
+    """Return resolved page path if it stays under wiki_root and is a file."""
+    rel = _normalize_rel(rel)
+    if _is_blocked_rel(rel):
+        return None
+    root_resolved = root.resolve()
+    candidate = (root / f"{rel}.md").resolve()
+    try:
+        candidate.relative_to(root_resolved)
+    except ValueError:
+        return None
+    if not candidate.is_file():
+        return None
+    return candidate
+
+
 def _expand_one_hop(root: Path, text: str) -> list[str]:
     neighbors: list[str] = []
     for match in _WIKILINK_RE.finditer(text):
-        target = match.group(1).strip().replace("\\", "/")
-        if target.startswith(("source-", "chunk-")):
+        target = _normalize_rel(match.group(1))
+        if _safe_page_path(root, target) is None:
             continue
-        if (root / f"{target}.md").is_file():
+        if target not in neighbors:
             neighbors.append(target)
     return neighbors
 
@@ -52,7 +87,9 @@ def _parse_index_entries(index_text: str) -> list[dict[str, str]]:
         match = _INDEX_ENTRY_RE.match(line.strip())
         if not match:
             continue
-        path = match.group(1).strip().replace("\\", "/")
+        path = _normalize_rel(match.group(1))
+        if _is_blocked_rel(path):
+            continue
         title = (match.group(2) or path.split("/")[-1]).strip()
         blurb = (match.group(3) or "").strip()
         entries.append({"path": path, "title": title, "blurb": blurb})
@@ -63,6 +100,13 @@ def _page_rel_id(root: Path, file_path: Path) -> str:
     return file_path.relative_to(root).as_posix().removesuffix(".md")
 
 
+def _read_file_text(file_path: Path) -> str | None:
+    try:
+        return file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def _score_candidates(
     root: Path,
     keywords: list[str],
@@ -70,16 +114,15 @@ def _score_candidates(
 ) -> list[Hit]:
     scored: list[tuple[float, Hit]] = []
     for rel in candidate_rels:
-        file_path = root / f"{rel}.md"
-        try:
-            text = file_path.read_text(encoding="utf-8") if file_path.is_file() else None
-        except OSError:
-            text = None
+        file_path = _safe_page_path(root, rel)
+        if file_path is None:
+            continue
+        text = _read_file_text(file_path)
         if text is None:
             continue
-        title = _title_from_markdown(text) or rel.split("/")[-1]
-        path = f"{rel}.md"
-        title_hits = _keyword_count(keywords, f"{rel} {title}")
+        rel_id = _normalize_rel(rel)
+        title = _title_from_markdown(text) or rel_id.split("/")[-1]
+        title_hits = _keyword_count(keywords, f"{rel_id} {title}")
         body_hits = _keyword_count(keywords, text)
         raw = 2 * title_hits + body_hits
         if raw <= 0:
@@ -88,9 +131,9 @@ def _score_candidates(
             score=float(raw),
             snippet=_excerpt(text),
             hit_type="wiki",
-            ref_id=rel,
+            ref_id=rel_id,
             title=title,
-            path=path,
+            path=f"{rel_id}.md",
         )
         scored.append((float(raw), hit))
     if not scored:
@@ -106,15 +149,14 @@ def _score_candidates(
 
 def _hits_from_paths(root: Path, paths: list[str], limit: int) -> list[Hit]:
     hits: list[Hit] = []
-    for index, rel in enumerate(paths[:limit]):
-        rel = rel.strip().replace("\\", "/").removesuffix(".md")
-        if not rel or ".." in rel.split("/"):
+    for index, raw_rel in enumerate(paths):
+        if len(hits) >= limit:
+            break
+        rel = _normalize_rel(raw_rel)
+        file_path = _safe_page_path(root, rel)
+        if file_path is None:
             continue
-        file_path = root / f"{rel}.md"
-        try:
-            text = file_path.read_text(encoding="utf-8") if file_path.is_file() else None
-        except OSError:
-            text = None
+        text = _read_file_text(file_path)
         if text is None:
             continue
         title = _title_from_markdown(text) or rel.split("/")[-1]
@@ -130,6 +172,14 @@ def _hits_from_paths(root: Path, paths: list[str], limit: int) -> list[Hit]:
             )
         )
     return hits
+
+
+def _strip_json_payload(raw: str) -> str:
+    text = raw.strip()
+    fence = _JSON_FENCE_RE.search(text)
+    if fence:
+        return fence.group(1).strip()
+    return text
 
 
 def _llm_select_paths(llm_client, question: str, index_text: str, limit: int) -> list[str]:
@@ -148,9 +198,11 @@ def _llm_select_paths(llm_client, question: str, index_text: str, limit: int) ->
         )
     except Exception:
         return []
+    if not isinstance(raw, str):
+        return []
     try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
+        payload = json.loads(_strip_json_payload(raw))
+    except (json.JSONDecodeError, TypeError, ValueError):
         return []
     paths = payload.get("paths") if isinstance(payload, dict) else None
     if not isinstance(paths, list):
@@ -184,14 +236,14 @@ class WikiPageRetrieval:
                 continue
             if path.name in {"index.md", "log.md"}:
                 continue
+            rel = path.relative_to(root).as_posix().removesuffix(".md")
+            if _is_blocked_rel(rel):
+                continue
             pages.append(path)
         return pages
 
     def _read_text(self, path: Path) -> str | None:
-        try:
-            return path.read_text(encoding="utf-8")
-        except OSError:
-            return None
+        return _read_file_text(path)
 
     def search(self, query: str, top_k: int = 5) -> list[Hit]:
         limit = min(max(top_k, 0), _WIKI_TOP_K_CAP)
@@ -204,22 +256,29 @@ class WikiPageRetrieval:
         if not leaves:
             return []
         index_path = root / "index.md"
+        if not index_path.is_file():
+            return []
         index_text = self._read_text(index_path)
-        if not index_text:
+        if index_text is None:
             return []
         keywords = extract_keywords(query)
         entries = _parse_index_entries(index_text)
         seeds: list[str] = []
         for entry in entries:
-            hay = f"{entry['path']} {entry['title']} {entry['blurb']}"
+            path = entry["path"]
+            if _safe_page_path(root, path) is None:
+                continue
+            hay = f"{path} {entry['title']} {entry['blurb']}"
             if _keyword_count(keywords, hay) > 0:
-                seeds.append(entry["path"])
+                seeds.append(path)
         if seeds:
             candidates: list[str] = []
             for seed in seeds:
                 if seed not in candidates:
                     candidates.append(seed)
-                seed_file = root / f"{seed}.md"
+                seed_file = _safe_page_path(root, seed)
+                if seed_file is None:
+                    continue
                 seed_text = self._read_text(seed_file)
                 if not seed_text:
                     continue
