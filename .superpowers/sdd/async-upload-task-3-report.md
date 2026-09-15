@@ -78,3 +78,27 @@ pytest tests/test_source_upload_zip.py tests/test_source_tree_ops.py tests/test_
 ## Commit
 
 `feat: accept all source uploads asynchronously with 202`
+
+
+## Review Fix (post-1564667)
+
+**Date:** 2026-09-15
+
+### Fixes
+1. CRITICAL — Reverted `infra/bootstrap.py` embedder/reranker/WikiCompileDeps drive-bys from 1564667; kept only `build_orchestrator_for_kb(..., settings=None)` so nested upload `source_id` aligns with app `data_root`.
+2. CRITICAL — Added tracked `admin_api/source_cleanup.py` required by `routes_sources` imports (`purge_source_side_effects`, `sole_source_claims`).
+3. IMPORTANT — Restored UTF-8 Chinese strings in `tests/test_admin_lint_api.py` (`七天无理由` / `运费承担方` / `买家` / `平台`).
+4. IMPORTANT — `test_single_upload_accepts_relative_path` asserts `source_id == docs__guide` on 202 response and after background processing via GET sources.
+
+### Verification
+
+```
+pytest tests/test_source_upload_zip.py tests/test_source_tree_ops.py tests/test_upload_jobs.py tests/test_upload_ingest_summary.py -q --tb=short
+.......................                                                  [100%]
+23 passed, 1 warning in 3.93s
+
+python -c "from admin_api.routes_sources import router; from infra.bootstrap import build_orchestrator_for_kb; print('import-ok')"
+import-ok
+```
+
+**Note:** Focused pytest was run with `admin_api/routes_wiki.py` temporarily at HEAD to avoid unrelated local WIP importing removed `build_wiki_compile_deps`; import check passed against the fixed bootstrap + staged `source_cleanup`.

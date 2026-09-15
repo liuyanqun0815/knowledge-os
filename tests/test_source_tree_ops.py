@@ -66,9 +66,17 @@ def test_single_upload_accepts_relative_path(client: TestClient, tmp_path: Path)
     )
 
     assert response.status_code == 202
-    assert response.json()["accepted_async"] is True
-    assert response.json()["results"][0]["relative_path"] == "docs/guide.md"
+    body = response.json()
+    assert body["accepted_async"] is True
+    assert body["results"][0]["relative_path"] == "docs/guide.md"
+    assert body["results"][0]["source_id"] == "docs__guide"
     assert (tmp_path / "data" / "single-kb" / "docs" / "guide.md").exists()
+
+    sources = client.get("/admin/knowledge-bases/single-kb/sources")
+    assert sources.status_code == 200
+    matched = [item for item in sources.json() if item["relative_path"] == "docs/guide.md"]
+    assert len(matched) == 1
+    assert matched[0]["id"] == "docs__guide"
 
 
 def test_move_file_keeps_source_id_stable(client: TestClient, tmp_path: Path) -> None:

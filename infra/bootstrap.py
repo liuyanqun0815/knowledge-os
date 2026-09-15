@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
 from compiler.service import KnowledgeCompiler
 from domains.base import DomainPort
@@ -25,24 +23,14 @@ from memory.memory_repo import InMemoryMemoryStore
 from memory.ports import MemoryPort
 from ontology.registry import InMemoryOntology
 from orchestrator.service import LangGraphOrchestrator
-from retrieval.embedder import create_embedder
 from retrieval.hybrid import HybridRetrieval
 from retrieval.chunk_index import ChunkRetrieval
-from retrieval.reranker import create_reranker
 from retrieval.wiki_index import WikiPageRetrieval
 from verification.service import VerificationService
 from wiki.paths import compile_wiki_root
 
 DEFAULT_IN_MEMORY_KB_ID = "default"
 LEGACY_PG_KB_ID = "legacy"
-
-# Process-wide model singletons — models are heavy (GBs) and identical across KBs.
-_MODEL_LOCK = threading.Lock()
-_SHARED_EMBEDDER: Any | None = None
-_SHARED_EMBEDDER_KEY: tuple[Any, ...] | None = None
-_SHARED_RERANKER: Any | None = None
-_SHARED_RERANKER_KEY: tuple[Any, ...] | None = None
-_SHARED_RERANKER_LOADED = False
 
 
 @dataclass
@@ -61,17 +49,6 @@ class OrchestratorDeps:
     evolution: EvolutionService
     verification: VerificationService
     knowledge_base_id: str
-    wiki_retrieval: WikiPageRetrieval | None = None
-    reranker: Any | None = None
-
-
-@dataclass(frozen=True)
-class WikiCompileDeps:
-    """Lightweight deps for wiki compile/export — no embedder / rerank / retrieval warm-up."""
-
-    knowledge: KnowledgePort
-    graph: GraphPort
-    llm_client: OpenAiCompatibleClient
     wiki_retrieval: WikiPageRetrieval | None = None
 
 
@@ -153,122 +130,10 @@ def _build_repos(
     )
 
 
-def build_wiki_compile_deps(
-    knowledge_base_id: str,
-    settings: Settings | None = None,
-    *,
-    existing: OrchestratorDeps | None = None,
-) -> WikiCompileDeps:
-    """Build wiki-compile deps without loading embedding/rerank stacks.
-
-    If ``existing`` orchestrator deps are already warmed (e.g. in-memory test cache),
-    reuse their knowledge/graph so compile sees the same store. Otherwise build a
-    fresh repo + LLM client only.
-    """
-    cfg = settings or Settings()
-    if existing is not None:
-        wiki_retrieval = existing.wiki_retrieval
-        if wiki_retrieval is None and cfg.wiki_compile:
-            wiki_retrieval = WikiPageRetrieval(llm_client=existing.llm_client)
-        return WikiCompileDeps(
-            knowledge=existing.knowledge,
-            graph=existing.graph,
-            llm_client=existing.llm_client,
-            wiki_retrieval=wiki_retrieval,
-        )
-
-    _resolve_kb(knowledge_base_id, cfg)
-    knowledge, graph, _, _ = _build_repos(knowledge_base_id, cfg)
-    llm_client = OpenAiCompatibleClient(cfg)
-    wiki_retrieval = WikiPageRetrieval(llm_client=llm_client) if cfg.wiki_compile else None
-    return WikiCompileDeps(
-        knowledge=knowledge,
-        graph=graph,
-        llm_client=llm_client,
-        wiki_retrieval=wiki_retrieval,
-    )
-
-
 def build_orchestrator_deps(knowledge_base_id: str | None = None) -> OrchestratorDeps:
     settings = Settings()
     kb_id = knowledge_base_id or (LEGACY_PG_KB_ID if settings.use_pg else DEFAULT_IN_MEMORY_KB_ID)
     return _build_orchestrator_deps_for_kb(kb_id, settings)
-
-
-def _embedder_cache_key(settings: Settings) -> tuple[Any, ...]:
-    return (
-        settings.embedding_enabled,
-        settings.embedding_provider,
-        settings.embedding_model_source,
-        settings.embedding_model,
-        settings.embedding_cache_dir,
-        settings.embedding_device,
-        settings.embedding_dims,
-        settings.hf_endpoint,
-    )
-
-
-def _reranker_cache_key(settings: Settings) -> tuple[Any, ...]:
-    return (
-        settings.rerank_enabled,
-        settings.rerank_provider,
-        settings.rerank_model_source,
-        settings.rerank_model,
-        settings.rerank_cache_dir,
-        settings.rerank_device,
-        settings.rerank_max_length,
-        settings.hf_endpoint,
-    )
-
-
-def _get_shared_embedder(settings: Settings) -> Any | None:
-    """Load embedding model once per process (shared across knowledge bases)."""
-    global _SHARED_EMBEDDER, _SHARED_EMBEDDER_KEY
-    key = _embedder_cache_key(settings)
-    with _MODEL_LOCK:
-        if _SHARED_EMBEDDER_KEY == key:
-            return _SHARED_EMBEDDER
-        _SHARED_EMBEDDER = create_embedder(settings)
-        _SHARED_EMBEDDER_KEY = key
-        return _SHARED_EMBEDDER
-
-
-def _get_shared_reranker(settings: Settings) -> Any | None:
-    """Load rerank model once per process (shared across knowledge bases)."""
-    global _SHARED_RERANKER, _SHARED_RERANKER_KEY, _SHARED_RERANKER_LOADED
-    key = _reranker_cache_key(settings)
-    with _MODEL_LOCK:
-        if _SHARED_RERANKER_LOADED and _SHARED_RERANKER_KEY == key:
-            return _SHARED_RERANKER
-        _SHARED_RERANKER = create_reranker(settings)
-        _SHARED_RERANKER_KEY = key
-        _SHARED_RERANKER_LOADED = True
-        return _SHARED_RERANKER
-
-
-def reset_shared_model_cache() -> None:
-    """Test helper: clear process-wide embedder/reranker singletons."""
-    global _SHARED_EMBEDDER, _SHARED_EMBEDDER_KEY, _SHARED_RERANKER, _SHARED_RERANKER_KEY, _SHARED_RERANKER_LOADED
-    with _MODEL_LOCK:
-        _SHARED_EMBEDDER = None
-        _SHARED_EMBEDDER_KEY = None
-        _SHARED_RERANKER = None
-        _SHARED_RERANKER_KEY = None
-        _SHARED_RERANKER_LOADED = False
-
-
-def _build_embedding_stack(
-    knowledge_base_id: str,
-    settings: Settings,
-) -> tuple[Any | None, Any | None]:
-    embedder = _get_shared_embedder(settings)
-    embedding_store = None
-    if settings.use_pg and settings.embedding_enabled and embedder is not None:
-        from infra.db import get_engine
-        from infra.pg_embeddings import PgEmbeddingStore
-
-        embedding_store = PgEmbeddingStore(get_engine(settings), knowledge_base_id, dims=embedder.dims)
-    return embedder, embedding_store
 
 
 def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) -> OrchestratorDeps:
@@ -277,11 +142,9 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     ontology = InMemoryOntology()
     domain.register_ontology(ontology)
     knowledge, graph, evidence, memory = _build_repos(knowledge_base_id, settings)
-    embedder, embedding_store = _build_embedding_stack(knowledge_base_id, settings)
-    reranker = _get_shared_reranker(settings)
-    retrieval = HybridRetrieval(knowledge, graph, embedder=embedder, embedding_store=embedding_store)
+    retrieval = HybridRetrieval(knowledge, graph)
     retrieval.warm_index()
-    chunk_retrieval = ChunkRetrieval(knowledge, embedder=embedder, embedding_store=embedding_store)
+    chunk_retrieval = ChunkRetrieval(knowledge)
     chunk_retrieval.warm_index()
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
     llm_client = OpenAiCompatibleClient(settings)
@@ -314,7 +177,6 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         verification=verification,
         knowledge_base_id=knowledge_base_id,
         wiki_retrieval=wiki_retrieval,
-        reranker=reranker,
     )
 
 
