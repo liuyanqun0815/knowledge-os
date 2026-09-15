@@ -47,6 +47,54 @@ def _parse_index_entries(index_text: str) -> list[dict[str, str]]:
     return entries
 
 
+def _page_rel_id(root: Path, file_path: Path) -> str:
+    return file_path.relative_to(root).as_posix().removesuffix(".md")
+
+
+def _score_candidates(
+    root: Path,
+    keywords: list[str],
+    candidate_rels: list[str],
+    index_by_path: dict[str, dict[str, str]] | None = None,
+) -> list[Hit]:
+    scored: list[tuple[float, Hit]] = []
+    for rel in candidate_rels:
+        file_path = root / f"{rel}.md"
+        try:
+            text = file_path.read_text(encoding="utf-8") if file_path.is_file() else None
+        except OSError:
+            text = None
+        if text is None:
+            continue
+        title = _title_from_markdown(text) or rel.split("/")[-1]
+        path = f"{rel}.md"
+        entry = (index_by_path or {}).get(rel, {})
+        title_hay = f"{rel} {title} {entry.get('title', '')} {entry.get('blurb', '')}"
+        title_hits = _keyword_count(keywords, title_hay)
+        body_hits = sum(1 for kw in keywords if kw and kw in text and kw not in title_hay)
+        raw = 2 * title_hits + body_hits
+        if raw <= 0:
+            continue
+        hit = Hit(
+            score=float(raw),
+            snippet=_excerpt(text),
+            hit_type="wiki",
+            ref_id=rel,
+            title=title,
+            path=path,
+        )
+        scored.append((float(raw), hit))
+    if not scored:
+        return []
+    max_raw = max(raw for raw, _ in scored)
+    hits = []
+    for raw, hit in scored:
+        hit.score = raw / max_raw if max_raw else 0.0
+        hits.append(hit)
+    hits.sort(key=lambda item: item.score, reverse=True)
+    return hits
+
+
 class WikiPageRetrieval:
     """Index-routed wiki retrieval (on-disk reads; no body cache)."""
 
@@ -90,6 +138,17 @@ class WikiPageRetrieval:
         index_text = self._read_text(index_path)
         if not index_text:
             return []
+        keywords = extract_keywords(query)
         entries = _parse_index_entries(index_text)
-        del query, entries
-        return []
+        seeds: list[str] = []
+        for entry in entries:
+            hay = f"{entry['path']} {entry['title']} {entry['blurb']}"
+            if _keyword_count(keywords, hay) > 0:
+                seeds.append(entry["path"])
+        if seeds:
+            candidates = list(dict.fromkeys(seeds))
+        else:
+            candidates = []
+        index_by_path = {entry["path"]: entry for entry in entries}
+        hits = _score_candidates(root, keywords, candidates, index_by_path)
+        return hits[:limit]

@@ -66,3 +66,49 @@ def test_search_skips_without_wiki_root():
 
     retrieval = WikiPageRetrieval()
     assert retrieval.search("发票") == []
+
+
+def test_search_index_seed_hit(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "默认开具电子普通发票")
+    _write_page(wiki_root, "物流/发货时效说明", "发货时效说明", "付款后48小时内发货")
+    _write_index(
+        wiki_root,
+        [
+            ("政策/发票政策", "发票政策", "电子普通发票与增值税专用发票说明"),
+            ("物流/发货时效说明", "发货时效说明", "现货发货时效"),
+        ],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("电子发票怎么开", top_k=5)
+    assert hits
+    assert hits[0].hit_type == "wiki"
+    assert hits[0].ref_id == "政策/发票政策"
+    assert hits[0].path == "政策/发票政策.md"
+    assert hits[0].title == "发票政策"
+    assert all(h.path != "index.md" for h in hits)
+
+
+def test_search_title_outweighs_body_only(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/运费政策", "运费政策", "普通说明不含特殊词")
+    _write_page(wiki_root, "规则/其它", "其它", "正文多次提到包邮包邮包邮")
+    _write_index(
+        wiki_root,
+        [
+            ("政策/运费政策", "运费政策", "包邮规则"),
+            ("规则/其它", "其它", "包邮相关"),
+        ],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("包邮", top_k=5)
+    assert hits
+    assert hits[0].ref_id == "政策/运费政策"
