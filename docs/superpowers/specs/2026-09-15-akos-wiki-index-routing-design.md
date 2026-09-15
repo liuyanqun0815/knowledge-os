@@ -11,7 +11,8 @@
 2. **只用关键词**：匹配与打分不直接使用整句 query  
 3. **有种子才扩链**：1-hop 仅跟「能解析到真实 wiki `.md`」的链接  
 4. **直接替换**：重写 `WikiPageRetrieval.search`，不保留伪 BM25/字符哈希，不做回退开关  
-5. **按需读盘**：不缓存页正文；`index_wiki_root` 只记录 `wiki_root`
+5. **按需读盘**：不缓存页正文；`index_wiki_root` 只记录 `wiki_root`  
+6. **无库则跳过**：无 wiki 数据或缺少 `index.md` 时直接返回 `[]`，不做全扫、不调 LLM
 
 ---
 
@@ -21,12 +22,13 @@
 |---|------|------|
 | D1 | 关键词抽取 | jieba + 停用词/正则（无 jieba 则降级切分） |
 | D2 | Index 命中 | 仅用命中种子；**不做**全库兜底 |
-| D3 | Index 未命中 | 进程内遍历全部 wiki `.md` 打分；**不**扩链；**不**用外部 grep |
+| D3 | Index 有文件但关键词未命中任何条目 | 进程内遍历全部 wiki `.md` 打分；**不**扩链；**不**用外部 grep |
 | D4 | 扩链 | 仅当有种子时 1-hop；只保留 `wiki_root/{target}.md` 存在的链接；忽略 `source-`/`chunk-` 与实体空链 |
 | D5 | 打分 | 标题/路径 ×2 + 正文 ×1，候选集内归一化到 \[0,1\]；丢弃 0 分；top **5** |
-| D6 | LLM fallback | 打分结果为空时，用问题 + 完整 `index.md` 选页；输出 `{"paths":[...]}`，条数 ≤ top_k（默认 5） |
+| D6 | LLM fallback | 在 **已有可读 `index.md`** 且打分结果为空时，用问题 + 完整 `index.md` 选页；输出 `{"paths":[...]}`，条数 ≤ top_k（默认 5） |
 | D7 | 接入 | 直接替换 `search`；bootstrap 注入可选 `llm_client` |
 | D8 | 存储 | 纯按需读盘，无页正文内存索引 |
+| D9 | 前置跳过 | `wiki_root` 无效、目录下无可用叶子页、或 **不存在 `index.md`** → 立即 `[]`（跳过全扫与 LLM） |
 
 ---
 
@@ -42,11 +44,13 @@
 
 ```text
 question
+  → 若 wiki_root 无效 / 无叶子页 / 无 index.md → return []
   → extract_keywords
   → 读盘解析 index.md → 关键词命中条目 → seeds[]
   → if seeds:
         读种子正文 → 抽 wikilink → 仅保留真实 .md → candidates = seeds ∪ neighbors
      else:
+        # 仅「有 index.md 但关键词未命中条目」时全扫
         rglob 全部叶子 .md（排除 index.md / log.md / .meta）→ candidates（不扩链）
   → 对 candidates 加权打分 → 归一化 → 按 score 降序取 top_k（默认 5，且 wiki 支路最多 5）
   → if 无正分结果:
@@ -61,13 +65,22 @@ question
 - 模块：`retrieval/wiki_keywords.py` 的 `extract_keywords`
 - 后续 index 匹配、正文打分、全扫 **一律**只用 keywords
 
-### 3.2 Index 解析与种子
+### 3.2 前置条件与 Index 解析
 
-- 按需读取 `{wiki_root}/index.md`
-- 解析条目形如：`- [[hub/leaf|标题]] — 摘要…`，以及 `### hub` / `>` 说明（hub 元数据可选，用于调试）
+**前置跳过（任一成立即 `return []`）**：
+
+- `wiki_root` 未设置或不是目录  
+- 目录下没有任何可用叶子 `.md`（排除 `index.md` / `log.md` / `.meta`）——视为「没有数据」  
+- `{wiki_root}/index.md` 不存在或不可读  
+
+通过前置检查后：
+
+- 按需读取并解析 `index.md`
+- 条目形如：`- [[hub/leaf|标题]] — 摘要…`，以及 `### hub` / `>` 说明（hub 元数据可选）
 - 条目字段：`path`（无 `.md`）、`title`、`blurb`
 - 种子条件：`path + title + blurb` 上关键词命中数 > 0
 - **有种子则禁止全库扫描兜底**
+- **无种子但已有 `index.md`**：才进入 §3.4 全扫
 
 ### 3.3 1-hop（仅种子路径）
 
@@ -77,7 +90,9 @@ question
 - 仅当 `(wiki_root / f"{target}.md").is_file()` 为真时纳入邻居
 - 不解析、不跟随不存在的实体链；不需要强制只扫「相关主题」小节（存在性过滤与当前语料等价且更稳）
 
-### 3.4 未命中全扫
+### 3.4 关键词未命中条目时的全扫
+
+前提：`index.md` **已存在**（否则已在前置跳过），但 seeds 为空。
 
 - `wiki_root.rglob("*.md")`
 - 排除：路径含 `.meta`；文件名为 `index.md` / `log.md`
@@ -99,7 +114,7 @@ score = raw / max(raw over candidates)   # max==0 → 全部视为 0 分
 
 ### 3.6 LLM fallback
 
-**触发**：打分后无任何正分 Hit（含无候选）。
+**触发**：已通过前置检查（含可读 `index.md`），且打分后无任何正分 Hit。
 
 **输入**：用户问题 + 完整 `index.md` 文本（仅路由）。
 
@@ -164,10 +179,11 @@ class WikiPageRetrieval:
 
 | 情况 | 行为 |
 |------|------|
-| `wiki_root` 未设置或不是目录 | `[]` |
-| 无 `index.md` | 视为无种子 → 全扫；全扫也空则 LLM（若无 index 文本则跳过 LLM） |
+| `wiki_root` 未设置或不是目录 | `[]`（跳过） |
+| 无可用叶子页（没有数据） | `[]`（跳过） |
+| 无 `index.md` 或不可读 | `[]`（跳过；**不**全扫、**不**调 LLM） |
 | 单页读盘失败 | 跳过该页 |
-| 关键词为空 | 无种子 → 全扫得分多为 0 → 走 LLM 或 `[]` |
+| 有 `index.md` 但关键词为空 / 未命中条目 | 全扫；若仍无正分 → LLM（有 index 文本）或 `[]` |
 | LLM 不可用 | fallback 跳过，返回 `[]` |
 
 ---
@@ -176,12 +192,13 @@ class WikiPageRetrieval:
 
 改写 / 扩展 `tests/test_wiki_retrieval.py`（必要时拆 `test_wiki_keywords.py`）：
 
-1. **Index 命中**：关键词命中条目 → 种子 path 正确；hits 不含 `index.md`  
-2. **1-hop 过滤**：正文/相关实体中的空链不进候选；真实 `hub/leaf.md` 邻居可进候选并参与打分  
-3. **无种子全扫**：不扩链；标题命中分高于仅正文弱命中（在构造 fixture 上断言排序）  
-4. **LLM fallback**：mock `llm_client` 返回 `{"paths":["政策/发票政策"]}` → Hit 路径正确；非法 path 丢弃  
-5. **无 LLM / 坏 JSON**：`search` 返回 `[]`，不抛  
-6. **top_k 上限**：请求 8 时 wiki 仍最多 5  
+1. **前置跳过**：无 `wiki_root` / 空目录 / 缺 `index.md` → `[]`，且不调用 LLM  
+2. **Index 命中**：关键词命中条目 → 种子 path 正确；hits 不含 `index.md`  
+3. **1-hop 过滤**：正文/相关实体中的空链不进候选；真实 `hub/leaf.md` 邻居可进候选并参与打分  
+4. **有 index 但无种子 → 全扫**：不扩链；标题命中分高于仅正文弱命中（在构造 fixture 上断言排序）  
+5. **LLM fallback**：mock `llm_client` 返回 `{"paths":["政策/发票政策"]}` → Hit 路径正确；非法 path 丢弃  
+6. **无 LLM / 坏 JSON**：`search` 返回 `[]`，不抛  
+7. **top_k 上限**：请求 8 时 wiki 仍最多 5  
 
 ---
 
