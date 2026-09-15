@@ -8,6 +8,7 @@ import { ClaimsPage } from "../pages/ClaimsPage";
 import { GraphPage } from "../pages/GraphPage";
 import { QuarantinePage } from "../pages/QuarantinePage";
 import { SourcesPage } from "../pages/SourcesPage";
+import { WikiPage } from "../pages/WikiPage";
 import { Layout } from "./Layout";
 
 export function AppRouter() {
@@ -20,6 +21,7 @@ export function AppRouter() {
         <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
         <Route path="/sources" element={<SourcesPage />} />
         <Route path="/ask" element={<AskPage />} />
+        <Route path="/wiki" element={<WikiPage />} />
         <Route path="/claims" element={<ClaimsPage />} />
         <Route path="/graph" element={<GraphPage />} />
         <Route path="/quarantine" element={<QuarantinePage />} />

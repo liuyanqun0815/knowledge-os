@@ -7,6 +7,7 @@ const navItems = [
   { to: "/knowledge-bases", label: "知识库" },
   { to: "/sources", label: "文档" },
   { to: "/ask", label: "问答" },
+  { to: "/wiki", label: "Wiki" },
   { to: "/claims", label: "Claim" },
   { to: "/graph", label: "图谱" },
   { to: "/quarantine", label: "隔离" },
