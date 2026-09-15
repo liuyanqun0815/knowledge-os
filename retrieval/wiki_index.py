@@ -166,6 +166,8 @@ class WikiPageRetrieval:
                     if neighbor not in candidates:
                         candidates.append(neighbor)
         else:
-            candidates = []
+            candidates = [_page_rel_id(root, path) for path in leaves]
         hits = _score_candidates(root, keywords, candidates)
-        return hits[:limit]
+        if hits:
+            return hits[:limit]
+        return []

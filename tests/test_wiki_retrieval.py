@@ -141,3 +141,31 @@ def test_one_hop_keeps_real_pages_drops_entities(tmp_path: Path):
     assert "政策/运费政策" in ref_ids
     assert all(not (rid or "").startswith("source-") for rid in ref_ids)
     assert "电子普通发票" not in ref_ids
+
+
+def test_full_scan_when_index_misses_keywords(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "正文含有稀有词夸克发票")
+    _write_page(
+        wiki_root,
+        "物流/发货时效说明",
+        "发货时效说明",
+        "无关内容",
+        related=["政策/发票政策"],
+    )
+    _write_index(
+        wiki_root,
+        [
+            ("政策/发票政策", "发票政策", "电子普通发票"),
+            ("物流/发货时效说明", "发货时效说明", "发货时效"),
+        ],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("夸克发票", top_k=5)
+    assert hits
+    assert hits[0].ref_id == "政策/发票政策"
+    assert {h.ref_id for h in hits} == {"政策/发票政策"}
