@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from compiler.domain_llm_extractor import DomainLlmExtractor
-from compiler.enrichment import enrich_source
 from compiler.ports import ExtractedClaim
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from infra.settings import Settings
@@ -16,6 +15,8 @@ from knowledge.models import Source
 
 
 def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypatch) -> None:
+    from admin_api.upload_jobs import process_uploaded_source
+
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
     monkeypatch.setenv("AKOS_EXTRACT_LLM", "true")
@@ -40,21 +41,25 @@ def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypat
         data={"source_type": "policy"},
     )
 
-    assert response.status_code == 200, response.text
+    assert response.status_code == 202, response.text
+    assert response.json()["accepted_async"] is True
     source_id = response.json()["results"][0]["source_id"]
-    assert sync_llm_calls, "compile should invoke LLM when extract_llm is enabled"
-    assert len(scheduled) >= 1
-    enrich_tasks = [item for item in scheduled if item[0].__name__ == "enrich_source"]
-    assert len(enrich_tasks) == 1
-    task, args, kwargs = enrich_tasks[0]
-    assert task is enrich_source
+    assert len(scheduled) == 1
+    task, args, kwargs = scheduled[0]
+    assert task is process_uploaded_source
     assert not args
     assert kwargs["kb_id"] == DEFAULT_IN_MEMORY_KB_ID
-    assert kwargs["source_id"] == source_id
-    assert kwargs["deps"].knowledge.get_source(source_id).status == "enriching"
+    assert kwargs["source_type"] == "policy"
+
+    task(**kwargs)
+    assert sync_llm_calls, "background job should invoke LLM when extract_llm is enabled"
+    assert kwargs["deps"].knowledge.get_source(source_id).status == "succeeded"
 
 
 def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> None:
+    from admin_api.upload_jobs import process_uploaded_source
+    from compiler.enrichment import enrich_source
+
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
     monkeypatch.setenv("AKOS_EXTRACT_OPEN_PREDICATES", "true")
@@ -80,7 +85,14 @@ def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> Non
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
         files={"file": ("policy.md", source_text.encode(), "text/markdown")},
     )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 202, response.text
+    source_id = response.json()["results"][0]["source_id"]
+
+    task, kwargs = scheduled[0]
+    assert task is process_uploaded_source
+    kwargs["settings"] = open_settings
+    task(**kwargs)
+    assert kwargs["deps"].knowledge.get_source_text(source_id) == source_text
 
     extracted_texts: list[str] = []
 
@@ -99,23 +111,25 @@ def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> Non
         ]
 
     monkeypatch.setattr(DomainLlmExtractor, "extract", extract_unknown)
-    task, kwargs = scheduled[0]
-    kwargs["settings"] = open_settings
-    assert kwargs["settings"].extract_llm is True
-    assert kwargs["settings"].extract_open_predicates is True
-    assert kwargs["deps"].llm_client.is_configured is True
-    assert kwargs["deps"].knowledge.get_source_text(kwargs["source_id"]) == source_text
-    task(**kwargs)
+    enrich_source(
+        kb_id=DEFAULT_IN_MEMORY_KB_ID,
+        source_id=source_id,
+        deps=kwargs["deps"],
+        settings=open_settings,
+    )
 
     knowledge = kwargs["deps"].knowledge
     assert extracted_texts == [source_text]
-    assert knowledge.get_source(kwargs["source_id"]).status == "succeeded"
+    assert knowledge.get_source(source_id).status == "succeeded"
     active = [c for c in knowledge.get_claims_by_status("active") if c.predicate == "unknown_predicate"]
     assert active
     assert not any(q["reason"] == "invalid_predicate" for q in knowledge.list_quarantine())
 
 
 def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch) -> None:
+    from admin_api.upload_jobs import process_uploaded_source
+    from compiler.enrichment import enrich_source
+
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
     monkeypatch.setenv("AKOS_EXTRACT_OPEN_PREDICATES", "false")
@@ -141,7 +155,13 @@ def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch)
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
         files={"file": ("policy.md", source_text.encode(), "text/markdown")},
     )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 202, response.text
+    source_id = response.json()["results"][0]["source_id"]
+
+    task, kwargs = scheduled[0]
+    assert task is process_uploaded_source
+    kwargs["settings"] = closed_settings
+    task(**kwargs)
 
     def extract_unknown(self, text: str) -> list[ExtractedClaim]:
         return [
@@ -157,9 +177,12 @@ def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch)
         ]
 
     monkeypatch.setattr(DomainLlmExtractor, "extract", extract_unknown)
-    task, kwargs = scheduled[0]
-    kwargs["settings"] = closed_settings
-    task(**kwargs)
+    enrich_source(
+        kb_id=DEFAULT_IN_MEMORY_KB_ID,
+        source_id=source_id,
+        deps=kwargs["deps"],
+        settings=closed_settings,
+    )
     assert kwargs["deps"].knowledge.list_quarantine()[-1]["reason"] == "invalid_predicate"
 
 

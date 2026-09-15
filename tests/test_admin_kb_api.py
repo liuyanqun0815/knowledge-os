@@ -38,16 +38,18 @@ def test_create_kb_upload_list_sources_claims_in_memory(tmp_path, monkeypatch):
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload.status_code == 200, upload.text
+    assert upload.status_code == 202, upload.text
     body = admin_upload_item(upload)
-    assert body["claims_created"] >= 1
+    assert body["claims_created"] == 0
     assert body["source_id"]
+    assert upload.json()["accepted_async"] is True
 
     listed = client.get(f"/admin/knowledge-bases/{kb_id}/sources")
     assert listed.status_code == 200
     sources = listed.json()
     assert len(sources) >= 1
     assert any(item["id"] == body["source_id"] for item in sources)
+    assert any(item["claims_count"] >= 1 for item in sources)
     assert Path(body["path"]).exists()
 
 
@@ -90,13 +92,15 @@ def test_admin_kb_crud_and_upload_flow(pg_admin_client):
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload.status_code == 200, upload.text
+    assert upload.status_code == 202, upload.text
     upload_body = admin_upload_item(upload)
-    assert upload_body["claims_created"] >= 1
+    assert upload_body["claims_created"] == 0
+    assert upload.json()["accepted_async"] is True
 
     sources = client.get(f"/admin/knowledge-bases/{kb_id}/sources")
     assert sources.status_code == 200
     assert len(sources.json()) >= 1
+    assert any(item["claims_count"] >= 1 for item in sources.json())
 
     archived = client.patch(f"/admin/knowledge-bases/{kb_id}", json={"status": "archived"})
     assert archived.status_code == 200

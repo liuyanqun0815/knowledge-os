@@ -33,10 +33,11 @@ def test_upload_tree_preserves_nested_paths(client: TestClient, tmp_path: Path) 
         ],
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     payload = response.json()
     assert payload["upload_mode"] == "tree"
-    assert payload["files_ingested"] == 2
+    assert payload["accepted_async"] is True
+    assert payload["files_ingested"] == 0
     assert {item["relative_path"] for item in payload["results"]} == {
         "policies/refund.md",
         "guides/start.txt",
@@ -64,7 +65,8 @@ def test_single_upload_accepts_relative_path(client: TestClient, tmp_path: Path)
         data={"relative_path": "docs/guide.md"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
+    assert response.json()["accepted_async"] is True
     assert response.json()["results"][0]["relative_path"] == "docs/guide.md"
     assert (tmp_path / "data" / "single-kb" / "docs" / "guide.md").exists()
 

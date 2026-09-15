@@ -22,7 +22,7 @@ def test_get_source_content_returns_utf8_text(client: TestClient) -> None:
         files=[("files", ("guide.md", "# 指南\n欢迎。", "text/markdown"))],
         data={"relative_paths": ["docs/guide.md"]},
     )
-    assert upload.status_code == 200
+    assert upload.status_code == 202
     source_id = upload.json()["results"][0]["source_id"]
 
     response = client.get(f"/admin/knowledge-bases/preview-kb/sources/{source_id}/content")

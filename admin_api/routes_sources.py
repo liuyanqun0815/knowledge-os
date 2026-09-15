@@ -1,10 +1,11 @@
 """Admin API：知识库文档（sources）上传、列表与萃取结果查询。
 
 核心入口 ``POST /{kb_id}/sources/upload``：
-- ``.md`` / ``.txt``：单文件规则 ingest，可选 ``replaces_source_id`` 触发文档演化
-- ``.zip``：解压后批量 ingest（保留目录，仅解压 md/txt）
-- 统一响应 ``SourceUploadResponse``（``upload_mode``: ``single`` | ``zip``）
-- ingest 完成后按配置调度 LLM 后台补抽（``BackgroundTasks``）
+- ``.md`` / ``.txt``：单文件接收后后台 ingest
+- ``.pdf`` / ``.docx`` / ``.doc``：接收后后台抽文本并 ingest
+- ``.zip``：解压后批量后台 ingest（保留目录）
+- 统一响应 ``SourceUploadResponse``（``upload_mode``: ``single`` | ``zip`` | ``tree``）
+- 成功接收返回 HTTP 202，``accepted_async=true``；编译在 BackgroundTasks 中执行
 
 ``POST .../upload-zip`` 为兼容别名，已标记 deprecated。
 """
@@ -15,9 +16,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 
-from admin_api.ingest_summary import build_ingest_summary, snapshot_active_by_subject
 from admin_api.schemas import (
     ClaimListItemResponse,
+    SourceChunkResponse,
     DeleteTreeRequest,
     DeleteTreeResponse,
     MoveSourcesRequest,
@@ -27,16 +28,18 @@ from admin_api.schemas import (
     ZipUploadItemResponse,
     ZipUploadResponse,
 )
+from admin_api.source_cleanup import purge_source_side_effects, sole_source_claims
 from admin_api.source_helpers import build_source_response, filter_sources_by_query
+from admin_api.upload_jobs import pending_item_response, process_uploaded_source, register_pending_source
 from app.admin_auth import require_admin_token
-from app.deps import build_orchestrator_for_request, get_kb_repo
-from compiler.chunk_enrichment import enrich_chunks
-from compiler.enrichment import enrich_source
+from app.deps import build_orchestrator_for_request, get_kb_repo, get_knowledge_for_request
 from infra.upload_utils import ALLOWED_UPLOAD_SUFFIXES, extract_zip_documents, safe_target_under_kb
 from knowledge.errors import DomainError
 from knowledge.models import Source
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-sources"])
+
+_ACCEPT_SUMMARY = "已接收，后台编译中"
 
 
 def _resolve_active_kb(
@@ -85,76 +88,60 @@ def _prune_empty_parents(path: Path, kb_dir: Path) -> None:
         current = current.parent
 
 
-def _item_from_dest(kb_dir: Path, dest: Path, report) -> ZipUploadItemResponse:
-    try:
-        rel = dest.relative_to(kb_dir.resolve())
-        relative_path = rel.as_posix()
-        directory = f"/{rel.parent.as_posix()}" if rel.parent.parts else "/"
-    except ValueError:
-        relative_path = dest.name
-        directory = "/"
-
-    return ZipUploadItemResponse(
-        source_id=report.source_id,
-        path=str(dest),
-        claims_created=report.claims_created,
-        entities_upserted=report.entities_upserted,
-        evidence_links=report.evidence_links,
-        quarantined=report.quarantined,
-        errors=report.errors,
-        relative_path=relative_path,
-        directory=directory,
-    )
-
-
-def _ingest_baseline(kb_id: str, request: Request) -> tuple[dict[str, int], int]:
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    knowledge = orchestrator.deps.knowledge
-    return snapshot_active_by_subject(knowledge), len(knowledge.list_quarantine())
-
-
-def _ingest_saved_file(
-    kb_id: str,
-    request: Request,
-    dest: Path,
-    source_type: str,
-    replaces_source_id: str | None = None,
-):
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    try:
-        return orchestrator.ingest(str(dest), source_type, replaces_source_id=replaces_source_id)
-    except DomainError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def _schedule_enrichment(
+def _schedule_upload_processing(
     kb_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    source_ids: list[str],
-) -> None:
+    kb_dir: Path,
+    originals: list[Path],
+    source_type: str,
+    replaces_source_id: str | None = None,
+) -> list[ZipUploadItemResponse]:
     orchestrator = build_orchestrator_for_request(kb_id, request)
-    deps = orchestrator.deps
     settings = request.app.state.settings
-    llm_enabled = settings.extract_llm and deps.llm_client.is_configured
-    for source_id in source_ids:
-        if llm_enabled:
-            deps.knowledge.update_source_status(source_id, "enriching")
-        background_tasks.add_task(
-            enrich_source,
-            kb_id=kb_id,
-            source_id=source_id,
-            deps=deps,
-            settings=settings,
+    results: list[ZipUploadItemResponse] = []
+    single = len(originals) == 1
+    for original in originals:
+        source = register_pending_source(
+            knowledge=orchestrator.deps.knowledge,
+            kb_dir=kb_dir,
+            original=original,
+            source_type=source_type,
+            replaces_source_id=replaces_source_id if single else None,
         )
-        if settings.chunk_llm_enrich and deps.llm_client.is_configured:
-            background_tasks.add_task(
-                enrich_chunks,
-                kb_id=kb_id,
-                source_id=source_id,
-                deps=deps,
-                settings=settings,
-            )
+        results.append(pending_item_response(kb_dir, original, source.id))
+        background_tasks.add_task(
+            process_uploaded_source,
+            kb_id=kb_id,
+            kb_dir=kb_dir,
+            original=original,
+            source_type=source_type,
+            deps=orchestrator.deps,
+            settings=settings,
+            orchestrator=orchestrator,
+            replaces_source_id=replaces_source_id if single else None,
+        )
+    return results
+
+
+def _async_upload_response(
+    *,
+    upload_mode: str,
+    files_total: int,
+    results: list[ZipUploadItemResponse],
+    errors: list[str] | None = None,
+) -> SourceUploadResponse:
+    error_list = list(errors or [])
+    return SourceUploadResponse(
+        upload_mode=upload_mode,
+        files_total=files_total,
+        files_ingested=0,
+        files_skipped=files_total - len(results),
+        results=results,
+        errors=error_list,
+        ingest_summary=_ACCEPT_SUMMARY,
+        accepted_async=True,
+    )
 
 
 def _upload_zip_bytes(
@@ -165,70 +152,24 @@ def _upload_zip_bytes(
     zip_bytes: bytes,
     source_type: str,
 ) -> SourceUploadResponse:
-    before_active, before_quarantine = _ingest_baseline(kb_id, request)
     extracted, extract_errors = extract_zip_documents(zip_bytes, kb_dir)
-
-    results: list[ZipUploadItemResponse] = []
-    ingest_errors = list(extract_errors)
-    for dest in extracted:
-        try:
-            report = _ingest_saved_file(kb_id, request, dest, source_type)
-            results.append(_item_from_dest(kb_dir, dest, report))
-        except HTTPException as exc:
-            ingest_errors.append(f"{dest.name}: {exc.detail}")
-
-    _schedule_enrichment(kb_id, request, background_tasks, [item.source_id for item in results])
-    skipped = len(extracted) - len(results) + len(extract_errors)
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    ingest_summary = build_ingest_summary(
-        orchestrator.deps.knowledge,
-        before_active,
-        before_quarantine,
-        results,
+    results = _schedule_upload_processing(
+        kb_id,
+        request,
+        background_tasks,
+        kb_dir,
+        extracted,
+        source_type,
     )
-    return SourceUploadResponse(
+    return _async_upload_response(
         upload_mode="zip",
         files_total=len(extracted) + len(extract_errors),
-        files_ingested=len(results),
-        files_skipped=skipped,
         results=results,
-        errors=ingest_errors,
-        ingest_summary=ingest_summary,
+        errors=list(extract_errors),
     )
 
 
-def _upload_single_file(
-    kb_id: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    kb_dir: Path,
-    dest: Path,
-    source_type: str,
-    replaces_source_id: str | None = None,
-) -> SourceUploadResponse:
-    before_active, before_quarantine = _ingest_baseline(kb_id, request)
-    report = _ingest_saved_file(kb_id, request, dest, source_type, replaces_source_id)
-    _schedule_enrichment(kb_id, request, background_tasks, [report.source_id])
-    item = _item_from_dest(kb_dir, dest, report)
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    ingest_summary = build_ingest_summary(
-        orchestrator.deps.knowledge,
-        before_active,
-        before_quarantine,
-        [item],
-    )
-    return SourceUploadResponse(
-        upload_mode="single",
-        files_total=1,
-        files_ingested=1,
-        files_skipped=0,
-        results=[item],
-        errors=list(report.errors),
-        ingest_summary=ingest_summary,
-    )
-
-
-@router.post("/{kb_id}/sources/upload", response_model=SourceUploadResponse)
+@router.post("/{kb_id}/sources/upload", response_model=SourceUploadResponse, status_code=202)
 async def upload_source(
     kb_id: str,
     request: Request,
@@ -248,7 +189,7 @@ async def upload_source(
     kb_dir.mkdir(parents=True, exist_ok=True)
     content = await file.read()
 
-    # ZIP 不走 ALLOWED_UPLOAD_SUFFIXES（仅含 .md/.txt）
+    # ZIP 单独处理（白名单含 md/txt/pdf/docx/doc）
     if filename.lower().endswith(".zip"):
         if replaces_source_id or relative_path:
             raise HTTPException(
@@ -269,18 +210,19 @@ async def upload_source(
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"failed to save upload: {exc}") from exc
 
-    return _upload_single_file(
+    results = _schedule_upload_processing(
         kb_id,
         request,
         background_tasks,
         kb_dir,
-        dest,
+        [dest],
         source_type,
         replaces_source_id,
     )
+    return _async_upload_response(upload_mode="single", files_total=1, results=results)
 
 
-@router.post("/{kb_id}/sources/upload-tree", response_model=SourceUploadResponse)
+@router.post("/{kb_id}/sources/upload-tree", response_model=SourceUploadResponse, status_code=202)
 async def upload_tree(
     kb_id: str,
     request: Request,
@@ -295,48 +237,37 @@ async def upload_tree(
 
     kb_dir = _kb_dir(kb_id, request)
     kb_dir.mkdir(parents=True, exist_ok=True)
-    before_active, before_quarantine = _ingest_baseline(kb_id, request)
-    destinations: list[tuple[UploadFile, Path]] = []
+    destinations: list[Path] = []
+    errors: list[str] = []
     for file, relative_path in zip(files, relative_paths):
         destination = _safe_target(kb_dir, relative_path)
         suffix = destination.suffix.lower()
         if suffix not in ALLOWED_UPLOAD_SUFFIXES:
             raise HTTPException(status_code=400, detail=f"unsupported file type: {suffix}")
-        destinations.append((file, destination))
-
-    results: list[ZipUploadItemResponse] = []
-    errors: list[str] = []
-    for file, destination in destinations:
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(await file.read())
-            report = _ingest_saved_file(kb_id, request, destination, source_type)
-            results.append(_item_from_dest(kb_dir, destination, report))
+            destinations.append(destination)
         except OSError as exc:
             errors.append(f"{destination.name}: failed to save upload: {exc}")
-        except HTTPException as exc:
-            errors.append(f"{destination.name}: {exc.detail}")
 
-    _schedule_enrichment(kb_id, request, background_tasks, [item.source_id for item in results])
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    ingest_summary = build_ingest_summary(
-        orchestrator.deps.knowledge,
-        before_active,
-        before_quarantine,
-        results,
+    results = _schedule_upload_processing(
+        kb_id,
+        request,
+        background_tasks,
+        kb_dir,
+        destinations,
+        source_type,
     )
-    return SourceUploadResponse(
+    return _async_upload_response(
         upload_mode="tree",
         files_total=len(files),
-        files_ingested=len(results),
-        files_skipped=len(files) - len(results),
         results=results,
         errors=errors,
-        ingest_summary=ingest_summary,
     )
 
 
-@router.post("/{kb_id}/sources/upload-zip", response_model=ZipUploadResponse, deprecated=True)
+@router.post("/{kb_id}/sources/upload-zip", response_model=ZipUploadResponse, status_code=202, deprecated=True)
 async def upload_zip(
     kb_id: str,
     request: Request,
@@ -350,6 +281,7 @@ async def upload_zip(
         raise HTTPException(status_code=400, detail="upload-zip requires a .zip file")
 
     kb_dir = _kb_dir(kb_id, request)
+    kb_dir.mkdir(parents=True, exist_ok=True)
     zip_bytes = await file.read()
     return _upload_zip_bytes(kb_id, request, background_tasks, kb_dir, zip_bytes, source_type)
 
@@ -361,12 +293,9 @@ def list_sources(
     q: str | None = Query(default=None, description="Fuzzy search by filename, path, or source id"),
     _: None = Depends(_resolve_active_kb),
 ) -> list[SourceResponse]:
-    orchestrator = build_orchestrator_for_request(kb_id, request)
+    knowledge = get_knowledge_for_request(kb_id, request)
     kb_dir = _kb_dir(kb_id, request)
-    payloads = [
-        build_source_response(source, orchestrator.deps.knowledge, kb_dir)
-        for source in orchestrator.deps.knowledge.list_sources()
-    ]
+    payloads = [build_source_response(source, knowledge, kb_dir) for source in knowledge.list_sources()]
     filtered = filter_sources_by_query(payloads, q)
     filtered.sort(key=lambda item: (item.get("directory", ""), item.get("relative_path", "")))
     return [SourceResponse(**payload) for payload in filtered]
@@ -384,8 +313,7 @@ def move_sources(
     if source_is_directory != target_is_directory:
         raise HTTPException(status_code=400, detail="source and target paths must both be files or directories")
 
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    knowledge = orchestrator.deps.knowledge
+    knowledge = get_knowledge_for_request(kb_id, request)
     kb_dir = _kb_dir(kb_id, request)
     from_target = _safe_target(kb_dir, body.from_path)
     to_target = _safe_target(kb_dir, body.to_path)
@@ -432,6 +360,29 @@ def move_sources(
     return moved
 
 
+@router.get("/{kb_id}/sources/{source_id}/chunks", response_model=list[SourceChunkResponse])
+def list_source_chunks(
+    kb_id: str,
+    source_id: str,
+    request: Request,
+    status: str = Query(default="active"),
+    _: None = Depends(_resolve_active_kb),
+) -> list[SourceChunkResponse]:
+    knowledge = get_knowledge_for_request(kb_id, request)
+    source = knowledge.get_source(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"source_not_found: {source_id}")
+
+    if status == "all":
+        chunks = knowledge.list_chunks(source_id, status="active") + knowledge.list_chunks(source_id, status="stale")
+        chunks.sort(key=lambda chunk: chunk.chunk_index)
+    elif status in {"active", "stale"}:
+        chunks = knowledge.list_chunks(source_id, status=status)
+    else:
+        raise HTTPException(status_code=400, detail=f"unsupported chunk status filter: {status}")
+    return [SourceChunkResponse.from_chunk(chunk) for chunk in chunks]
+
+
 @router.get("/{kb_id}/sources/{source_id}/claims", response_model=list[ClaimListItemResponse])
 def list_source_claims(
     kb_id: str,
@@ -439,12 +390,12 @@ def list_source_claims(
     request: Request,
     _: None = Depends(_resolve_active_kb),
 ) -> list[ClaimListItemResponse]:
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    source = orchestrator.deps.knowledge.get_source(source_id)
+    knowledge = get_knowledge_for_request(kb_id, request)
+    source = knowledge.get_source(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"source_not_found: {source_id}")
 
-    claims = orchestrator.deps.knowledge.get_claims_for_source(source_id)
+    claims = knowledge.get_claims_for_source(source_id)
     claims_sorted = sorted(claims, key=lambda claim: (claim.subject, claim.predicate, claim.version))
     return [ClaimListItemResponse.from_claim(claim) for claim in claims_sorted]
 
@@ -456,8 +407,7 @@ def get_source_content(
     request: Request,
     _: None = Depends(_resolve_active_kb),
 ) -> SourceContentResponse:
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    knowledge = orchestrator.deps.knowledge
+    knowledge = get_knowledge_for_request(kb_id, request)
     source = knowledge.get_source(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"source_not_found: {source_id}")
@@ -516,7 +466,9 @@ def delete_source(
         _prune_empty_parents(source_path, kb_dir)
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"failed to delete source file: {exc}") from exc
+    claims_to_purge = sole_source_claims(knowledge, source_id)
     knowledge.delete_source(source_id)
+    purge_source_side_effects(orchestrator.deps, source_id, sole_claims=claims_to_purge)
     return Response(status_code=204)
 
 
@@ -549,5 +501,7 @@ def delete_tree(
             _prune_empty_parents(source_path, kb_dir)
         except OSError as exc:
             raise HTTPException(status_code=500, detail=f"failed to delete source file: {exc}") from exc
+        claims_to_purge = sole_source_claims(knowledge, source.id)
         knowledge.delete_source(source.id)
+        purge_source_side_effects(orchestrator.deps, source.id, sole_claims=claims_to_purge)
     return DeleteTreeResponse(deleted_count=len(matches))

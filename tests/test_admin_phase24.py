@@ -36,7 +36,7 @@ def _seed_kb(client: TestClient, kb_id: str = DEFAULT_IN_MEMORY_KB_ID) -> str:
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload.status_code == 200, upload.text
+    assert upload.status_code == 202, upload.text
     return admin_upload_item(upload)["source_id"]
 
 

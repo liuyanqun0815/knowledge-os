@@ -88,7 +88,14 @@ def test_build_ingest_summary_includes_quarantine(tmp_path, monkeypatch):
             data={"source_type": "policy"},
         )
 
-    assert response.status_code == 200, response.text
+    assert response.status_code == 202, response.text
     body = response.json()
-    assert body["ingest_summary"]
-    assert "Claim" in body["ingest_summary"]
+    assert body["accepted_async"] is True
+    assert body["ingest_summary"] == "已接收，后台编译中"
+    assert body["results"][0]["claims_created"] == 0
+
+    sources = client.get(f"/admin/knowledge-bases/{kb_id}/sources")
+    assert sources.status_code == 200
+    listed = sources.json()
+    assert len(listed) >= 1
+    assert listed[0]["claims_count"] >= 1

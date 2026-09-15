@@ -26,8 +26,11 @@ def test_admin_lint_returns_report_after_upload(tmp_path, monkeypatch):
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload.status_code == 200, upload.text
-    assert admin_upload_item(upload)["claims_created"] >= 1
+    assert upload.status_code == 202, upload.text
+    assert upload.json()["accepted_async"] is True
+    assert admin_upload_item(upload)["claims_created"] == 0
+    sources = client.get(f"/admin/knowledge-bases/{kb_id}/sources")
+    assert any(item["claims_count"] >= 1 for item in sources.json())
 
     response = client.get(f"/admin/knowledge-bases/{kb_id}/lint")
     assert response.status_code == 200, response.text
@@ -54,9 +57,9 @@ def test_admin_lint_detects_conflict(tmp_path, monkeypatch):
             id="claim-a",
             family_id="family-conflict",
             version=1,
-            subject="七天无理由",
-            predicate="运费承担方",
-            object="买家",
+            subject="ä¸ĺ¤Šć ççą",
+            predicate="čżč´šćżććš",
+            object="äš°ĺŽś",
             subject_type="RefundRule",
             object_type="Concept",
             confidence=0.9,
@@ -71,9 +74,9 @@ def test_admin_lint_detects_conflict(tmp_path, monkeypatch):
             id="claim-b",
             family_id="family-conflict",
             version=2,
-            subject="七天无理由",
-            predicate="运费承担方",
-            object="平台",
+            subject="ä¸ĺ¤Šć ççą",
+            predicate="čżč´šćżććš",
+            object="ĺšłĺ°",
             subject_type="RefundRule",
             object_type="Concept",
             confidence=0.9,

@@ -81,6 +81,7 @@ class SourceUploadResponse(BaseModel):
     results: list[ZipUploadItemResponse] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     ingest_summary: str | None = None
+    accepted_async: bool = False
 
 
 class MoveSourcesRequest(BaseModel):

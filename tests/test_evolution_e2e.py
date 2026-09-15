@@ -103,7 +103,7 @@ def test_phase22_evolution_e2e_http(tmp_path, monkeypatch):
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload_v3.status_code == 200, upload_v3.text
+    assert upload_v3.status_code == 202, upload_v3.text
     v3_source_id = admin_upload_item(upload_v3)["source_id"]
 
     with V4_PATH.open("rb") as handle:
@@ -112,7 +112,7 @@ def test_phase22_evolution_e2e_http(tmp_path, monkeypatch):
             files={"file": ("refund_policy_v4.md", handle, "text/markdown")},
             data={"source_type": "policy", "replaces_source_id": v3_source_id},
         )
-    assert upload_v4.status_code == 200, upload_v4.text
+    assert upload_v4.status_code == 202, upload_v4.text
 
     history = client.get(
         f"/claims/{FREIGHT_FAMILY_ID}/history",

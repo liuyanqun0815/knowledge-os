@@ -23,8 +23,11 @@ def test_admin_wiki_export_writes_default_path(tmp_path, monkeypatch):
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload.status_code == 200, upload.text
-    assert admin_upload_item(upload)["claims_created"] >= 1
+    assert upload.status_code == 202, upload.text
+    assert upload.json()["accepted_async"] is True
+    assert admin_upload_item(upload)["claims_created"] == 0
+    sources = client.get(f"/admin/knowledge-bases/{kb_id}/sources")
+    assert any(item["claims_count"] >= 1 for item in sources.json())
 
     response = client.post(f"/admin/knowledge-bases/{kb_id}/wiki/export")
     assert response.status_code == 200, response.text
@@ -49,7 +52,7 @@ def test_admin_wiki_export_custom_relative_dir(tmp_path, monkeypatch):
             files={"file": ("refund_policy_v3.md", handle, "text/markdown")},
             data={"source_type": "policy"},
         )
-    assert upload.status_code == 200, upload.text
+    assert upload.status_code == 202, upload.text
 
     response = client.post(
         f"/admin/knowledge-bases/{kb_id}/wiki/export",
