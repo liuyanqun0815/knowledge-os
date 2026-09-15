@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from admin_api.schemas import ZipUploadItemResponse
-from infra.doc_extract import EXTRACTABLE_UPLOAD_SUFFIXES
+from infra.doc_extract import EXTRACTABLE_UPLOAD_SUFFIXES, materialize_markdown_for_ingest
 from infra.upload_utils import relative_path_from_kb_root, source_id_from_relative_path
 from knowledge.models import Source
 
@@ -66,3 +66,38 @@ def pending_item_response(kb_dir: Path, original: Path, source_id: str) -> ZipUp
         relative_path=relative_path,
         directory=directory,
     )
+
+
+def process_uploaded_source(
+    *,
+    kb_id: str,
+    kb_dir: Path,
+    original: Path,
+    source_type: str,
+    deps,
+    settings,
+    orchestrator,
+    replaces_source_id: str | None = None,
+) -> None:
+    from compiler.chunk_enrichment import enrich_chunks
+    from compiler.enrichment import enrich_source
+
+    source_id = source_id_for_upload(kb_dir, original)
+    try:
+        deps.knowledge.update_source_status(source_id, "running")
+        ingest_path = materialize_markdown_for_ingest(original)
+        report = orchestrator.ingest(
+            str(ingest_path),
+            source_type,
+            replaces_source_id=replaces_source_id,
+        )
+        source_id = report.source_id
+        enrich_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+        if (settings.chunk_llm_enrich or settings.chunk_llm_segment) and deps.llm_client.is_configured:
+            enrich_chunks(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+    except Exception as exc:
+        _LOG.exception("async upload failed kb=%s source=%s: %s", kb_id, source_id, exc)
+        try:
+            deps.knowledge.update_source_status(source_id, "failed")
+        except Exception:
+            _LOG.exception("failed to mark source failed: %s", source_id)
