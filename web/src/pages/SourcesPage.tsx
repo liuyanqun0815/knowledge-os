@@ -34,6 +34,7 @@ export function SourcesPage() {
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedTreeEntries, setSelectedTreeEntries] = useState<UploadTreeEntry[]>([]);
+  const [replacesSourceId, setReplacesSourceId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
@@ -41,7 +42,9 @@ export function SourcesPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
+  const pollGenerationRef = useRef(0);
 
+  const isZipSelected = selectedFile?.name.toLowerCase().endsWith(".zip") ?? false;
   const hasSelectedUpload = selectedFile !== null || selectedTreeEntries.length > 0;
 
   const loadSources = useCallback(async () => {
@@ -71,9 +74,11 @@ export function SourcesPage() {
 
   useEffect(() => {
     requestSequence.current += 1;
+    pollGenerationRef.current += 1;
     setSources([]);
     setSelectedFile(null);
     setSelectedTreeEntries([]);
+    setReplacesSourceId("");
     setUploadSummary(null);
     setExpandedSourceId(null);
     setSearchQuery("");
@@ -89,6 +94,12 @@ export function SourcesPage() {
     }, 300);
     return () => window.clearTimeout(timer);
   }, [kbId, loadSources]);
+
+  useEffect(() => {
+    return () => {
+      pollGenerationRef.current += 1;
+    };
+  }, []);
 
   function selectFile(file: File | undefined) {
     if (!file) {
@@ -138,23 +149,33 @@ export function SourcesPage() {
     setIsUploading(true);
     setError(null);
     setUploadSummary(null);
+    const trimmedReplacesId = replacesSourceId.trim();
+    const pollKbId = kbId;
+    const pollQuery = searchQuery;
     try {
       const result =
         selectedTreeEntries.length > 0
           ? await uploadTree(kbId, selectedTreeEntries)
-          : await uploadSource(kbId, selectedFile as File);
+          : trimmedReplacesId && !isZipSelected
+            ? await uploadSource(kbId, selectedFile as File, { replacesSourceId: trimmedReplacesId })
+            : await uploadSource(kbId, selectedFile as File);
       setSelectedFile(null);
       setSelectedTreeEntries([]);
+      setReplacesSourceId("");
       setUploadSummary(
         result.accepted_async !== false
           ? `已接收 ${result.results.length} 个文件，后台编译中`
           : formatUploadSummary(result),
       );
       setIsUploading(false);
+      const pollGen = ++pollGenerationRef.current;
       void (async () => {
         const deadline = Date.now() + 180_000;
-        while (Date.now() < deadline && kbId) {
-          const items = await listSources(kbId);
+        while (Date.now() < deadline && pollGenerationRef.current === pollGen) {
+          const items = await listSources(pollKbId, { query: pollQuery });
+          if (pollGenerationRef.current !== pollGen) {
+            return;
+          }
           setSources(items);
           const busy = items.some(
             (s) =>
@@ -236,6 +257,15 @@ export function SourcesPage() {
           {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
           {selectedTreeEntries.length > 0 ? <p>已选择文件夹：{selectedTreeEntries.length} 个文档</p> : null}
         </div>
+        <label htmlFor="replaces-source-id">替换文档 ID (replaces_source_id)</label>
+        <input
+          id="replaces-source-id"
+          type="text"
+          value={replacesSourceId}
+          onChange={(event) => setReplacesSourceId(event.target.value)}
+          placeholder="可选：单文件上传时填写被替换的 source_id"
+          disabled={isUploading || isZipSelected || selectedTreeEntries.length > 0}
+        />
         <div className="form-actions">
           <button className="button button-primary" type="submit" disabled={!hasSelectedUpload || isUploading}>
             {isUploading ? "上传中…" : "上传"}

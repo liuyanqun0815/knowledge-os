@@ -237,13 +237,19 @@ async def upload_tree(
 
     kb_dir = _kb_dir(kb_id, request)
     kb_dir.mkdir(parents=True, exist_ok=True)
-    destinations: list[Path] = []
-    errors: list[str] = []
+    # Phase 1: validate all paths/suffixes before any write (no orphan files on mid-batch 400)
+    pending: list[tuple[UploadFile, Path]] = []
     for file, relative_path in zip(files, relative_paths):
         destination = _safe_target(kb_dir, relative_path)
         suffix = destination.suffix.lower()
         if suffix not in ALLOWED_UPLOAD_SUFFIXES:
             raise HTTPException(status_code=400, detail=f"unsupported file type: {suffix}")
+        pending.append((file, destination))
+
+    # Phase 2: write then schedule
+    destinations: list[Path] = []
+    errors: list[str] = []
+    for file, destination in pending:
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(await file.read())

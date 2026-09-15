@@ -50,4 +50,6 @@ def purge_source_side_effects(
         rebuild_topic_clusters(deps.knowledge, deps.graph, deps.knowledge_base_id, cfg)
 
     if isinstance(deps.graph, PgGraph):
-        deps.graph.purge_orphans()
+        purge_orphans = getattr(deps.graph, "purge_orphans", None)
+        if callable(purge_orphans):
+            purge_orphans()
