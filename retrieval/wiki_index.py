@@ -34,6 +34,17 @@ def _keyword_count(keywords: list[str], haystack: str) -> int:
     return sum(1 for kw in keywords if kw and kw in haystack)
 
 
+def _expand_one_hop(root: Path, text: str) -> list[str]:
+    neighbors: list[str] = []
+    for match in _WIKILINK_RE.finditer(text):
+        target = match.group(1).strip().replace("\\", "/")
+        if target.startswith(("source-", "chunk-")):
+            continue
+        if (root / f"{target}.md").is_file():
+            neighbors.append(target)
+    return neighbors
+
+
 def _parse_index_entries(index_text: str) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
     for line in index_text.splitlines():
@@ -143,7 +154,17 @@ class WikiPageRetrieval:
             if _keyword_count(keywords, hay) > 0:
                 seeds.append(entry["path"])
         if seeds:
-            candidates = list(dict.fromkeys(seeds))
+            candidates: list[str] = []
+            for seed in seeds:
+                if seed not in candidates:
+                    candidates.append(seed)
+                seed_file = root / f"{seed}.md"
+                seed_text = self._read_text(seed_file)
+                if not seed_text:
+                    continue
+                for neighbor in _expand_one_hop(root, seed_text):
+                    if neighbor not in candidates:
+                        candidates.append(neighbor)
         else:
             candidates = []
         hits = _score_candidates(root, keywords, candidates)

@@ -114,3 +114,30 @@ def test_search_title_outweighs_body_only(tmp_path: Path):
     assert hits[0].ref_id == "政策/包邮政策"
     assert len(hits) >= 2
     assert hits[0].score > hits[1].score
+
+
+def test_one_hop_keeps_real_pages_drops_entities(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(
+        wiki_root,
+        "政策/发票政策",
+        "发票政策",
+        "发票说明\n\n## 相关实体\n- [[电子普通发票|电子普通发票]]\n",
+        related=["政策/运费政策", "source-政策__发票"],
+    )
+    _write_page(wiki_root, "政策/运费政策", "运费政策", "运费与普通发票无关的邻居页")
+    _write_index(
+        wiki_root,
+        [("政策/发票政策", "发票政策", "电子普通发票开具说明")],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("电子普通发票", top_k=5)
+    ref_ids = {h.ref_id for h in hits}
+    assert "政策/发票政策" in ref_ids
+    assert "政策/运费政策" in ref_ids
+    assert all(not (rid or "").startswith("source-") for rid in ref_ids)
+    assert "电子普通发票" not in ref_ids
