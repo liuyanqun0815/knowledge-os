@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { WikiSearchHit, WikiTreeHubItem } from "../api/wiki";
+import { highlightPlainText } from "./wikiHighlight";
 
 export type WikiSidebarProps = {
   hubs: WikiTreeHubItem[];
@@ -7,6 +8,7 @@ export type WikiSidebarProps = {
   searchHits: WikiSearchHit[] | null;
   searchTotal?: number;
   isSearching?: boolean;
+  highlightQuery?: string;
   onSelectPage: (pageId: string) => void;
 };
 
@@ -16,6 +18,7 @@ export function WikiSidebar({
   searchHits,
   searchTotal,
   isSearching = false,
+  highlightQuery,
   onSelectPage,
 }: WikiSidebarProps) {
   const [expandedHubs, setExpandedHubs] = useState<Set<string>>(() => new Set());
@@ -78,7 +81,9 @@ export function WikiSidebar({
                 >
                   <span className="wiki-hit-title">{hit.title}</span>
                   {hit.snippets[0] ? (
-                    <span className="wiki-hit-snippet">{hit.snippets[0]}</span>
+                    <span className="wiki-hit-snippet">
+                      {highlightPlainText(hit.snippets[0], highlightQuery)}
+                    </span>
                   ) : null}
                 </button>
               </li>

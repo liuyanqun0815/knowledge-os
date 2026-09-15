@@ -92,8 +92,8 @@ describe("WikiPage", () => {
     const user = userEvent.setup();
     renderWiki("/wiki?kb=kb1&q=%E9%80%80%E6%AC%BE");
 
-    expect(await screen.findByText(/可申请退款/)).toBeInTheDocument();
     await waitFor(() => expect(searchWiki).toHaveBeenCalledWith("kb1", "退款"));
+    expect(document.querySelector(".wiki-hit-snippet mark")?.textContent).toBe("退款");
 
     await user.click(screen.getByRole("button", { name: /七天无理由退货/ }));
     await waitFor(() =>
@@ -113,9 +113,11 @@ describe("WikiPage", () => {
     expect(await screen.findByText(/命中/)).toBeInTheDocument();
     await waitFor(() => expect(searchWiki).toHaveBeenCalledWith("kb1", "退款"));
 
+    const snippetMark = document.querySelector(".wiki-hit-snippet mark");
+    expect(snippetMark?.textContent).toBe("退款");
+
     await user.click(screen.getByRole("button", { name: /七天无理由退货/ }));
-    expect(await screen.findByText("退款")).toBeVisible();
-    expect(document.querySelector("mark")?.textContent).toBe("退款");
+    expect(document.querySelector(".wiki-article mark")?.textContent).toBe("退款");
   });
 
   it("shows empty state when wiki has no hubs", async () => {

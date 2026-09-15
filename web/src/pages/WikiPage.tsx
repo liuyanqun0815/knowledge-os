@@ -318,6 +318,7 @@ export function WikiPage() {
             searchHits={inSearchMode ? searchHits : null}
             searchTotal={searchTotal}
             isSearching={inSearchMode && (isSearching || searchHits === null)}
+            highlightQuery={trimmedQuery || undefined}
             onSelectPage={selectPage}
           />
         </aside>
