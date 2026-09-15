@@ -1,145 +1,303 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import MagicMock
 
-from wiki.meta import WikiPageMeta, save_pages_meta
 from wiki.paths import compile_wiki_root
 
 
-def _write_topic_page(wiki_root: Path, filename: str, title: str, body: str) -> Path:
-    path = wiki_root / filename
-    path.write_text(
-        "\n".join(
-            [
-                "---",
-                "tags: [topic]",
-                "type: topic",
-                "kb_id: kb-wiki",
-                "---",
-                "",
-                f"# {title}",
-                "",
-                "## 摘要",
-                f"> {body}",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    return path
+def _write_page(wiki_root: Path, rel: str, title: str, body: str, related: list[str] | None = None) -> None:
+    path = wiki_root / f"{rel}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "---",
+        "type: source_page",
+        "---",
+        "",
+        f"# {title}",
+        "",
+        "## 摘要",
+        body,
+        "",
+    ]
+    if related:
+        lines.append("## 相关主题")
+        for item in related:
+            lines.append(f"- [[{item}|{item.split('/')[-1]}]]")
+        lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def test_wiki_page_retrieval_indexes_topic_pages_and_searches(tmp_path: Path):
+def _write_index(wiki_root: Path, entries: list[tuple[str, str, str]]) -> None:
+    # entries: (path_no_md, title, blurb)
+    lines = ["---", "type: index", "---", "", "# Wiki Index", "", "## 主题", ""]
+    for path, title, blurb in entries:
+        lines.append(f"- [[{path}|{title}]] — {blurb}")
+    (wiki_root / "index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_search_skips_without_index(tmp_path: Path):
     from retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
-    _write_topic_page(
-        wiki_root,
-        "topic-refund.md",
-        "退款",
-        "买家申请退款后需在 7 日内完成审核并原路退回。",
-    )
-    _write_topic_page(
-        wiki_root,
-        "topic-shipping.md",
-        "发货",
-        "普通订单 48 小时内发出，偏远地区除外。",
-    )
-    save_pages_meta(
-        wiki_root,
-        {
-            "topic-refund": WikiPageMeta(
-                path="topic-refund.md",
-                title="退款",
-                kind="topic",
-                content_hash="h1",
-                source_ids=["s1"],
-                updated_at=datetime(2026, 9, 14, tzinfo=timezone.utc),
-            ),
-            "topic-shipping": WikiPageMeta(
-                path="topic-shipping.md",
-                title="发货",
-                kind="topic",
-                content_hash="h2",
-                source_ids=["s2"],
-                updated_at=datetime(2026, 9, 14, tzinfo=timezone.utc),
-            ),
-        },
-    )
-
-    retrieval = WikiPageRetrieval()
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "电子发票说明")
+    llm = MagicMock()
+    llm.is_configured = True
+    retrieval = WikiPageRetrieval(llm_client=llm)
     retrieval.index_wiki_root(wiki_root)
-    hits = retrieval.search("退款审核原路退回", top_k=3)
-
-    assert hits
-    top = hits[0]
-    assert top.hit_type == "wiki"
-    assert getattr(top, "ref_type", top.hit_type) == "wiki"
-    assert top.ref_id == "topic-refund"
-    assert top.title == "退款"
-    assert top.path == "topic-refund.md"
-    assert top.snippet
-    assert "退款" in top.snippet or "审核" in top.snippet
+    assert retrieval.search("发票") == []
+    llm.chat_completions.assert_not_called()
 
 
-def test_wiki_page_retrieval_respects_top_k(tmp_path: Path):
+def test_search_skips_without_leaf_pages(tmp_path: Path):
     from retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
-    pages = (
-        ("topic-a.md", "政策A", "节假日发货顺延处理规则说明"),
-        ("topic-b.md", "政策B", "节假日客服值班与发货顺延"),
-        ("topic-c.md", "政策C", "无关的库存盘点流程"),
-    )
-    meta: dict[str, WikiPageMeta] = {}
-    for name, title, body in pages:
-        _write_topic_page(wiki_root, name, title, body)
-        page_id = name.removesuffix(".md")
-        meta[page_id] = WikiPageMeta(
-            path=name,
-            title=title,
-            kind="topic",
-            content_hash=page_id,
-            source_ids=[],
-            updated_at=None,
-        )
-    save_pages_meta(wiki_root, meta)
-
+    (wiki_root / "index.md").write_text("# empty\n", encoding="utf-8")
     retrieval = WikiPageRetrieval()
     retrieval.index_wiki_root(wiki_root)
-    hits = retrieval.search("节假日发货顺延", top_k=1)
-    assert len(hits) == 1
-    assert hits[0].ref_id in {"topic-a", "topic-b"}
+    assert retrieval.search("发票") == []
 
 
-def test_wiki_page_retrieval_indexes_nested_hierarchy_pages(tmp_path: Path):
-    """Nested hub/leaf pages (no pages.json) must be searchable via rglob."""
+def test_search_skips_without_wiki_root():
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    retrieval = WikiPageRetrieval()
+    assert retrieval.search("发票") == []
+
+
+def test_search_index_seed_hit(tmp_path: Path):
     from retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
-    nested = wiki_root / "客服话术"
-    nested.mkdir(parents=True)
-    _write_topic_page(
-        nested,
-        "沟通规范.md",
-        "沟通规范",
-        "客服应答须礼貌清晰，禁止推诿与敷衍。",
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "默认开具电子普通发票")
+    _write_page(wiki_root, "物流/发货时效说明", "发货时效说明", "付款后48小时内发货")
+    _write_index(
+        wiki_root,
+        [
+            ("政策/发票政策", "发票政策", "电子普通发票与增值税专用发票说明"),
+            ("物流/发货时效说明", "发货时效说明", "现货发货时效"),
+        ],
     )
-    # Non-indexable noise under .meta must be skipped
-    meta_dir = wiki_root / ".meta"
-    meta_dir.mkdir(parents=True)
-    (meta_dir / "noise.md").write_text("# noise\n不应被索引的元数据。\n", encoding="utf-8")
-
     retrieval = WikiPageRetrieval()
     retrieval.index_wiki_root(wiki_root)
-    hits = retrieval.search("客服应答礼貌禁止推诿", top_k=3)
-
+    hits = retrieval.search("电子发票怎么开", top_k=5)
     assert hits
-    top = hits[0]
-    assert top.hit_type == "wiki"
-    assert top.path == "客服话术/沟通规范.md"
-    assert "沟通规范" in (top.title or "")
-    assert all(h.path != ".meta/noise.md" for h in hits)
+    assert hits[0].hit_type == "wiki"
+    assert hits[0].ref_id == "政策/发票政策"
+    assert hits[0].path == "政策/发票政策.md"
+    assert hits[0].title == "发票政策"
+    assert all(h.path != "index.md" for h in hits)
+
+
+def test_search_title_outweighs_body_only(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/包邮政策", "包邮政策", "普通说明不含特殊词")
+    _write_page(wiki_root, "规则/其它", "其它", "正文多次提到包邮包邮包邮")
+    _write_index(
+        wiki_root,
+        [
+            ("政策/包邮政策", "包邮政策", "包邮规则"),
+            ("规则/其它", "其它", "包邮相关"),
+        ],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("包邮", top_k=5)
+    assert hits
+    assert hits[0].ref_id == "政策/包邮政策"
+    assert len(hits) >= 2
+    assert hits[0].score > hits[1].score
+
+
+def test_one_hop_keeps_real_pages_drops_entities(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(
+        wiki_root,
+        "政策/发票政策",
+        "发票政策",
+        "发票说明\n\n## 相关实体\n- [[电子普通发票|电子普通发票]]\n",
+        related=["政策/运费政策", "source-政策__发票"],
+    )
+    _write_page(wiki_root, "政策/运费政策", "运费政策", "运费与普通发票无关的邻居页")
+    _write_index(
+        wiki_root,
+        [("政策/发票政策", "发票政策", "电子普通发票开具说明")],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("电子普通发票", top_k=5)
+    ref_ids = {h.ref_id for h in hits}
+    assert "政策/发票政策" in ref_ids
+    assert "政策/运费政策" in ref_ids
+    assert all(not (rid or "").startswith("source-") for rid in ref_ids)
+    assert "电子普通发票" not in ref_ids
+
+
+def test_full_scan_when_index_misses_keywords(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "正文含有稀有词夸克发票")
+    _write_page(
+        wiki_root,
+        "物流/发货时效说明",
+        "发货时效说明",
+        "无关内容",
+        related=["政策/发票政策"],
+    )
+    _write_index(
+        wiki_root,
+        [
+            ("政策/发票政策", "发票政策", "电子普通发票"),
+            ("物流/发货时效说明", "发货时效说明", "发货时效"),
+        ],
+    )
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("夸克发票", top_k=5)
+    assert hits
+    assert hits[0].ref_id == "政策/发票政策"
+    assert {h.ref_id for h in hits} == {"政策/发票政策"}
+
+
+def test_llm_fallback_selects_paths(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = '{"paths": ["政策/发票政策", "不存在/页"]}'
+
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
+    llm.chat_completions.assert_called_once()
+
+
+def test_llm_fallback_bad_json_returns_empty(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "abc")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "xyz")])
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = "not-json"
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    assert retrieval.search("zzz无关词", top_k=5) == []
+
+
+def test_top_k_capped_at_five(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    entries = []
+    for i in range(6):
+        rel = f"政策/页{i}"
+        _write_page(wiki_root, rel, f"页{i}", f"共同关键词阿尔法 {i}")
+        entries.append((rel, f"页{i}", f"阿尔法摘要{i}"))
+    _write_index(wiki_root, entries)
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("阿尔法", top_k=8)
+    assert len(hits) == 5
+
+
+def test_llm_fallback_drops_index_path(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = '{"paths": ["index", "政策/发票政策"]}'
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
+    assert all(h.path != "index.md" for h in hits)
+
+
+def test_llm_fallback_accepts_fenced_json(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+    llm = MagicMock()
+    llm.is_configured = True
+    llm.chat_completions.return_value = '```json\n{"paths": ["政策/发票政策"]}\n```'
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
+
+
+def test_index_source_entries_are_not_seeds(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "普通正文")
+    (wiki_root / "source-政策__发票政策.md").write_text("# 源文件\n源标题命中词\n", encoding="utf-8")
+    index_lines = [
+        "---",
+        "type: index",
+        "---",
+        "",
+        "# Wiki Index",
+        "",
+        "## 主题",
+        "- [[政策/发票政策|发票政策]] — 电子普通发票说明",
+        "",
+        "## Sources",
+        "- [[source-政策__发票政策|源文件]] — 源标题命中词",
+        "",
+    ]
+    (wiki_root / "index.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    retrieval = WikiPageRetrieval()
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("源标题命中词", top_k=5)
+    assert all(not (h.ref_id or "").startswith("source-") for h in hits)
+    assert all(h.path != "source-政策__发票政策.md" for h in hits)
+
+
+def test_llm_rejects_path_escaping_wiki_root(tmp_path: Path):
+    from retrieval.wiki_index import WikiPageRetrieval
+
+    wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
+    wiki_root.mkdir(parents=True)
+    _write_page(wiki_root, "政策/发票政策", "发票政策", "无匹配关键词正文xyz")
+    _write_index(wiki_root, [("政策/发票政策", "发票政策", "完全不相关摘要")])
+    outside = tmp_path / "outside.md"
+    outside.write_text("# leak\n", encoding="utf-8")
+    llm = MagicMock()
+    llm.is_configured = True
+    # Absolute-ish escape via .. from wiki_root
+    llm.chat_completions.return_value = '{"paths": ["../outside", "政策/发票政策"]}'
+    retrieval = WikiPageRetrieval(llm_client=llm)
+    retrieval.index_wiki_root(wiki_root)
+    hits = retrieval.search("完全无关的问法zzz", top_k=5)
+    assert [h.ref_id for h in hits] == ["政策/发票政策"]
