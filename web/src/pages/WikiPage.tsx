@@ -53,6 +53,7 @@ export function WikiPage() {
   const treeRequestRef = useRef(0);
   const pageRequestRef = useRef(0);
   const searchRequestRef = useRef(0);
+  const prevKbIdRef = useRef<string | null | undefined>(undefined);
 
   const hubs = useMemo(() => tree?.hubs ?? [], [tree]);
   const pageIds = useMemo(() => collectPageIds(tree), [tree]);
@@ -63,6 +64,13 @@ export function WikiPage() {
   }, [queryParam]);
 
   useEffect(() => {
+    const prevKbId = prevKbIdRef.current;
+    if (prevKbId === kbId) {
+      return;
+    }
+    const hadPreviousKb = prevKbId !== undefined;
+    prevKbIdRef.current = kbId;
+
     treeRequestRef.current += 1;
     pageRequestRef.current += 1;
     searchRequestRef.current += 1;
@@ -75,6 +83,19 @@ export function WikiPage() {
       setIsLoadingTree(false);
       setIsLoadingPage(false);
       setIsSearching(false);
+    }
+    if (hadPreviousKb) {
+      setSearchParams(
+        (current) => {
+          if (!current.get("page")) {
+            return current;
+          }
+          const next = new URLSearchParams(current);
+          next.delete("page");
+          return next;
+        },
+        { replace: true },
+      );
     }
   }, [kbId]);
 
@@ -96,17 +117,20 @@ export function WikiPage() {
         setTree(nextTree);
         setError(null);
 
+        const nextPageIds = collectPageIds(nextTree);
         setSearchParams(
           (current) => {
-            if (current.get("page")) {
+            const currentPage = current.get("page");
+            if (currentPage && nextPageIds.has(currentPage)) {
               return current;
             }
             const defaultPage = pickDefaultPageId(nextTree);
-            if (!defaultPage) {
-              return current;
-            }
             const next = new URLSearchParams(current);
-            next.set("page", defaultPage);
+            if (defaultPage) {
+              next.set("page", defaultPage);
+            } else {
+              next.delete("page");
+            }
             return next;
           },
           { replace: true },
@@ -122,10 +146,10 @@ export function WikiPage() {
         }
       }
     })();
-  }, [kbId, setSearchParams]);
+  }, [kbId]);
 
   useEffect(() => {
-    if (!kbId || !pageParam) {
+    if (!kbId || !pageParam || !tree || tree.kb_id !== kbId || !pageIds.has(pageParam)) {
       return;
     }
 
@@ -152,7 +176,7 @@ export function WikiPage() {
         }
       }
     })();
-  }, [kbId, pageParam]);
+  }, [kbId, pageParam, tree, pageIds]);
 
   useEffect(() => {
     if (!kbId) {

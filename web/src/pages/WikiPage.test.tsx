@@ -5,12 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { WikiPage } from "./WikiPage";
 
-const { fetchWikiTree, fetchWikiPage, searchWiki, useKb } = vi.hoisted(() => ({
-  fetchWikiTree: vi.fn(),
-  fetchWikiPage: vi.fn(),
-  searchWiki: vi.fn(),
-  useKb: vi.fn(),
-}));
+const { fetchWikiTree, fetchWikiPage, searchWiki, useKb, kbState } = vi.hoisted(() => {
+  const kbState = { kbId: "kb1" as string | null };
+  return {
+    fetchWikiTree: vi.fn(),
+    fetchWikiPage: vi.fn(),
+    searchWiki: vi.fn(),
+    useKb: vi.fn(),
+    kbState,
+  };
+});
 
 vi.mock("../api/wiki", () => ({ fetchWikiTree, fetchWikiPage, searchWiki }));
 vi.mock("../app/KbContext", () => ({ useKb }));
@@ -34,21 +38,31 @@ const page = {
   markdown: "# 七天\n\n可申请退款。\n",
 };
 
-function renderWiki(initialEntry = "/wiki?kb=kb1") {
-  return render(
+function WikiTestRoot({ kbId, initialEntry = "/wiki?kb=kb1" }: { kbId: string | null; initialEntry?: string }) {
+  kbState.kbId = kbId;
+  return (
     <MemoryRouter
       initialEntries={[initialEntry]}
       future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
     >
       <WikiPage />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderWiki(initialEntry = "/wiki?kb=kb1", kbId: string | null = "kb1") {
+  return render(<WikiTestRoot kbId={kbId} initialEntry={initialEntry} />);
 }
 
 describe("WikiPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useKb.mockReturnValue({ kbId: "kb1", setKbId: vi.fn(), clearKb: vi.fn() });
+    kbState.kbId = "kb1";
+    useKb.mockImplementation(() => ({
+      kbId: kbState.kbId,
+      setKbId: vi.fn(),
+      clearKb: vi.fn(),
+    }));
     fetchWikiTree.mockResolvedValue(tree);
     fetchWikiPage.mockResolvedValue(page);
     searchWiki.mockResolvedValue({
@@ -61,9 +75,7 @@ describe("WikiPage", () => {
   afterEach(cleanup);
 
   it("shows empty state when no knowledge base is selected", () => {
-    useKb.mockReturnValue({ kbId: null, setKbId: vi.fn(), clearKb: vi.fn() });
-
-    renderWiki("/wiki");
+    renderWiki("/wiki", null);
 
     expect(screen.getByText(/请先选择知识库/)).toBeInTheDocument();
   });
@@ -87,6 +99,58 @@ describe("WikiPage", () => {
     await waitFor(() =>
       expect(fetchWikiPage).toHaveBeenCalledWith("kb1", "售后/七天无理由退货"),
     );
+  });
+
+  it("resets page when knowledge base changes", async () => {
+    const kb2Tree = {
+      kb_id: "kb2",
+      wiki_root: "/tmp2",
+      hubs: [
+        {
+          name: "产品",
+          description: "产品文档",
+          pages: [{ page_id: "产品/入门指南", title: "入门指南", summary: "快速上手" }],
+        },
+      ],
+    };
+    const kb2Page = {
+      page_id: "产品/入门指南",
+      title: "入门指南",
+      path: "产品/入门指南.md",
+      markdown: "# 入门\n\n欢迎使用。\n",
+    };
+
+    fetchWikiTree.mockImplementation((kbId: string) =>
+      Promise.resolve(kbId === "kb2" ? kb2Tree : tree),
+    );
+    fetchWikiPage.mockImplementation((kbId: string, pageId: string) => {
+      if (kbId === "kb2" && pageId === "产品/入门指南") {
+        return Promise.resolve(kb2Page);
+      }
+      if (kbId === "kb1" && pageId === "售后/七天无理由退货") {
+        return Promise.resolve(page);
+      }
+      return Promise.reject(new Error("not found"));
+    });
+
+    const { rerender } = render(<WikiTestRoot kbId="kb1" />);
+
+    await waitFor(() =>
+      expect(fetchWikiPage).toHaveBeenCalledWith("kb1", "售后/七天无理由退货"),
+    );
+    expect(await screen.findByText(/可申请退款/)).toBeInTheDocument();
+
+    fetchWikiPage.mockClear();
+    fetchWikiTree.mockClear();
+    rerender(<WikiTestRoot kbId="kb2" />);
+
+    await waitFor(() => expect(fetchWikiTree).toHaveBeenCalledWith("kb2"));
+    await waitFor(() =>
+      expect(fetchWikiPage).toHaveBeenCalledWith("kb2", "产品/入门指南"),
+    );
+    expect(fetchWikiPage).not.toHaveBeenCalledWith("kb2", "售后/七天无理由退货");
+    expect(await screen.findByText(/欢迎使用/)).toBeInTheDocument();
+    expect(screen.queryByText(/Wiki 页面加载失败/)).not.toBeInTheDocument();
   });
 
   it("wires the wiki page into the application router", async () => {
