@@ -12,7 +12,14 @@ export type SourceItem = {
   id: string;
   filename: string;
   created_at: string;
-  compile_status: "pending" | "running" | "succeeded" | "failed";
+  compile_status:
+    | "pending"
+    | "running"
+    | "enriching"
+    | "succeeded"
+    | "succeeded_partial"
+    | "failed"
+    | "ready";
   error_summary?: string | null;
   relative_path?: string;
   directory?: string;
@@ -38,6 +45,8 @@ export type SourceUploadResponse = {
   files_skipped: number;
   results: UploadSourceResultItem[];
   errors: string[];
+  accepted_async?: boolean;
+  ingest_summary?: string | null;
 };
 
 /** @deprecated use UploadSourceResultItem */
@@ -151,6 +160,7 @@ export type AskResponse = {
   request_id?: string | null;
   duration_ms?: number;
   trace?: AgentTraceStep[] | null;
+  duration_ms?: number | null;
 };
 
 export type GraphEntity = {

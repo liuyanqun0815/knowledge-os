@@ -104,7 +104,7 @@ describe("sources page", () => {
     await user.click(screen.getByRole("button", { name: "上传" }));
 
     await waitFor(() => {
-      expect(uploadSource).toHaveBeenCalledWith("kb-1", file, {});
+      expect(uploadSource).toHaveBeenCalledWith("kb-1", file);
     });
   });
 
@@ -146,5 +146,39 @@ describe("sources page", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "文档来源" })).toBeInTheDocument();
+  });
+
+  it("shows async accept banner and polls until compile finishes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    uploadSource.mockResolvedValue({
+      accepted_async: true,
+      upload_mode: "single",
+      files_total: 1,
+      files_ingested: 1,
+      files_skipped: 0,
+      results: [{ source_id: "a", path: "a.md", claims_created: 0, entities_upserted: 0, evidence_links: 0, quarantined: 0, errors: [] }],
+      errors: [],
+    });
+    listSources
+      .mockResolvedValueOnce([source])
+      .mockResolvedValueOnce([{ ...source, id: "a", filename: "a.md", compile_status: "pending" as const }])
+      .mockResolvedValueOnce([{ ...source, id: "a", filename: "a.md", compile_status: "succeeded" as const }]);
+
+    render(<SourcesPage />);
+    await screen.findByText(/guide.md/);
+    const file = new File(["# A"], "a.md", { type: "text/markdown" });
+
+    await user.upload(screen.getByLabelText("选择文件"), file);
+    await user.click(screen.getByRole("button", { name: "上传" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/后台编译中/);
+    await waitFor(() => {
+      expect(listSources.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    await waitFor(() => {
+      expect(listSources.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
   });
 });

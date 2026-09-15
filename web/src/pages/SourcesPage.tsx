@@ -6,7 +6,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SourceFileBrowser } from "../components/SourceFileBrowser";
 
-const ACCEPTED_EXTENSIONS = [".md", ".txt", ".zip"];
+const ACCEPTED_EXTENSIONS = [".md", ".txt", ".pdf", ".docx", ".doc", ".zip"];
 
 function isAcceptedUploadFile(file: File): boolean {
   const lowerName = file.name.toLowerCase();
@@ -34,7 +34,6 @@ export function SourcesPage() {
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedTreeEntries, setSelectedTreeEntries] = useState<UploadTreeEntry[]>([]);
-  const [replacesSourceId, setReplacesSourceId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
@@ -43,7 +42,6 @@ export function SourcesPage() {
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
 
-  const isZipSelected = selectedFile?.name.toLowerCase().endsWith(".zip") ?? false;
   const hasSelectedUpload = selectedFile !== null || selectedTreeEntries.length > 0;
 
   const loadSources = useCallback(async () => {
@@ -76,7 +74,6 @@ export function SourcesPage() {
     setSources([]);
     setSelectedFile(null);
     setSelectedTreeEntries([]);
-    setReplacesSourceId("");
     setUploadSummary(null);
     setExpandedSourceId(null);
     setSearchQuery("");
@@ -98,7 +95,7 @@ export function SourcesPage() {
       return;
     }
     if (!isAcceptedUploadFile(file)) {
-      setError("仅支持 .md、.txt 或 .zip 文件。");
+      setError("仅支持 .md、.txt、.pdf、.docx、.doc 或 .zip 文件。");
       return;
     }
     setSelectedFile(file);
@@ -113,10 +110,12 @@ export function SourcesPage() {
 
   function handleFolderChange(event: ChangeEvent<HTMLInputElement>) {
     const entries = [...(event.target.files ?? [])]
-      .filter((file) => [".md", ".txt"].some((suffix) => file.name.toLowerCase().endsWith(suffix)))
+      .filter((file) =>
+        [".md", ".txt", ".pdf", ".docx", ".doc"].some((suffix) => file.name.toLowerCase().endsWith(suffix)),
+      )
       .map((file) => ({ file, relativePath: file.webkitRelativePath || file.name }));
     if (entries.length === 0) {
-      setError("所选文件夹中没有可上传的 .md 或 .txt 文件。");
+      setError("所选文件夹中没有可上传的 .md / .txt / .pdf / .docx / .doc 文件。");
       return;
     }
     setSelectedFile(null);
@@ -139,21 +138,36 @@ export function SourcesPage() {
     setIsUploading(true);
     setError(null);
     setUploadSummary(null);
-    const trimmedReplacesId = replacesSourceId.trim();
-    const uploadOptions = trimmedReplacesId && !isZipSelected ? { replacesSourceId: trimmedReplacesId } : {};
     try {
       const result =
         selectedTreeEntries.length > 0
           ? await uploadTree(kbId, selectedTreeEntries)
-          : await uploadSource(kbId, selectedFile as File, uploadOptions);
+          : await uploadSource(kbId, selectedFile as File);
       setSelectedFile(null);
       setSelectedTreeEntries([]);
-      setReplacesSourceId("");
-      setUploadSummary(formatUploadSummary(result));
-      await loadSources();
+      setUploadSummary(
+        result.accepted_async !== false
+          ? `已接收 ${result.results.length} 个文件，后台编译中`
+          : formatUploadSummary(result),
+      );
+      setIsUploading(false);
+      void (async () => {
+        const deadline = Date.now() + 180_000;
+        while (Date.now() < deadline && kbId) {
+          const items = await listSources(kbId);
+          setSources(items);
+          const busy = items.some(
+            (s) =>
+              s.compile_status === "pending" ||
+              s.compile_status === "running" ||
+              s.compile_status === "enriching",
+          );
+          if (!busy) return;
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      })();
     } catch {
       setError("文档上传失败，请稍后重试。");
-    } finally {
       setIsUploading(false);
     }
   }
@@ -171,7 +185,7 @@ export function SourcesPage() {
       <div className="page-header">
         <div>
           <h1>文档来源</h1>
-          <p>支持单文件、文件夹或 ZIP 上传；文件夹与 ZIP 会保留目录结构。</p>
+          <p>支持单文件、文件夹或 ZIP 上传（.md / .txt / .pdf / .docx / .doc）；文件夹与 ZIP 会保留目录结构。</p>
         </div>
       </div>
 
@@ -190,7 +204,7 @@ export function SourcesPage() {
           onDrop={handleDrop}
         >
           <p className="upload-drop-title">选择文档</p>
-          <p>拖拽文件到此处，或选择 .md / .txt / .zip；选择文件夹可保留目录结构。</p>
+          <p>拖拽文件到此处，或选择 .md / .txt / .pdf / .docx / .doc / .zip；选择文件夹可保留目录结构。</p>
           <div className="upload-picker-actions">
             <label className="button button-secondary" htmlFor="source-file">
               选择文件
@@ -203,7 +217,7 @@ export function SourcesPage() {
             id="source-file"
             className="visually-hidden"
             type="file"
-            accept=".md,.txt,.zip,text/markdown,text/plain,application/zip"
+            accept=".md,.txt,.pdf,.docx,.doc,.zip,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip"
             aria-label="选择文档"
             onChange={handleFileChange}
             disabled={isUploading}
@@ -212,7 +226,7 @@ export function SourcesPage() {
             id="source-folder"
             className="visually-hidden"
             type="file"
-            accept=".md,.txt,text/markdown,text/plain"
+            accept=".md,.txt,.pdf,.docx,.doc,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             multiple
             aria-label="选择文件夹"
             {...{ webkitdirectory: "", directory: "" }}
@@ -222,15 +236,6 @@ export function SourcesPage() {
           {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
           {selectedTreeEntries.length > 0 ? <p>已选择文件夹：{selectedTreeEntries.length} 个文档</p> : null}
         </div>
-        <label htmlFor="replaces-source-id">替换文档 ID (replaces_source_id)</label>
-        <input
-          id="replaces-source-id"
-          type="text"
-          value={replacesSourceId}
-          onChange={(event) => setReplacesSourceId(event.target.value)}
-          placeholder="可选：单文件上传时填写被替换的 source_id"
-          disabled={isUploading || isZipSelected || selectedTreeEntries.length > 0}
-        />
         <div className="form-actions">
           <button className="button button-primary" type="submit" disabled={!hasSelectedUpload || isUploading}>
             {isUploading ? "上传中…" : "上传"}
