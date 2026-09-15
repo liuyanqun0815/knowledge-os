@@ -68,6 +68,39 @@ def pending_item_response(kb_dir: Path, original: Path, source_id: str) -> ZipUp
     )
 
 
+def _path_from_file_uri(uri: str) -> Path | None:
+    if not uri.startswith("file://"):
+        return None
+    raw = uri.removeprefix("file://")
+    if raw.startswith("/") and len(raw) > 2 and raw[2] == ":":
+        raw = raw[1:]
+    return Path(raw)
+
+
+def resume_incomplete_uploads(app) -> None:
+    settings = app.state.settings
+    cache = getattr(app.state, "orchestrator_cache", {})
+    for kb_id, orchestrator in list(cache.items()):
+        kb_dir = Path(settings.data_root) / kb_id
+        for source in orchestrator.deps.knowledge.list_sources():
+            if source.status not in {"pending", "running"}:
+                continue
+            original = _path_from_file_uri(source.uri)
+            if original is None or not original.is_file():
+                orchestrator.deps.knowledge.update_source_status(source.id, "failed")
+                continue
+            process_uploaded_source(
+                kb_id=kb_id,
+                kb_dir=kb_dir,
+                original=original,
+                source_type=source.type,
+                deps=orchestrator.deps,
+                settings=settings,
+                orchestrator=orchestrator,
+                replaces_source_id=source.replaces_source_id,
+            )
+
+
 def process_uploaded_source(
     *,
     kb_id: str,

@@ -16,8 +16,10 @@ from admin_api.routes_sources import router as sources_router
 from admin_api.routes_topics import router as topics_router
 from app.admin_auth import require_admin_token
 from app.routes import router
+from admin_api.upload_jobs import resume_incomplete_uploads
 from compiler.enrichment import enrich_source
 from infra.bootstrap import _get_kb_repo, build_orchestrator_for_kb
+from infra.schema_bootstrap import ensure_pg_schema
 from infra.settings import Settings
 from infra.tracing import configure_langsmith
 
@@ -35,7 +37,7 @@ def _load_orchestrators_for_resume(app: FastAPI) -> dict:
         return cache
     for knowledge_base in kb_repo.list():
         if knowledge_base.status == "active" and knowledge_base.id not in cache:
-            cache[knowledge_base.id] = build_orchestrator_for_kb(knowledge_base.id)
+            cache[knowledge_base.id] = build_orchestrator_for_kb(knowledge_base.id, settings=settings)
     return cache
 
 
@@ -56,10 +58,18 @@ def _resume_enriching_sources(app: FastAPI) -> None:
                 logger.exception("Failed to resume enrichment for source %s in knowledge base %s", source.id, kb_id)
 
 
+def _resume_background_source_jobs(app: FastAPI) -> None:
+    _load_orchestrators_for_resume(app)
+    resume_incomplete_uploads(app)
+    _resume_enriching_sources(app)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_langsmith(app.state.settings)
-    asyncio.create_task(asyncio.to_thread(_resume_enriching_sources, app))
+    if app.state.settings.use_pg:
+        ensure_pg_schema(app.state.settings)
+    asyncio.create_task(asyncio.to_thread(_resume_background_source_jobs, app))
     yield
 
 
