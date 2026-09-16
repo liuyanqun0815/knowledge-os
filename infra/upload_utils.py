@@ -4,7 +4,19 @@ import io
 import zipfile
 from pathlib import Path, PurePosixPath
 
-ALLOWED_UPLOAD_SUFFIXES = {".md", ".txt"}
+from infra.doc_extract import ALLOWED_UPLOAD_SUFFIXES, EXTRACTABLE_UPLOAD_SUFFIXES, TEXT_UPLOAD_SUFFIXES
+
+__all__ = [
+    "ALLOWED_UPLOAD_SUFFIXES",
+    "EXTRACTABLE_UPLOAD_SUFFIXES",
+    "TEXT_UPLOAD_SUFFIXES",
+    "safe_target_under_kb",
+    "source_id_from_relative_path",
+    "relative_path_from_kb_root",
+    "directory_from_relative",
+    "fuzzy_match",
+    "extract_zip_documents",
+]
 
 
 def safe_target_under_kb(kb_dir: Path, relative_path: str) -> Path:

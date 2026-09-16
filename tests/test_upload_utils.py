@@ -29,12 +29,23 @@ def test_extract_zip_preserves_directories(tmp_path: Path):
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("policies/refund.md", "# refund")
         archive.writestr("notes/readme.txt", "hello")
-        archive.writestr("ignore.pdf", "binary")
+        archive.writestr("ignore.xlsx", "binary")
 
     extracted, errors = extract_zip_documents(buffer.getvalue(), tmp_path)
     assert len(extracted) == 2
     assert (tmp_path / "policies" / "refund.md").exists()
-    assert any("ignore.pdf" in error for error in errors)
+    assert any("ignore.xlsx" in error for error in errors)
+
+
+def test_extract_zip_allows_pdf_and_docx(tmp_path: Path):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("docs/a.pdf", b"%PDF-1.4")
+        archive.writestr("docs/b.docx", b"PK")
+
+    extracted, errors = extract_zip_documents(buffer.getvalue(), tmp_path)
+    assert errors == []
+    assert {path.name for path in extracted} == {"a.pdf", "b.docx"}
 
 
 def test_directory_from_relative():
