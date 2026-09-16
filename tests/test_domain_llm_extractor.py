@@ -80,8 +80,8 @@ def test_prompt_contains_spec_and_json_schema() -> None:
     DomainLlmExtractor(client, _spec()).extract("公司倡导诚信经营。")
 
     prompt = client.messages[0]["content"]
-    assert '"suggested_predicates": ["倡导", "禁止", "适用于"]' in prompt
-    assert '"suggested_entity_types": ["Value", "Behavior", "Policy", "Department"]' in prompt
+    assert '"allowed_predicates": ["倡导", "禁止", "适用于"]' in prompt
+    assert '"entity_types": ["Value", "Behavior", "Policy", "Department"]' in prompt
     assert '"subject": "string"' in prompt
     assert '"start"' not in prompt
 
