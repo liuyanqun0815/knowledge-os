@@ -5,18 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { WikiPage } from "./WikiPage";
 
-const { fetchWikiTree, fetchWikiPage, searchWiki, useKb, kbState } = vi.hoisted(() => {
+const { fetchWikiTree, fetchWikiPage, searchWiki, compileWiki, useKb, kbState } = vi.hoisted(() => {
   const kbState = { kbId: "kb1" as string | null };
   return {
     fetchWikiTree: vi.fn(),
     fetchWikiPage: vi.fn(),
     searchWiki: vi.fn(),
+    compileWiki: vi.fn(),
     useKb: vi.fn(),
     kbState,
   };
 });
 
-vi.mock("../api/wiki", () => ({ fetchWikiTree, fetchWikiPage, searchWiki }));
+vi.mock("../api/wiki", () => ({ fetchWikiTree, fetchWikiPage, searchWiki, compileWiki }));
 vi.mock("../app/KbContext", () => ({ useKb }));
 
 const tree = {
@@ -69,6 +70,13 @@ describe("WikiPage", () => {
       query: "退款",
       total: 1,
       hits: [{ page_id: "售后/七天无理由退货", title: "七天无理由退货", snippets: ["可申请退款"] }],
+    });
+    compileWiki.mockResolvedValue({
+      kb_id: "kb1",
+      wiki_root: "data/kb/kb1/wiki",
+      pages_written: 3,
+      topics: ["售后"],
+      source_ids: ["s1"],
     });
   });
 
@@ -215,6 +223,20 @@ describe("WikiPage", () => {
     expect(fetchWikiPage).not.toHaveBeenCalledWith("kb2", "售后/七天无理由退货");
     expect(await screen.findByText(/欢迎使用/)).toBeInTheDocument();
     expect(screen.queryByText(/Wiki 页面加载失败/)).not.toBeInTheDocument();
+  });
+
+  it("exports wiki from the wiki page and reloads the tree", async () => {
+    const user = userEvent.setup();
+    renderWiki();
+
+    await screen.findByRole("button", { name: "七天无理由退货" });
+    fetchWikiTree.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "导出 Wiki" }));
+
+    await waitFor(() => expect(compileWiki).toHaveBeenCalledWith("kb1"));
+    expect(await screen.findByText(/Wiki 已写入编译目录：3 页/)).toBeInTheDocument();
+    await waitFor(() => expect(fetchWikiTree).toHaveBeenCalled());
   });
 
   it("wires the wiki page into the application router", async () => {

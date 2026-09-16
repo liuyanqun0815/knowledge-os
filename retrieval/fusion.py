@@ -65,6 +65,7 @@ def fuse_hits(
                 ref_id=hit.ref_id,
                 title=hit.title,
                 path=hit.path,
+                content=hit.content,
             )
         )
     return fused

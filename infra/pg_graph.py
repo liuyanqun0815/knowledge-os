@@ -116,3 +116,52 @@ class PgGraph:
         if row is None:
             return None
         return self._entity_from_row(entity_id, row.type, row.props)
+
+    def purge_orphans(self) -> None:
+        """Remove stale topic edges and chunk entities whose source_chunks row is gone."""
+        params = {"knowledge_base_id": self._knowledge_base_id}
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    DELETE FROM relations r
+                    WHERE r.knowledge_base_id = :knowledge_base_id
+                      AND r.predicate IN ('涵盖', '包含段落')
+                      AND EXISTS (
+                        SELECT 1
+                        FROM entities e
+                        WHERE e.knowledge_base_id = :knowledge_base_id
+                          AND e.id = r.src
+                          AND e.type = 'Topic'
+                          AND COALESCE(e.props->>'status', '') = 'stale'
+                      )
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM relations r
+                    WHERE r.knowledge_base_id = :knowledge_base_id
+                      AND r.dst LIKE 'chunk:%'
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM source_chunks sc
+                        WHERE sc.knowledge_base_id = :knowledge_base_id
+                          AND r.dst = 'chunk:' || sc.id
+                      )
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM entities e
+                    WHERE e.knowledge_base_id = :knowledge_base_id
+                      AND e.type = 'Chunk'
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM source_chunks sc
+                        WHERE sc.knowledge_base_id = :knowledge_base_id
+                          AND e.id = 'chunk:' || sc.id
+                      )
+                    """),
+                params,
+            )

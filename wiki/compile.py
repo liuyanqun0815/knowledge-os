@@ -22,6 +22,7 @@ from wiki.links import (
     topic_page_path,
     topic_wikilink,
 )
+from wiki.source_plan import compile_source_wiki_for_source
 from wiki.meta import WikiPageMeta, load_pages_meta, save_pages_meta
 from wiki.paths import compile_wiki_root
 from wiki.prompts import build_topic_merge_prompt
@@ -712,6 +713,25 @@ def _compile_flat_for_source(
     return CompileReport(pages_written=written, topics=topic_names)
 
 
+def _compile_source_plan_for_source(
+    knowledge: KnowledgePort,
+    kb_id: str,
+    source_id: str,
+    wiki_root: Path,
+    settings: Any,
+    llm_client: Any = None,
+) -> CompileReport:
+    written, topics = compile_source_wiki_for_source(
+        knowledge,
+        kb_id,
+        source_id,
+        wiki_root,
+        settings,
+        llm_client=llm_client,
+    )
+    return CompileReport(pages_written=written, topics=topics)
+
+
 def compile_topics_for_source(
     knowledge: KnowledgePort,
     kb_id: str,
@@ -727,6 +747,10 @@ def compile_topics_for_source(
     wiki_root = compile_wiki_root(data_root, kb_id)
     wiki_root.mkdir(parents=True, exist_ok=True)
 
+    if getattr(settings, "wiki_hierarchy", False) and getattr(settings, "wiki_source_plan", True):
+        return _compile_source_plan_for_source(
+            knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client
+        )
     if getattr(settings, "wiki_hierarchy", False):
         return _compile_hierarchy_for_source(knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client)
     return _compile_flat_for_source(knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client)

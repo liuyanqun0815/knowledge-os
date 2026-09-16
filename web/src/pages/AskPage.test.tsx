@@ -55,7 +55,7 @@ describe("AskPage", () => {
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "定制商品可以退货吗？");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByText("不可退货")).toBeInTheDocument();
     expect(askQuestion).toHaveBeenCalledWith(
@@ -74,6 +74,8 @@ describe("AskPage", () => {
     expect(screen.getByText("90%")).toBeInTheDocument();
     expect(screen.getByText("HYBRID")).toBeInTheDocument();
     expect(screen.getByText(/1\.50 秒|1500/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /执行结果/ }));
     expect(screen.getByText(/混合检索|retrieve/)).toBeInTheDocument();
     expect(screen.getByText(/Claim 核验|verify/)).toBeInTheDocument();
 
@@ -84,23 +86,9 @@ describe("AskPage", () => {
     expect(screen.getByText("定制商品不适用七天无理由")).toBeInTheDocument();
   });
 
-  it("sends as_of as ISO when datetime-local is set", async () => {
-    const user = userEvent.setup();
+  it("does not expose as_of datetime control in the chat composer", () => {
     render(<AskPage />);
-
-    await user.type(screen.getByLabelText("问题"), "历史政策是什么？");
-    await user.type(screen.getByLabelText("截至时间（可选）"), "2024-06-15T14:30");
-    await user.click(screen.getByRole("button", { name: "提问" }));
-
-    await waitFor(() => expect(askQuestion).toHaveBeenCalled());
-    expect(askQuestion.mock.calls[0][0]).toMatchObject({
-      knowledgeBaseId: "kb-1",
-      question: "历史政策是什么？",
-      includeTrace: true,
-      sessionId: expect.any(String),
-      asOf: new Date("2024-06-15T14:30").toISOString(),
-    });
-    expect(screen.queryByText("时间点查询将在后续版本开放")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("截至时间（可选）")).not.toBeInTheDocument();
   });
 
   it("does not show verification summary after asking", async () => {
@@ -115,7 +103,7 @@ describe("AskPage", () => {
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "运费谁承担？");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByText("不可退货")).toBeInTheDocument();
     expect(screen.queryByText("存在冲突")).not.toBeInTheDocument();
@@ -131,12 +119,12 @@ describe("AskPage", () => {
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "第一个问题");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
     expect(await screen.findByText("不可退货")).toBeInTheDocument();
 
     askQuestion.mockResolvedValue({ ...answer, text: "第二个回答" });
     await user.type(screen.getByLabelText("问题"), "第二个问题");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByText("第二个回答")).toBeInTheDocument();
     const log = screen.getByRole("log");
@@ -151,8 +139,10 @@ describe("AskPage", () => {
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "问题");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
+    expect(await screen.findByText("不可退货")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /执行结果/ }));
     expect(await screen.findByText("轨迹暂不可用")).toBeInTheDocument();
     expect(fetchTrace).toHaveBeenCalledWith("kb-1", "r1");
   });
@@ -164,8 +154,10 @@ describe("AskPage", () => {
     render(<AskPage />);
 
     await user.type(screen.getByLabelText("问题"), "问题");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
+    expect(await screen.findByText("不可退货")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /执行结果/ }));
     expect(await screen.findByText(/生成回答|answer/)).toBeInTheDocument();
     expect(fetchTrace).toHaveBeenCalledWith("kb-1", "r1");
   });
@@ -174,7 +166,7 @@ describe("AskPage", () => {
     const user = userEvent.setup();
     const view = render(<AskPage />);
     await user.type(screen.getByLabelText("问题"), "换库前的问题");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
     expect(await screen.findByText("不可退货")).toBeInTheDocument();
     expect(within(screen.getByRole("log")).getByText("换库前的问题")).toBeInTheDocument();
 
@@ -195,7 +187,7 @@ describe("AskPage", () => {
     );
     const view = render(<AskPage />);
     await user.type(screen.getByLabelText("问题"), "问题");
-    await user.click(screen.getByRole("button", { name: "提问" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
     useKb.mockReturnValue({ kbId: "kb-2", setKbId: vi.fn(), clearKb: vi.fn() });
     view.rerender(<AskPage />);

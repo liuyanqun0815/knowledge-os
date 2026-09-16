@@ -5,26 +5,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { QuarantinePage } from "./QuarantinePage";
 
-const { listQuarantine, approveQuarantine, useKb } = vi.hoisted(() => ({
+const { listQuarantine, approveQuarantine, approveAllQuarantine, useKb } = vi.hoisted(() => ({
   listQuarantine: vi.fn(),
   approveQuarantine: vi.fn(),
+  approveAllQuarantine: vi.fn(),
   useKb: vi.fn(),
 }));
 
 vi.mock("../api/quarantine", () => ({
   listQuarantine,
   approveQuarantine,
+  approveAllQuarantine,
 }));
 
 vi.mock("../app/KbContext", () => ({
   useKb,
 }));
 
-const quarantineItem = {
-  id: 42,
-  reason: "置信度过低",
-  raw: { subject: "七天无理由", predicate: "适用对象", object: "特殊商品" },
-};
+const quarantineItems = [
+  {
+    id: 42,
+    reason: "置信度过低",
+    raw: { subject: "七天无理由", predicate: "适用对象", object: "特殊商品" },
+  },
+  {
+    id: 43,
+    reason: "invalid_predicate",
+    raw: { subject: "定制商品", predicate: "适用对象", object: "特殊商品" },
+  },
+];
+
+const quarantineItem = quarantineItems[0];
 
 const approvedClaim = {
   id: "claim-1",
@@ -48,6 +59,12 @@ describe("QuarantinePage", () => {
     useKb.mockReturnValue({ kbId: "kb-1", setKbId: vi.fn(), clearKb: vi.fn() });
     listQuarantine.mockResolvedValue([quarantineItem]);
     approveQuarantine.mockResolvedValue({ claim: approvedClaim });
+    approveAllQuarantine.mockResolvedValue({
+      approved_count: 2,
+      failed_count: 0,
+      claims: [approvedClaim, approvedClaim],
+      failures: [],
+    });
     vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
@@ -73,6 +90,49 @@ describe("QuarantinePage", () => {
     expect(within(table).getByText("置信度过低")).toBeInTheDocument();
     expect(within(table).getByText("查看 JSON")).toBeInTheDocument();
     expect(listQuarantine).toHaveBeenCalledWith("kb-1");
+  });
+
+  it("approves all quarantine items after confirm, reloads list, and shows success message", async () => {
+    const user = userEvent.setup();
+    listQuarantine.mockResolvedValueOnce(quarantineItems).mockResolvedValueOnce([]);
+
+    render(<QuarantinePage />);
+    await screen.findByText("42");
+
+    await user.click(screen.getByRole("button", { name: "一键审批" }));
+
+    expect(window.confirm).toHaveBeenCalledWith("确认批准当前 2 条隔离项吗？");
+    expect(approveAllQuarantine).toHaveBeenCalledWith("kb-1");
+    await waitFor(() => {
+      expect(listQuarantine).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByText("已批准 2 条隔离项。")).toBeInTheDocument();
+  });
+
+  it("does not approve all when confirm is cancelled", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const user = userEvent.setup();
+    listQuarantine.mockResolvedValue(quarantineItems);
+
+    render(<QuarantinePage />);
+    await screen.findByText("42");
+
+    await user.click(screen.getByRole("button", { name: "一键审批" }));
+
+    expect(approveAllQuarantine).not.toHaveBeenCalled();
+  });
+
+  it("shows error banner when approve all fails", async () => {
+    approveAllQuarantine.mockRejectedValue(new Error("approve all failed"));
+    const user = userEvent.setup();
+    listQuarantine.mockResolvedValue(quarantineItems);
+
+    render(<QuarantinePage />);
+    await screen.findByText("42");
+
+    await user.click(screen.getByRole("button", { name: "一键审批" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("一键审批失败，请稍后重试。");
   });
 
   it("approves quarantine after confirm, reloads list, and shows success message", async () => {

@@ -85,24 +85,15 @@ def _build_prompt(context: dict[str, Any]) -> str:
         "chunks": context.get("chunks", []),
         "wiki_pages": wiki_pages,
     }
-    wiki_section = ""
-    if wiki_pages:
-        wiki_section = (
-            "## Wiki 主题页\n"
-            "以下为主题页结构与综述摘录，可用于组织回答脉络；"
-            "数字与规则以 Claim/原文为准；Wiki 仅作结构与综述。\n"
-            f"{json.dumps(wiki_pages, ensure_ascii=False)}\n\n"
-        )
     return (
         "你是 AKOS 知识库问答助手。仅根据下方「参考知识」中的 claims、evidence、chunks、wiki_pages 作答，"
         "禁止编造、禁止引入参考知识以外的内容。\n\n"
         "## 回答原则\n"
         "1. 语言：使用简洁、专业、面向业务用户的中文自然语言\n"
-        "2. 聚焦：直接回应「用户问题」，优先使用与问题最相关的 claims 与 chunks；"
-        "Wiki 主题页仅作结构与综述，不可单独作为数字/规则依据\n"
+        "2. 聚焦：直接回应「用户问题」，优先使用与问题最相关的 claims 与 chunks\n"
         "3. 结构：先给出结论，再补充适用条件、例外情形或操作要点；必要时使用短列表\n"
         "4. 数值与规则：涉及天数、金额、比例等须与 Claim/原文（claims、evidence、chunks）一致，"
-        "不可四舍五入或自行推断；数字与规则以 Claim/原文为准；Wiki 仅作结构与综述\n"
+        "不可四舍五入或自行推断；数字与规则以 Claim/原文为准\n"
         "5. 冲突：若 claims 对同一问题给出不同结论，说明存在冲突并分别陈述双方依据\n"
         "6. 不足：若参考知识无法支撑可靠结论，answer 仅输出「依据不足」，citations 输出空数组 []\n"
         "7. 引用分工：answer 正文必须是纯文本结论，不得出现任何引用标注"
@@ -118,7 +109,6 @@ def _build_prompt(context: dict[str, Any]) -> str:
         "只输出一个 JSON 对象，不要 markdown 代码块，不要前后说明文字：\n"
         '{"answer":"...","citations":[{"source_id":"...","quote":"...","claim_id":null,"chunk_id":null}]}\n\n'
         f"## 用户问题\n{question.strip()}\n\n"
-        f"{wiki_section}"
         f"## 参考知识\n{json.dumps(knowledge_context, ensure_ascii=False)}"
     )
 
@@ -170,7 +160,7 @@ def _context_texts_for_source(context: dict[str, Any], source_id: str) -> list[s
         title = item.get("title")
         if source_id not in {path, title, item.get("ref_id")}:
             continue
-        for field in ("excerpt", "title", "path"):
+        for field in ("content", "excerpt", "title", "path"):
             value = item.get(field)
             if isinstance(value, str) and value:
                 texts.append(value)
@@ -194,7 +184,7 @@ def _quote_allowed(quote: str, context: dict[str, Any], source_id: str | None = 
                 if isinstance(value, str):
                     candidates.append(value)
         for item in context.get("wiki_pages", []):
-            for field in ("excerpt", "title"):
+            for field in ("content", "excerpt", "title"):
                 value = item.get(field)
                 if isinstance(value, str):
                     candidates.append(value)
@@ -215,9 +205,10 @@ def _answer_grounded_in_context(answer: str, context: dict[str, Any]) -> bool:
             if isinstance(text, str) and len(text) >= 12 and text[: min(40, len(text))] in answer:
                 return True
     for item in context.get("wiki_pages", []):
-        excerpt = item.get("excerpt")
-        if isinstance(excerpt, str) and len(excerpt) >= 12 and excerpt[: min(40, len(excerpt))] in answer:
-            return True
+        for field in ("content", "excerpt"):
+            text = item.get(field)
+            if isinstance(text, str) and len(text) >= 12 and text[: min(40, len(text))] in answer:
+                return True
     return False
 
 

@@ -82,7 +82,6 @@ def build_wiki_tree(wiki_root: Path) -> dict:
 
     hub_items = []
     if index_text is not None:
-        index_title = _first_h1_title(index_text) or "总览"
         hub_items.append(
             {
                 "name": "总览",
@@ -90,7 +89,7 @@ def build_wiki_tree(wiki_root: Path) -> dict:
                 "pages": [
                     {
                         "page_id": "index",
-                        "title": index_title,
+                        "title": "综合概览",
                         "summary": None,
                     }
                 ],
@@ -115,12 +114,15 @@ def read_wiki_page(wiki_root: Path, page_id: str) -> dict:
     path = resolve_wiki_page_path(wiki_root, page_id)
     markdown = path.read_text(encoding="utf-8")
     meta = load_pages_meta(wiki_root).get(page_id)
-    if meta:
+    if page_id in {"", "index"}:
+        title = "综合概览"
+    elif meta:
         title = meta.title
     else:
         title = _first_h1_title(markdown) or path.stem
     normalized_page_id = page_id if page_id else "index"
-    rel_path = str(path.relative_to(wiki_root)).replace("\\", "/")
+    root = wiki_root.resolve()
+    rel_path = str(path.relative_to(root)).replace("\\", "/")
     return {
         "page_id": normalized_page_id,
         "title": title,

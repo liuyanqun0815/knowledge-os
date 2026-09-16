@@ -11,17 +11,20 @@ type StatusFilter = "all" | "active" | "superseded" | "staging" | "quarantined";
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "active", label: "生效" },
-  { value: "superseded", label: "已取代" },
+  { value: "superseded", label: "过期" },
   { value: "staging", label: "暂存" },
   { value: "quarantined", label: "隔离" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
   active: "生效",
-  superseded: "已取代",
+  superseded: "过期",
   staging: "暂存",
   quarantined: "隔离",
 };
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const DEFAULT_PAGE_SIZE = 10;
 
 export function ClaimsPage() {
   const { kbId } = useKb();
@@ -29,6 +32,8 @@ export function ClaimsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
@@ -64,6 +69,7 @@ export function ClaimsPage() {
     requestSequence.current += 1;
     setClaims([]);
     setExpandedFamilyId(null);
+    setPage(1);
     setError(null);
     if (!kbId) {
       setIsLoading(false);
@@ -74,12 +80,32 @@ export function ClaimsPage() {
     void loadClaims();
   }, [kbId, loadClaims]);
 
+  useEffect(() => {
+    setPage(1);
+    setExpandedFamilyId(null);
+  }, [statusFilter, subjectFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(claims.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const paginatedClaims = claims.slice(pageStart, pageStart + pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   function handleStatusChange(event: ChangeEvent<HTMLSelectElement>) {
     setStatusFilter(event.target.value as StatusFilter);
   }
 
   function handleSubjectChange(event: ChangeEvent<HTMLInputElement>) {
     setSubjectFilter(event.target.value);
+  }
+
+  function handlePageSizeChange(event: ChangeEvent<HTMLSelectElement>) {
+    setPageSize(Number(event.target.value));
   }
 
   function toggleHistory(familyId: string) {
@@ -126,19 +152,19 @@ export function ClaimsPage() {
       ) : null}
       {claims.length > 0 ? (
         <div className="table-card">
-          <table>
+          <table className="claims-table">
             <thead>
               <tr>
                 <th>主体</th>
                 <th>谓词</th>
                 <th>客体</th>
-                <th>状态</th>
+                <th className="claims-col-status">状态</th>
                 <th>版本</th>
                 <th>置信度</th>
               </tr>
             </thead>
             <tbody>
-              {claims.map((claim) => (
+              {paginatedClaims.map((claim) => (
                 <Fragment key={claim.id}>
                   <tr
                     className="clickable-row"
@@ -148,7 +174,7 @@ export function ClaimsPage() {
                     <td>{claim.subject}</td>
                     <td>{claim.predicate}</td>
                     <td>{claim.object}</td>
-                    <td>{STATUS_LABELS[claim.status] ?? claim.status}</td>
+                    <td className="claims-col-status">{STATUS_LABELS[claim.status] ?? claim.status}</td>
                     <td>{claim.version}</td>
                     <td>{claim.confidence.toFixed(2)}</td>
                   </tr>
@@ -163,6 +189,37 @@ export function ClaimsPage() {
               ))}
             </tbody>
           </table>
+          <div className="table-pagination">
+            <p className="table-pagination-summary">
+              共 {claims.length} 条，第 {currentPage} / {totalPages} 页
+            </p>
+            <div className="table-pagination-actions">
+              <label htmlFor="claims-page-size">每页</label>
+              <select id="claims-page-size" value={pageSize} onChange={handlePageSizeChange}>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                上一页
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                下一页
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>

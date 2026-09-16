@@ -120,6 +120,35 @@ describe("ClaimsPage", () => {
     expect(fetchClaimHistory).toHaveBeenCalledWith("kb-1", "family-1");
   });
 
+  it("paginates claims and navigates between pages", async () => {
+    const user = userEvent.setup();
+    const manyClaims = Array.from({ length: 25 }, (_, index) => ({
+      ...claim,
+      id: `claim-${index}`,
+      family_id: `family-${index}`,
+      subject: `主体-${index}`,
+    }));
+    listClaims.mockResolvedValue(manyClaims);
+
+    render(<ClaimsPage />);
+    await screen.findByText("主体-0");
+    expect(screen.getByText("主体-9")).toBeInTheDocument();
+    expect(screen.queryByText("主体-10")).not.toBeInTheDocument();
+    expect(screen.getByText("共 25 条，第 1 / 3 页")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+
+    expect(await screen.findByText("主体-10")).toBeInTheDocument();
+    expect(screen.queryByText("主体-0")).not.toBeInTheDocument();
+    expect(screen.getByText("共 25 条，第 2 / 3 页")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+
+    expect(await screen.findByText("主体-20")).toBeInTheDocument();
+    expect(screen.queryByText("主体-10")).not.toBeInTheDocument();
+    expect(screen.getByText("共 25 条，第 3 / 3 页")).toBeInTheDocument();
+  });
+
   it("wires the claims page into the application router", async () => {
     render(
       <MemoryRouter initialEntries={["/claims"]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>

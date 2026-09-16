@@ -27,6 +27,23 @@ export async function exportWiki(kbId: string, options: WikiExportOptions = {}):
   return response.json() as Promise<WikiExportResponse>;
 }
 
+export type WikiCompileResponse = {
+  kb_id: string;
+  wiki_root: string;
+  pages_written: number;
+  topics: string[];
+  source_ids: string[];
+};
+
+/** Compile into `{data_root}/kb/{kbId}/wiki/` (same root as Wiki browser). */
+export async function compileWiki(kbId: string, sourceId?: string): Promise<WikiCompileResponse> {
+  const params = sourceId ? `?source_id=${encodeURIComponent(sourceId)}` : "";
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/wiki/compile${params}`, {
+    method: "POST",
+  });
+  return response.json() as Promise<WikiCompileResponse>;
+}
+
 export type WikiTreePageItem = { page_id: string; title: string; summary?: string | null };
 export type WikiTreeHubItem = { name: string; description?: string | null; pages: WikiTreePageItem[] };
 export type WikiTreeResponse = { kb_id: string; wiki_root: string; hubs: WikiTreeHubItem[] };

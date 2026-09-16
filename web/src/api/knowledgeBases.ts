@@ -42,3 +42,8 @@ export async function updateKnowledgeBase(id: string, body: UpdateKnowledgeBaseB
   });
   return response.json() as Promise<KnowledgeBase>;
 }
+
+/** Soft-delete: archive the knowledge base so it disappears from the default list. */
+export async function deleteKnowledgeBase(id: string): Promise<KnowledgeBase> {
+  return updateKnowledgeBase(id, { status: "archived" });
+}

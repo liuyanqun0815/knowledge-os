@@ -96,8 +96,33 @@ class Settings(BaseSettings):
     # Wiki 目录层级（hub/leaf/snippet）；false 时保持平铺 topic- 行为
     wiki_hierarchy: bool = True
     wiki_hierarchy_llm: bool = False
+    # 以源文档为单位，由 LLM 规划 wiki 目录与拆分（优先于 topic-cluster 层级）
+    wiki_source_plan: bool = True
+    wiki_source_plan_llm: bool = True
     wiki_migrate_flat: bool = True
     wiki_max_related: int = 12
+
+    chunk_llm_segment: bool = True
+    chunk_llm_segment_max_sections: int = 12
+    chunk_min_tokens: int = 50
+    chunk_min_score: float = 0.5
+    embedding_enabled: bool = True
+    embedding_provider: str = "local"
+    embedding_model: str = "BAAI/bge-base-zh-v1.5"
+    embedding_dims: int = 768
+    embedding_device: str = "cpu"
+    embedding_model_source: str = "modelscope"
+    embedding_cache_dir: str = "./models"
+    hf_endpoint: str = Field(default="", validation_alias="HF_ENDPOINT")
+    rerank_enabled: bool = False
+    rerank_provider: str = "bce"
+    rerank_model: str = "maidalun/bce-reranker-base_v1"
+    rerank_model_source: str = "modelscope"
+    rerank_cache_dir: str = "./models"
+    rerank_device: str = "cpu"
+    rerank_max_length: int = 256
+    rerank_top_n: int = 8
+    rerank_min_score: float = 0.0
 
     # Topic cluster
     topic_cluster: bool = True

@@ -134,6 +134,7 @@ def _score_candidates(
             ref_id=rel_id,
             title=title,
             path=f"{rel_id}.md",
+            content=text,
         )
         scored.append((float(raw), hit))
     if not scored:
@@ -169,6 +170,7 @@ def _hits_from_paths(root: Path, paths: list[str], limit: int) -> list[Hit]:
                 ref_id=rel,
                 title=title,
                 path=f"{rel}.md",
+                content=text,
             )
         )
     return hits

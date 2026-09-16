@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from admin_api.claim_helpers import index_approved_claim
 from admin_api.routes_sources import _resolve_active_kb
-from admin_api.schemas import ApproveQuarantineResponse, ClaimListItemResponse, QuarantineItemResponse
+from admin_api.schemas import (
+    ApproveAllQuarantineFailure,
+    ApproveAllQuarantineResponse,
+    ApproveQuarantineResponse,
+    ClaimListItemResponse,
+    QuarantineItemResponse,
+)
 from app.deps import build_orchestrator_for_request
 from knowledge.errors import DomainError
 
@@ -20,6 +26,35 @@ def list_quarantine(
     orchestrator = build_orchestrator_for_request(kb_id, request)
     items = orchestrator.deps.knowledge.list_quarantine()
     return [QuarantineItemResponse(id=item["id"], reason=item["reason"], raw=item["raw"]) for item in items]
+
+
+@router.post("/{kb_id}/quarantine/approve-all", response_model=ApproveAllQuarantineResponse)
+def approve_all_quarantine(
+    kb_id: str,
+    request: Request,
+    _: None = Depends(_resolve_active_kb),
+) -> ApproveAllQuarantineResponse:
+    orchestrator = build_orchestrator_for_request(kb_id, request)
+    knowledge = orchestrator.deps.knowledge
+    pending_ids = [item["id"] for item in knowledge.list_quarantine()]
+
+    claims: list[ClaimListItemResponse] = []
+    failures: list[ApproveAllQuarantineFailure] = []
+    for quarantine_id in pending_ids:
+        try:
+            claim = knowledge.approve_quarantine(quarantine_id)
+        except DomainError as exc:
+            failures.append(ApproveAllQuarantineFailure(id=quarantine_id, detail=str(exc)))
+            continue
+        index_approved_claim(orchestrator.deps, claim)
+        claims.append(ClaimListItemResponse.from_claim(claim))
+
+    return ApproveAllQuarantineResponse(
+        approved_count=len(claims),
+        failed_count=len(failures),
+        claims=claims,
+        failures=failures,
+    )
 
 
 @router.post("/{kb_id}/quarantine/{quarantine_id}/approve", response_model=ApproveQuarantineResponse)

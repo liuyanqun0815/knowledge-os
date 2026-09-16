@@ -2,7 +2,6 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getKnowledgeBase, updateKnowledgeBase } from "../api/knowledgeBases";
 import { listSources } from "../api/sources";
-import { exportWiki } from "../api/wiki";
 import type { KnowledgeBase, SourceItem } from "../api/types";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SourceFileBrowser } from "../components/SourceFileBrowser";
@@ -13,7 +12,6 @@ export function KnowledgeBaseDetailPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<SourceItem[]>([]);
@@ -103,7 +101,7 @@ export function KnowledgeBaseDetailPage() {
   }
 
   async function handleArchive() {
-    if (!id || !window.confirm("归档后该知识库将不再出现在默认列表中，确认继续吗？")) {
+    if (!id || !window.confirm("确定删除该知识库吗？删除后将从列表中隐藏（数据仍保留，可联系管理员恢复）。")) {
       return;
     }
 
@@ -114,30 +112,11 @@ export function KnowledgeBaseDetailPage() {
       const updated = await updateKnowledgeBase(id, { status: "archived" });
       setKnowledgeBase(updated);
       window.dispatchEvent(new CustomEvent("akos:kb-list-changed"));
-      setNotice("知识库已归档。");
+      setNotice("知识库已删除。");
     } catch {
-      setError("知识库归档失败，请稍后重试。");
+      setError("知识库删除失败，请稍后重试。");
     } finally {
       setIsSaving(false);
-    }
-  }
-
-  async function handleExportWiki() {
-    if (!id) {
-      return;
-    }
-    setError(null);
-    setNotice(null);
-    setIsExporting(true);
-    try {
-      const result = await exportWiki(id);
-      const topicHint =
-        result.topic_pages && result.topic_pages > 0 ? `（含 ${result.topic_pages} 个主题）` : "";
-      setNotice(`Wiki 已导出：${result.files_written} 个文件${topicHint} → ${result.output_path}`);
-    } catch {
-      setError("Wiki 导出失败，请稍后重试。");
-    } finally {
-      setIsExporting(false);
     }
   }
 
@@ -150,7 +129,7 @@ export function KnowledgeBaseDetailPage() {
   }
 
   return (
-    <section className="page-section form-page">
+    <section className="page-section">
       <div className="page-header">
         <div>
           <h1>{knowledgeBase.name}</h1>
@@ -162,14 +141,9 @@ export function KnowledgeBaseDetailPage() {
           <Link className="button button-secondary" to={`/sources?kb=${id}`}>
             管理文档
           </Link>
-          <button
-            className="button button-secondary"
-            type="button"
-            disabled={isExporting || isSaving}
-            onClick={() => void handleExportWiki()}
-          >
-            {isExporting ? "正在导出…" : "导出 Wiki"}
-          </button>
+          <Link className="button button-secondary" to={`/wiki?kb=${id}`}>
+            打开 Wiki
+          </Link>
           <Link className="button button-primary" to={`/ask?kb=${id}`}>
             开始问答
           </Link>
@@ -178,22 +152,28 @@ export function KnowledgeBaseDetailPage() {
 
       {error ? <ErrorBanner message={error} /> : null}
       {notice ? <p className="success-banner">{notice}</p> : null}
-      <form className="form-card" onSubmit={handleSave}>
-        <label htmlFor="knowledge-base-name">名称</label>
-        <input
-          id="knowledge-base-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          required
-        />
-
-        <label htmlFor="knowledge-base-description">描述</label>
-        <textarea
-          id="knowledge-base-description"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          rows={5}
-        />
+      <form className="form-card kb-settings-card" onSubmit={handleSave}>
+        <div className="kb-settings-fields">
+          <div className="kb-settings-field">
+            <label htmlFor="knowledge-base-name">名称</label>
+            <input
+              id="knowledge-base-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </div>
+          <div className="kb-settings-field">
+            <label htmlFor="knowledge-base-description">描述</label>
+            <textarea
+              id="knowledge-base-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={2}
+              placeholder="可选，简要说明知识库用途"
+            />
+          </div>
+        </div>
 
         <div className="form-actions form-actions-between">
           <button
@@ -202,7 +182,7 @@ export function KnowledgeBaseDetailPage() {
             disabled={isSaving || knowledgeBase.status === "archived"}
             onClick={handleArchive}
           >
-            {knowledgeBase.status === "archived" ? "已归档" : "归档知识库"}
+            {knowledgeBase.status === "archived" ? "已删除" : "删除知识库"}
           </button>
           <button className="button button-primary" type="submit" disabled={isSaving}>
             {isSaving ? "正在保存…" : "保存修改"}
@@ -216,9 +196,6 @@ export function KnowledgeBaseDetailPage() {
             <h2>已上传文档</h2>
             <p>按目录浏览本库文件，支持模糊搜索，并可查看每份文档的萃取结果。</p>
           </div>
-          <Link className="button button-secondary" to={`/sources?kb=${id}`}>
-            前往文档管理
-          </Link>
         </div>
         {sourcesError ? <ErrorBanner message={sourcesError} /> : null}
         <SourceFileBrowser

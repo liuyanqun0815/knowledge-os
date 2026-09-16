@@ -6,12 +6,33 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+import re
+
 from knowledge.models import Claim, SourceChunk, TopicCluster
 
 DEFAULT_TOPIC_ALIASES: dict[str, str] = {
     "尺码表": "尺码选择",
     "尺码指南": "尺码选择",
 }
+
+_ENTITY_SUBJECT = re.compile(
+    r"^(女装|男装)?尺码[A-Z0-9XL]+$|^中国码\d+$|^欧码\d+$|^美码[\d.]+$",
+    re.IGNORECASE,
+)
+
+
+def _claim_subject_as_topic(subject: str) -> bool:
+    """Skip table-row / size-code entities as standalone topics."""
+    text = subject.strip()
+    if not text or len(text) <= 2:
+        return False
+    if _ENTITY_SUBJECT.match(text):
+        return False
+    if re.match(r"^[\d\-~、，,cm\s]+$", text):
+        return False
+    if len(text) > 48 and ("、" in text or "，" in text):
+        return False
+    return True
 
 
 def _merge_aliases(custom: dict[str, str] | None) -> dict[str, str]:
@@ -109,6 +130,8 @@ def build_topic_clusters(
             bucket.source_ids.add(chunk.source_id)
 
     for claim in claims:
+        if not _claim_subject_as_topic(claim.subject):
+            continue
         canonical = normalize_topic_name(claim.subject, alias_map)
         if not canonical:
             continue

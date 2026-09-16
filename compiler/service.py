@@ -182,6 +182,32 @@ class KnowledgeCompiler:
         evidence_links = 0
         quarantined = 0
 
+        from compiler.claim_merge import merge_complementary_extracted
+
+        # Quarantine low-confidence first so complementary merge cannot
+        # absorb them via confidence=max(...) and skip low_confidence isolation.
+        kept: list[ExtractedClaim] = []
+        for candidate in extracted:
+            if candidate.confidence < min_confidence:
+                self._knowledge.add_quarantine(
+                    "low_confidence",
+                    {
+                        "subject": candidate.subject,
+                        "predicate": candidate.predicate,
+                        "object": candidate.object,
+                        "confidence": candidate.confidence,
+                        "quote": candidate.quote,
+                        "start": candidate.start,
+                        "end": candidate.end,
+                        "source_id": source_id,
+                    },
+                )
+                quarantined += 1
+            else:
+                kept.append(candidate)
+
+        extracted = merge_complementary_extracted(kept)
+
         for candidate in extracted:
             raw = {
                 "subject": candidate.subject,

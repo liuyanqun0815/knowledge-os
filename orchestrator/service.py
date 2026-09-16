@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass, replace
 from datetime import datetime
+import time
 
 from compiler.ports import CompileReport
 from evolution.ports import ApplyReport
@@ -118,6 +119,7 @@ class LangGraphOrchestrator:
             },
             tags=["ask", self.deps.knowledge_base_id],
         )
+        started = time.perf_counter()
         state = self._ask.invoke(
             {
                 "question": question,

@@ -3,16 +3,23 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import threading
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 from graph.ports import GraphPort
 from knowledge.models import Claim
 from knowledge.ports import KnowledgePort
+from retrieval.embedder import EmbedderPort, claim_embedding_text
 from retrieval.ports import Hit, RetrievalMode
+
+if TYPE_CHECKING:
+    from infra.pg_embeddings import PgEmbeddingStore
 
 _TOP_K = 8
 _GRAPH_MAX_DEPTH = 2
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
+_LEGACY_HASH_DIMS = 64
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -36,7 +43,7 @@ def _tokenize(text: str) -> list[str]:
     return _TOKEN_PATTERN.findall(text.lower())
 
 
-def _char_hash_vector(text: str, dims: int = 64) -> list[float]:
+def _char_hash_vector(text: str, dims: int = _LEGACY_HASH_DIMS) -> list[float]:
     vec = [0.0] * dims
     for token in _tokenize(text):
         digest = hashlib.md5(token.encode()).hexdigest()
@@ -53,25 +60,75 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 class HybridRetrieval:
-    def __init__(self, knowledge: KnowledgePort, graph: GraphPort) -> None:
+    def __init__(
+        self,
+        knowledge: KnowledgePort,
+        graph: GraphPort,
+        *,
+        embedder: EmbedderPort | None = None,
+        embedding_store: PgEmbeddingStore | None = None,
+    ) -> None:
         self._knowledge = knowledge
         self._graph = graph
+        self._embedder = embedder
+        self._embedding_store = embedding_store
         self._indexed_claims: dict[str, Claim] = {}
         self._claim_vectors: dict[str, list[float]] = {}
+        self._lock = threading.RLock()
+        if embedding_store is not None and embedder is None:
+            raise ValueError("embedding_store requires embedder")
+
+    @property
+    def uses_pg_embeddings(self) -> bool:
+        return self._embedding_store is not None
 
     def index_claim(self, claim: Claim) -> None:
+        with self._lock:
+            self._index_claim_unlocked(claim)
+
+    def remove_claim(self, claim_id: str) -> None:
+        with self._lock:
+            self._indexed_claims.pop(claim_id, None)
+            self._claim_vectors.pop(claim_id, None)
+            if self._embedding_store is not None:
+                self._embedding_store.delete("claim", claim_id)
+
+    def _index_claim_unlocked(self, claim: Claim) -> None:
         self._indexed_claims[claim.id] = claim
-        text = f"{claim.subject} {claim.predicate} {claim.object}"
+        if self._embedding_store is not None and self._embedder is not None and claim.status == "active":
+            text = claim_embedding_text(claim.subject, claim.predicate, claim.object)
+            vector = self._embedder.embed([text])[0]
+            self._embedding_store.upsert("claim", claim.id, vector)
+            return
+        text = claim_embedding_text(claim.subject, claim.predicate, claim.object)
         self._claim_vectors[claim.id] = _char_hash_vector(text)
 
     def warm_index(self) -> None:
-        """从持久化 KnowledgePort 重建进程内索引（重启后可检索已有 active claims）。"""
-        for claim in self._knowledge.get_claims_by_status("active"):
-            self.index_claim(claim)
+        """Refresh in-memory claim cache; reuse existing pgvector rows when available.
+
+        Re-embedding every active claim on each orchestrator build blocks Ask for
+        minutes on CPU. With PgEmbeddingStore, vector search already hits Postgres,
+        so warm only needs the metadata cache used by BM25/graph/claim modes.
+        """
+        with self._lock:
+            self._indexed_claims.clear()
+            self._claim_vectors.clear()
+            active_claims = self._knowledge.get_claims_by_status("active")
+            if self._embedding_store is not None and self._embedder is not None:
+                for claim in active_claims:
+                    self._indexed_claims[claim.id] = claim
+                return
+            for claim in active_claims:
+                self._index_claim_unlocked(claim)
 
     def search(self, query: str, mode: RetrievalMode, filters: dict) -> list[Hit]:
+        with self._lock:
+            return self._search_unlocked(query, mode, filters)
+
+    def _search_unlocked(self, query: str, mode: RetrievalMode, filters: dict) -> list[Hit]:
         top_k = int(filters.get("top_k", _TOP_K))
         as_of = filters.get("as_of")
+        query_embedding = filters.get("query_embedding")
         if mode == RetrievalMode.CLAIM:
             hits = self._search_claim(query, as_of)
         elif mode == RetrievalMode.BM25:
@@ -79,14 +136,14 @@ class HybridRetrieval:
         elif mode == RetrievalMode.GRAPH:
             hits = self._search_graph(query, as_of)
         elif mode == RetrievalMode.VECTOR:
-            hits = self._search_vector(query, as_of)
+            hits = self._search_vector(query, as_of, top_k=top_k, query_embedding=query_embedding)
         else:
             hits = self._merge_hits(
                 [
                     self._search_claim(query, as_of),
                     self._search_bm25(query, as_of),
                     self._search_graph(query, as_of),
-                    self._search_vector(query, as_of),
+                    self._search_vector(query, as_of, top_k=top_k, query_embedding=query_embedding),
                 ]
             )
         hits.sort(key=lambda h: h.score, reverse=True)
@@ -98,7 +155,7 @@ class HybridRetrieval:
         for claim in self._indexed_claims.values():
             if not _claim_valid_at(claim, as_of):
                 continue
-            text = f"{claim.subject} {claim.predicate} {claim.object}"
+            text = claim_embedding_text(claim.subject, claim.predicate, claim.object)
             score = 0.0
             for part in (claim.subject, claim.predicate, claim.object):
                 if part and part.lower() in query_lower:
@@ -164,17 +221,28 @@ class HybridRetrieval:
                         frontier.append((edge.dst, hop + 1))
         return hits
 
-    def _search_vector(self, query: str, as_of: datetime | None = None) -> list[Hit]:
-        query_vec = _char_hash_vector(query)
+    def _search_vector(
+        self,
+        query: str,
+        as_of: datetime | None = None,
+        *,
+        top_k: int = _TOP_K,
+        query_embedding: list[float] | None = None,
+    ) -> list[Hit]:
+        if self._embedding_store is not None and self._embedder is not None:
+            query_vec = query_embedding if query_embedding is not None else self._embedder.embed([query])[0]
+            return self._embedding_store.search_claims(query_vec, top_k=top_k, as_of=as_of)
+
+        query_vec = query_embedding if query_embedding is not None else _char_hash_vector(query)
         hits: list[Hit] = []
         for claim_id, claim_vec in self._claim_vectors.items():
-            claim = self._indexed_claims[claim_id]
-            if not _claim_valid_at(claim, as_of):
+            claim = self._indexed_claims.get(claim_id)
+            if claim is None or not _claim_valid_at(claim, as_of):
                 continue
             score = _cosine(query_vec, claim_vec)
             if score <= 0:
                 continue
-            snippet = f"{claim.subject} {claim.predicate} {claim.object}"
+            snippet = claim_embedding_text(claim.subject, claim.predicate, claim.object)
             hits.append(Hit(claim_id=claim_id, score=score, snippet=snippet))
         return hits
 
@@ -193,7 +261,7 @@ class HybridRetrieval:
     def _iter_source_texts(self) -> list[tuple[str, str]]:
         texts: list[tuple[str, str]] = []
         seen: set[str] = set()
-        for claim in self._indexed_claims.values():
+        for claim in list(self._indexed_claims.values()):
             for source_id in claim.source_ids:
                 if source_id in seen:
                     continue

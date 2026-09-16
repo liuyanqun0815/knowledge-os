@@ -173,9 +173,38 @@ def test_build_tree_includes_index_when_present(tmp_path: Path):
     assert "index" in page_ids
     overview = next(h for h in tree["hubs"] if h["name"] == "总览")
     assert overview["pages"][0]["page_id"] == "index"
+    assert overview["pages"][0]["title"] == "综合概览"
     page = read_wiki_page(wiki, "index")
     assert page["page_id"] == "index"
     assert page["path"] == "index.md"
+    assert page["title"] == "综合概览"
+
+
+def test_read_wiki_page_works_with_relative_wiki_root(tmp_path: Path, monkeypatch: object):
+    from wiki.browser import read_wiki_page
+
+    wiki = tmp_path / "wiki"
+    (wiki / "政策").mkdir(parents=True)
+    (wiki / "政策" / "保修政策.md").write_text("# 保修政策\n\n正文\n", encoding="utf-8")
+    save_pages_meta(
+        wiki,
+        {
+            "政策/保修政策": WikiPageMeta(
+                path="政策/保修政策.md",
+                title="保修政策",
+                kind="source_page",
+                content_hash="h",
+                source_ids=["s1"],
+                hub="政策",
+            )
+        },
+    )
+    monkeypatch.chdir(tmp_path)
+    page = read_wiki_page(Path("wiki"), "政策/保修政策")
+    assert page["page_id"] == "政策/保修政策"
+    assert page["path"] == "政策/保修政策.md"
+    assert "保修政策" in page["title"]
+    assert "正文" in page["markdown"]
 
 
 def test_build_tree_and_search_skip_hub_index(tmp_path: Path):

@@ -17,6 +17,17 @@ def test_extraction_settings_defaults():
     assert s.chunk_max_chars == 3000
     assert s.chunk_max_per_doc == 40
     assert s.extract_min_confidence == 0.5
+    assert s.extract_max_claims_per_chunk == 12
+
+
+def test_apply_open_flag_copies_max_claims_per_chunk():
+    from compiler.spec_utils import apply_open_flag
+
+    spec = LlmExtractionSpec(allowed_predicates=["适用"], entity_types=["Concept"])
+    settings = Settings(_env_file=None, extract_max_claims_per_chunk=8)
+    applied = apply_open_flag(spec, settings)
+    assert applied.max_claims_per_chunk == 8
+    assert applied.open_predicates is True
 
 
 def test_llm_extraction_spec_dataclass():

@@ -90,6 +90,9 @@ def test_search_index_seed_hit(tmp_path: Path):
     assert hits[0].ref_id == "政策/发票政策"
     assert hits[0].path == "政策/发票政策.md"
     assert hits[0].title == "发票政策"
+    assert hits[0].content is not None
+    assert "# 发票政策" in hits[0].content
+    assert "默认开具电子普通发票" in hits[0].content
     assert all(h.path != "index.md" for h in hits)
 
 

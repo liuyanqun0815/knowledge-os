@@ -16,6 +16,7 @@ class WikiPageMeta:
     updated_at: datetime | None = None
     hub: str | None = None
     role: str | None = None
+    summary: str | None = None
 
 
 def _meta_dir(wiki_root: Path) -> Path:
@@ -58,6 +59,7 @@ def load_pages_meta(wiki_root: Path | str) -> dict[str, WikiPageMeta]:
             updated_at=_parse_updated_at(payload.get("updated_at")),
             hub=payload.get("hub"),
             role=payload.get("role"),
+            summary=(str(payload["summary"]).strip() if payload.get("summary") else None),
         )
     return result
 
@@ -81,6 +83,8 @@ def save_pages_meta(wiki_root: Path | str, pages: dict[str, WikiPageMeta]) -> Pa
             entry["hub"] = meta.hub
         if meta.role is not None:
             entry["role"] = meta.role
+        if meta.summary:
+            entry["summary"] = meta.summary
         payload[page_id] = entry
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path

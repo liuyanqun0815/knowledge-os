@@ -1,13 +1,9 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { askQuestion, fetchTrace } from "../api/ask";
 import { useKb } from "../app/KbContext";
 import { AskMessageBubble } from "../components/AskMessageBubble";
 import { EmptyState } from "../components/EmptyState";
 import type { AskChatMessage } from "./askTypes";
-
-function toIsoAsOf(localValue: string): string {
-  return new Date(localValue).toISOString();
-}
 
 function newMessageId(): string {
   return crypto.randomUUID();
@@ -18,7 +14,6 @@ export function AskPage() {
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [messages, setMessages] = useState<AskChatMessage[]>([]);
   const [question, setQuestion] = useState("");
-  const [asOfLocal, setAsOfLocal] = useState("");
   const [isAsking, setIsAsking] = useState(false);
   const requestSequence = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -37,8 +32,7 @@ export function AskPage() {
     }
   }, [messages]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitQuestion() {
     if (!kbId || !question.trim() || isAsking) {
       return;
     }
@@ -75,7 +69,6 @@ export function AskPage() {
         question: trimmed,
         sessionId,
         includeTrace: true,
-        ...(asOfLocal ? { asOf: toIsoAsOf(asOfLocal) } : {}),
       });
       if (requestSequence.current !== requestId) {
         return;
@@ -130,6 +123,18 @@ export function AskPage() {
     }
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitQuestion();
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void submitQuestion();
+    }
+  }
+
   if (!kbId) {
     return <EmptyState title="请先选择知识库" description="选择知识库后即可提问并查看证据与 Agent 轨迹。" />;
   }
@@ -143,39 +148,38 @@ export function AskPage() {
         </div>
       </div>
 
-      <div className="ask-chat-messages" role="log" aria-live="polite">
-        {messages.length === 0 ? (
-          <p className="ask-chat-empty">输入问题开始对话。切换知识库会清空当前会话。</p>
-        ) : (
-          messages.map((message) => <AskMessageBubble key={message.id} message={message} />)
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <form className="ask-chat-composer" onSubmit={handleSubmit}>
-        <label htmlFor="ask-question">问题</label>
-        <textarea
-          id="ask-question"
-          rows={3}
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder="请输入要查询的问题"
-          disabled={isAsking}
-        />
-        <label htmlFor="ask-as-of">截至时间（可选）</label>
-        <input
-          id="ask-as-of"
-          type="datetime-local"
-          value={asOfLocal}
-          onChange={(event) => setAsOfLocal(event.target.value)}
-          disabled={isAsking}
-        />
-        <div className="form-actions">
-          <button className="button button-primary" type="submit" disabled={isAsking || !question.trim()}>
-            {isAsking ? "提问中…" : "提问"}
-          </button>
+      <div className="ask-chat-shell">
+        <div className="ask-chat-messages" role="log" aria-live="polite">
+          {messages.length === 0 ? (
+            <div className="ask-chat-empty">
+              <p className="ask-chat-empty-title">开始提问</p>
+              <p>输入问题开始对话。切换知识库会清空当前会话。</p>
+            </div>
+          ) : (
+            messages.map((message) => <AskMessageBubble key={message.id} message={message} />)
+          )}
+          <div ref={messagesEndRef} />
         </div>
-      </form>
+
+        <form className="ask-chat-composer" onSubmit={handleSubmit}>
+          <textarea
+            id="ask-question"
+            aria-label="问题"
+            rows={3}
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            placeholder="输入问题…"
+            disabled={isAsking}
+          />
+          <div className="ask-chat-composer-bar">
+            <span className="ask-chat-composer-hint">Enter 发送 · Shift+Enter 换行</span>
+            <button className="button button-primary ask-chat-send" type="submit" disabled={isAsking || !question.trim()}>
+              {isAsking ? "提问中…" : "发送"}
+            </button>
+          </div>
+        </form>
+      </div>
     </section>
   );
 }

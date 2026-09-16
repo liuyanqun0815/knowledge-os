@@ -26,6 +26,7 @@ class Hit:
     ref_id: str | None = None
     title: str | None = None
     path: str | None = None
+    content: str | None = None  # full wiki page markdown when hit_type="wiki"
 
 
 class RetrievalPort(Protocol):

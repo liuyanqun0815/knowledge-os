@@ -5,15 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { KbProvider } from "../app/KbContext";
 
-const { createKnowledgeBase, getKnowledgeBase, listKnowledgeBases, updateKnowledgeBase } = vi.hoisted(() => ({
-  createKnowledgeBase: vi.fn(),
-  getKnowledgeBase: vi.fn(),
-  listKnowledgeBases: vi.fn(),
-  updateKnowledgeBase: vi.fn(),
-}));
+const { createKnowledgeBase, deleteKnowledgeBase, getKnowledgeBase, listKnowledgeBases, updateKnowledgeBase } = vi.hoisted(
+  () => ({
+    createKnowledgeBase: vi.fn(),
+    deleteKnowledgeBase: vi.fn(),
+    getKnowledgeBase: vi.fn(),
+    listKnowledgeBases: vi.fn(),
+    updateKnowledgeBase: vi.fn(),
+  }),
+);
 
 vi.mock("../api/knowledgeBases", () => ({
   createKnowledgeBase,
+  deleteKnowledgeBase,
   getKnowledgeBase,
   listKnowledgeBases,
   updateKnowledgeBase,
@@ -24,6 +28,16 @@ const knowledgeBase = {
   name: "电商客服",
   domain_type: "ecommerce_cs",
   description: "客服知识",
+  status: "active" as const,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-02T00:00:00Z",
+};
+
+const testKnowledgeBase = {
+  id: "kb-test",
+  name: "pg-knowledge-test",
+  domain_type: "ecommerce_cs",
+  description: "",
   status: "active" as const,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
@@ -54,6 +68,12 @@ describe("knowledge base pages", () => {
     );
     createKnowledgeBase.mockResolvedValue({ ...knowledgeBase, id: "kb-new", name: "企业文化" });
     updateKnowledgeBase.mockImplementation(async (_id, body) => ({ ...knowledgeBase, ...body }));
+    deleteKnowledgeBase.mockImplementation(async (id) => {
+      if (id === "kb-test") {
+        return { ...testKnowledgeBase, status: "archived" as const };
+      }
+      return { ...knowledgeBase, status: "archived" as const };
+    });
   });
 
   it("renders knowledge base names and sets the current knowledge base", async () => {
@@ -67,6 +87,33 @@ describe("knowledge base pages", () => {
     await user.click(screen.getByRole("button", { name: "设为当前" }));
 
     expect(localStorage.getItem("akos_current_kb")).toBe("kb-1");
+  });
+
+  it("deletes a knowledge base from the list after confirmation", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let includeTestKb = true;
+    listKnowledgeBases.mockImplementation(async () =>
+      includeTestKb ? [knowledgeBase, testKnowledgeBase] : [knowledgeBase],
+    );
+    deleteKnowledgeBase.mockImplementation(async (id) => {
+      includeTestKb = false;
+      return id === "kb-test"
+        ? { ...testKnowledgeBase, status: "archived" as const }
+        : { ...knowledgeBase, status: "archived" as const };
+    });
+    renderAt("/knowledge-bases");
+
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("pg-knowledge-test")).toBeInTheDocument();
+
+    const deleteButtons = within(table).getAllByRole("button", { name: "删除" });
+    await user.click(deleteButtons[1]);
+
+    await waitFor(() => {
+      expect(deleteKnowledgeBase).toHaveBeenCalledWith("kb-test");
+      expect(within(table).queryByText("pg-knowledge-test")).not.toBeInTheDocument();
+    });
   });
 
   it("creates a knowledge base and opens its detail page", async () => {
@@ -103,7 +150,7 @@ describe("knowledge base pages", () => {
       description: "客服知识",
     });
 
-    await user.click(screen.getByRole("button", { name: "归档知识库" }));
+    await user.click(screen.getByRole("button", { name: "删除知识库" }));
 
     await waitFor(() => {
       expect(updateKnowledgeBase).toHaveBeenCalledWith("kb-1", { status: "archived" });
@@ -111,5 +158,7 @@ describe("knowledge base pages", () => {
     await waitFor(() => expect(listKnowledgeBases).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("link", { name: "管理文档" })).toHaveAttribute("href", "/sources?kb=kb-1");
     expect(screen.getByRole("link", { name: "开始问答" })).toHaveAttribute("href", "/ask?kb=kb-1");
+    expect(screen.getByRole("link", { name: "打开 Wiki" })).toHaveAttribute("href", "/wiki?kb=kb-1");
+    expect(screen.queryByRole("button", { name: "导出 Wiki" })).not.toBeInTheDocument();
   });
 });

@@ -290,7 +290,9 @@ export function GraphPage() {
       {error ? <ErrorBanner message={error} /> : null}
       {notice ? <p className="success-banner">{notice}</p> : null}
       {truncated ? (
-        <p className="info-banner">图谱数据较多，画布仅展示部分实体/关系；请通过搜索与邻居展开继续探索。</p>
+        <p className="info-banner">
+          图谱仅展示生效状态的 Claim 关系；数据较多时画布只显示部分实体/关系，请通过搜索与邻居展开继续探索。
+        </p>
       ) : null}
 
       {isLoading ? <p role="status">正在加载图谱…</p> : null}
@@ -339,7 +341,8 @@ export function GraphPage() {
                 {isSearching ? "搜索中…" : "搜索"}
               </button>
               <p className="graph-sidebar-meta">
-                库内 {totalEntityCount} 个实体，画布 {entities.length} 节点 / {edges.length} 边
+                仅展示生效 Claim；库内 {totalEntityCount} 个生效相关实体，画布 {entities.length} 节点 /{" "}
+                {edges.length} 边
               </p>
             </div>
 

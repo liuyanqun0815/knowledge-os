@@ -13,6 +13,7 @@ from admin_api.schemas import (
     WikiTreeResponse,
 )
 from app.deps import build_orchestrator_for_request
+from infra.bootstrap import build_wiki_compile_deps
 from wiki.browser import build_wiki_tree, read_wiki_page, search_wiki_pages
 from wiki.compile import CompileReport, compile_topics_for_source
 from wiki.export import export_wiki, resolve_wiki_output_dir
@@ -108,9 +109,10 @@ def compile_knowledge_base_wiki(
     source_id: str | None = Query(default=None),
     _: None = Depends(_resolve_active_kb),
 ) -> WikiCompileResponse:
-    orchestrator = build_orchestrator_for_request(kb_id, request)
-    deps = orchestrator.deps
     settings = request.app.state.settings
+    cache: dict = getattr(request.app.state, "orchestrator_cache", {}) or {}
+    existing = cache[kb_id].deps if kb_id in cache else None
+    deps = build_wiki_compile_deps(kb_id, settings, existing=existing)
     knowledge = deps.knowledge
 
     if source_id is not None:
@@ -140,7 +142,7 @@ def compile_knowledge_base_wiki(
                 aggregate.topics.append(topic)
 
     wiki_root = compile_wiki_root(settings.data_root, kb_id)
-    wiki_retrieval = getattr(deps, "wiki_retrieval", None)
+    wiki_retrieval = deps.wiki_retrieval
     if wiki_retrieval is not None and wiki_root.exists():
         wiki_retrieval.index_wiki_root(wiki_root)
 

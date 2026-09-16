@@ -1,7 +1,7 @@
 import { Fragment, type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { deleteSource, deleteTree, fetchSourceContent, moveSources } from "../api/sources";
 import type { SourceItem } from "../api/types";
-import { SourceClaimsPanel } from "./SourceClaimsPanel";
+import { SourceDetailPanel } from "./SourceDetailPanel";
 import { SourceContentModal } from "./SourceContentModal";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -187,41 +187,43 @@ export function SourceFileBrowser({
           >
             📄 {source.filename}
           </button>
-          <span>{source.claims_count ?? 0} 条 Claim</span>
-          <span>{STATUS_LABELS[source.compile_status]}</span>
-          <div className="source-tree-actions">
-            <button
-              aria-label={`查看文件 ${source.filename}`}
-              className="button button-secondary"
-              type="button"
-              onClick={() => void openPreview(source)}
-            >
-              查看
-            </button>
-            <button className="button button-secondary" type="button" onClick={() => onToggleSource(source.id)}>
-              {expandedSourceId === source.id ? "收起萃取" : "查看萃取"}
-            </button>
-            <button
-              aria-label={`移动文件 ${source.filename}`}
-              className="button button-secondary"
-              type="button"
-              onClick={() => void handleMove(path, false)}
-            >
-              移动
-            </button>
-            <button
-              aria-label={`删除文件 ${source.filename}`}
-              className="button button-danger"
-              type="button"
-              onClick={() => void handleDeleteFile(source)}
-            >
-              删除
-            </button>
+          <div className="source-tree-meta">
+            <span className="source-tree-stat">{source.claims_count ?? 0} 条 Claim</span>
+            <span className="source-tree-stat">{STATUS_LABELS[source.compile_status]}</span>
+            <div className="source-tree-actions">
+              <button
+                aria-label={`查看文件 ${source.filename}`}
+                className="button button-secondary"
+                type="button"
+                onClick={() => void openPreview(source)}
+              >
+                查看
+              </button>
+              <button className="button button-secondary" type="button" onClick={() => onToggleSource(source.id)}>
+                {expandedSourceId === source.id ? "收起萃取" : "查看萃取"}
+              </button>
+              <button
+                aria-label={`移动文件 ${source.filename}`}
+                className="button button-secondary"
+                type="button"
+                onClick={() => void handleMove(path, false)}
+              >
+                移动
+              </button>
+              <button
+                aria-label={`删除文件 ${source.filename}`}
+                className="button button-danger"
+                type="button"
+                onClick={() => void handleDeleteFile(source)}
+              >
+                删除
+              </button>
+            </div>
           </div>
         </div>
         {expandedSourceId === source.id ? (
           <div className="source-tree-claims" style={{ marginInlineStart: `${depth * 1.5 + 2.25}rem` }}>
-            <SourceClaimsPanel kbId={kbId} sourceId={source.id} />
+            <SourceDetailPanel kbId={kbId} sourceId={source.id} />
           </div>
         ) : null}
       </Fragment>
@@ -243,24 +245,26 @@ export function SourceFileBrowser({
           >
             {isExpanded ? "▾" : "▸"} 📁 {folder.name}
           </button>
-          <span>{folder.documentCount} 个文档</span>
-          <div className="source-tree-actions">
-            <button
-              aria-label={`移动文件夹 ${folder.name}`}
-              className="button button-secondary"
-              type="button"
-              onClick={() => void handleMove(folder.path, true)}
-            >
-              移动
-            </button>
-            <button
-              aria-label={`删除文件夹 ${folder.name}`}
-              className="button button-danger"
-              type="button"
-              onClick={() => void handleDeleteFolder(folder)}
-            >
-              删除
-            </button>
+          <div className="source-tree-meta">
+            <span className="source-tree-stat">{folder.documentCount} 个文档</span>
+            <div className="source-tree-actions">
+              <button
+                aria-label={`移动文件夹 ${folder.name}`}
+                className="button button-secondary"
+                type="button"
+                onClick={() => void handleMove(folder.path, true)}
+              >
+                移动
+              </button>
+              <button
+                aria-label={`删除文件夹 ${folder.name}`}
+                className="button button-danger"
+                type="button"
+                onClick={() => void handleDeleteFolder(folder)}
+              >
+                删除
+              </button>
+            </div>
           </div>
         </div>
         {isExpanded ? (
@@ -275,17 +279,19 @@ export function SourceFileBrowser({
 
   return (
     <>
-      <div className="table-card">
-        <label htmlFor="source-search">模糊搜索</label>
-        <input
-          id="source-search"
-          type="search"
-          value={searchQuery}
-          onChange={handleSearchChange}
-          placeholder="按文件名、目录或 source_id 搜索"
-        />
+      <div className="table-card source-browser-card">
+        <div className="source-search-bar">
+          <label htmlFor="source-search">模糊搜索</label>
+          <input
+            id="source-search"
+            type="search"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="文件名、目录或 ID"
+          />
+        </div>
         {sources.length === 0 ? (
-          <p className="form-helper">未找到匹配的文档。</p>
+          <p className="form-helper source-browser-empty">未找到匹配的文档。</p>
         ) : (
           <div className="source-tree" role="tree" aria-label="文档目录树">
             {[...tree.folders.values()]

@@ -50,7 +50,7 @@ export function AskExecutionCard({
   unavailableReason = "轨迹暂不可用",
   evidence,
 }: AskExecutionCardProps): JSX.Element {
-  const [cardOpen, setCardOpen] = useState(true);
+  const [cardOpen, setCardOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
   function toggleStep(index: number) {

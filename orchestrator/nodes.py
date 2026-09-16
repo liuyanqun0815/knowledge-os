@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
@@ -20,11 +21,13 @@ from orchestrator.trace_utils import (
     trace_step,
 )
 from retrieval.fusion import fuse_hits, route_fusion_weights
+from retrieval.reranker import rerank_content_hits_preserving_claims
 from retrieval.ports import Hit, RetrievalMode
 
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
 _PROCEDURE_KEYWORDS = ("怎么做", "流程", "步骤", "怎么走")
+_RETRIEVE_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="akos-retrieve")
 
 
 def _node_duration_ms(started: float) -> int:
@@ -254,15 +257,62 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     mode = state.get("retrieval_mode") or RetrievalMode.HYBRID
     settings = get_settings()
-    claim_hits = retriever_agent.retrieve(deps.retrieval, question, mode, state.get("as_of"))
-    chunk_hits: list[Hit] = []
+    as_of = state.get("as_of")
     chunk_retrieval = getattr(deps, "chunk_retrieval", None)
-    if settings.chunk_index and chunk_retrieval is not None:
-        chunk_hits = chunk_retrieval.search(question, {"top_k": settings.retrieval_top_k})
-    wiki_hits: list[Hit] = []
     wiki_retrieval = getattr(deps, "wiki_retrieval", None)
-    if settings.wiki_compile and wiki_retrieval is not None:
-        wiki_hits = wiki_retrieval.search(question, top_k=settings.retrieval_top_k)
+    run_chunk = bool(settings.chunk_index and chunk_retrieval is not None)
+    run_wiki = bool(settings.wiki_compile and wiki_retrieval is not None)
+
+    embed_started = time.perf_counter()
+    query_embedding: list[float] | None = None
+    embedder = getattr(deps.retrieval, "_embedder", None)
+    if embedder is None and chunk_retrieval is not None:
+        embedder = getattr(chunk_retrieval, "_embedder", None)
+    if embedder is not None:
+        query_embedding = embedder.embed([question])[0]
+    embed_ms = _node_duration_ms(embed_started)
+
+    def _search_claims() -> tuple[list[Hit], int]:
+        t0 = time.perf_counter()
+        hits = retriever_agent.retrieve(
+            deps.retrieval,
+            question,
+            mode,
+            as_of,
+            query_embedding=query_embedding,
+            top_k=settings.retrieval_top_k,
+        )
+        return hits, _node_duration_ms(t0)
+
+    def _search_chunks() -> tuple[list[Hit], int]:
+        t0 = time.perf_counter()
+        if not run_chunk:
+            return [], _node_duration_ms(t0)
+        filters: dict[str, Any] = {
+            "top_k": settings.retrieval_top_k,
+            "min_score": settings.chunk_min_score,
+        }
+        if query_embedding is not None:
+            filters["query_embedding"] = query_embedding
+        hits = chunk_retrieval.search(question, filters)
+        return hits, _node_duration_ms(t0)
+
+    def _search_wiki() -> tuple[list[Hit], int]:
+        t0 = time.perf_counter()
+        if not run_wiki:
+            return [], _node_duration_ms(t0)
+        hits = wiki_retrieval.search(question, top_k=settings.retrieval_top_k)
+        return hits, _node_duration_ms(t0)
+
+    # One query embedding → Claim/Chunk/Wiki lanes in parallel (PG similarity is cheap).
+    claim_future = _RETRIEVE_POOL.submit(_search_claims)
+    chunk_future = _RETRIEVE_POOL.submit(_search_chunks)
+    wiki_future = _RETRIEVE_POOL.submit(_search_wiki)
+    claim_hits, claim_ms = claim_future.result()
+    chunk_hits, chunk_ms = chunk_future.result()
+    wiki_hits, wiki_ms = wiki_future.result()
+
+    fuse_started = time.perf_counter()
     if wiki_hits:
         fused_hits = fuse_hits(
             claim_hits,
@@ -274,30 +324,63 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
         )
     else:
         fused_hits = fuse_hits(claim_hits, chunk_hits, claim_weight=route_fusion_weights(question))
+    fuse_ms = _node_duration_ms(fuse_started)
+
+    reranker = getattr(deps, "reranker", None)
+    reranked_hits = fused_hits
+    rerank_started = time.perf_counter()
+    if settings.rerank_enabled and reranker is not None and fused_hits:
+        reranked_hits = rerank_content_hits_preserving_claims(
+            question,
+            fused_hits,
+            reranker,
+            settings,
+            knowledge=deps.knowledge,
+        )
+    rerank_ms = _node_duration_ms(rerank_started)
+
     mode_value = mode.value if isinstance(mode, RetrievalMode) else str(mode)
+    duration_ms = _node_duration_ms(started)
+    parallel_ms = max(claim_ms, chunk_ms, wiki_ms)
     return {
-        "hits": fused_hits,
+        "hits": reranked_hits,
         "chunk_hits": chunk_hits,
         "wiki_hits": wiki_hits,
         "trace": [
             trace_step(
                 "retrieve",
                 summary=(
-                    f"命中 {len(fused_hits)} 条"
-                    f"（Claim {len(claim_hits)} / Wiki {len(wiki_hits)} / Chunk {len(chunk_hits)}）"
+                    f"命中 {len(reranked_hits)} 条"
+                    f"（Claim {len(claim_hits)} / Wiki {len(wiki_hits)} / Chunk {len(chunk_hits)}"
+                    f"{'; rerank' if reranked_hits is not fused_hits else ''}）；"
+                    f" embed {embed_ms}ms / parallel {parallel_ms}ms"
+                    f" (claim {claim_ms}ms / chunk {chunk_ms}ms / wiki {wiki_ms}ms)"
+                    f" / fuse {fuse_ms}ms / rerank {rerank_ms}ms"
                 ),
                 detail={
-                    "hit_count": len(fused_hits),
+                    "hit_count": len(reranked_hits),
                     "claim_hits": len(claim_hits),
                     "wiki_hits": len(wiki_hits),
                     "chunk_hits": len(chunk_hits),
                     "retrieval_mode": mode_value,
-                    "fused_hits": serialize_hits_for_trace(fused_hits, deps.knowledge),
+                    "parallel": True,
+                    "shared_query_embedding": query_embedding is not None,
+                    "rerank_enabled": settings.rerank_enabled and reranker is not None,
+                    "rerank_input_count": len(fused_hits),
+                    "rerank_output_count": len(reranked_hits),
+                    "embed_ms": embed_ms,
+                    "claim_ms": claim_ms,
+                    "chunk_ms": chunk_ms,
+                    "wiki_ms": wiki_ms,
+                    "parallel_ms": parallel_ms,
+                    "fuse_ms": fuse_ms,
+                    "rerank_ms": rerank_ms,
+                    "fused_hits": serialize_hits_for_trace(reranked_hits, deps.knowledge),
                     "claim_hit_items": serialize_hits_for_trace(claim_hits, deps.knowledge),
                     "wiki_hit_items": serialize_hits_for_trace(wiki_hits, deps.knowledge),
                     "chunk_hit_items": serialize_hits_for_trace(chunk_hits, deps.knowledge),
                 },
-                duration_ms=_node_duration_ms(started),
+                duration_ms=duration_ms,
             )
         ],
     }
@@ -351,6 +434,7 @@ def _wiki_pages_from_hits(hits: list[Hit], *, limit: int = 5) -> list[dict[str, 
             {
                 "title": hit.title or hit.ref_id or "",
                 "excerpt": hit.snippet or "",
+                "content": hit.content or hit.snippet or "",
                 "path": hit.path or "",
                 "links": [],
                 "ref_id": hit.ref_id,

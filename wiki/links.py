@@ -29,6 +29,17 @@ def entity_wikilink(subject: str) -> str:
     return f"[[{entity_page_name(subject)}|{subject}]]"
 
 
+def wiki_page_path(folder: str, slug: str) -> str:
+    """Source-plan page path without ``.md`` suffix."""
+    return f"{sanitize_filename(folder)}/{sanitize_filename(slug)}"
+
+
+def wiki_page_wikilink(folder: str, slug: str, label: str | None = None) -> str:
+    path = wiki_page_path(folder, slug)
+    display = label or slug
+    return f"[[{path}|{display}]]"
+
+
 def topic_page_name(name: str) -> str:
     """Legacy flat page id: ``topic-{name}``."""
     return f"topic-{sanitize_filename(name)}"

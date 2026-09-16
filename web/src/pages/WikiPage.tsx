@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  compileWiki,
   fetchWikiPage,
   fetchWikiTree,
   searchWiki,
@@ -49,7 +50,10 @@ export function WikiPage() {
   const [isLoadingTree, setIsLoadingTree] = useState(false);
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isCompilingWiki, setIsCompilingWiki] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [treeReloadToken, setTreeReloadToken] = useState(0);
   const treeRequestRef = useRef(0);
   const pageRequestRef = useRef(0);
   const searchRequestRef = useRef(0);
@@ -79,6 +83,7 @@ export function WikiPage() {
     setSearchHits(null);
     setSearchTotal(0);
     setError(null);
+    setNotice(null);
     if (!kbId) {
       setIsLoadingTree(false);
       setIsLoadingPage(false);
@@ -146,7 +151,7 @@ export function WikiPage() {
         }
       }
     })();
-  }, [kbId]);
+  }, [kbId, treeReloadToken]);
 
   useEffect(() => {
     if (!kbId || !pageParam || !tree || tree.kb_id !== kbId || !pageIds.has(pageParam)) {
@@ -253,6 +258,40 @@ export function WikiPage() {
     });
   }
 
+  async function handleExportWiki() {
+    if (!kbId) {
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    setIsCompilingWiki(true);
+    try {
+      const result = await compileWiki(kbId);
+      const topicHint = result.topics.length > 0 ? `（${result.topics.length} 个主题）` : "";
+      setNotice(`Wiki 已写入编译目录：${result.pages_written} 页${topicHint} → ${result.wiki_root}`);
+      setTreeReloadToken((token) => token + 1);
+    } catch {
+      setError("Wiki 导出失败，请稍后重试。");
+    } finally {
+      setIsCompilingWiki(false);
+    }
+  }
+
+  function renderHeaderActions() {
+    return (
+      <div className="header-actions">
+        <button
+          className="button button-primary"
+          type="button"
+          disabled={isCompilingWiki || isLoadingTree}
+          onClick={() => void handleExportWiki()}
+        >
+          {isCompilingWiki ? "正在导出…" : "导出 Wiki"}
+        </button>
+      </div>
+    );
+  }
+
   if (!kbId) {
     return <EmptyState title="请先选择知识库" description="选择知识库后即可浏览编译 Wiki。" />;
   }
@@ -270,9 +309,11 @@ export function WikiPage() {
             <h1>Wiki</h1>
             <p>浏览当前知识库的编译 Wiki，支持目录跳转与关键字检索。</p>
           </div>
+          {renderHeaderActions()}
         </div>
         {error ? <ErrorBanner message={error} /> : null}
-        <EmptyState title="暂无 Wiki" description="尚未编译 Wiki，请先完成知识库编译后再浏览。" />
+        {notice ? <p className="success-banner">{notice}</p> : null}
+        <EmptyState title="暂无 Wiki" description="尚未编译 Wiki，可点击右上角「导出 Wiki」写入编译目录。" />
       </section>
     );
   }
@@ -284,9 +325,11 @@ export function WikiPage() {
           <h1>Wiki</h1>
           <p>浏览当前知识库的编译 Wiki，支持目录跳转与关键字检索。</p>
         </div>
+        {renderHeaderActions()}
       </div>
 
       {error ? <ErrorBanner message={error} /> : null}
+      {notice ? <p className="success-banner">{notice}</p> : null}
       {isLoading ? <p role="status">正在加载 Wiki…</p> : null}
 
       <div className="wiki-layout">

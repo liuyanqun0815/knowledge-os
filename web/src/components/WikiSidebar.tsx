@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { WikiSearchHit, WikiTreeHubItem } from "../api/wiki";
 import { highlightPlainText } from "./wikiHighlight";
 
@@ -12,6 +12,12 @@ export type WikiSidebarProps = {
   onSelectPage: (pageId: string) => void;
 };
 
+const INDEX_HUB_NAME = "总览";
+
+function isIndexHub(hub: WikiTreeHubItem): boolean {
+  return hub.name === INDEX_HUB_NAME && hub.pages.some((page) => page.page_id === "index");
+}
+
 export function WikiSidebar({
   hubs,
   activePageId,
@@ -23,19 +29,22 @@ export function WikiSidebar({
 }: WikiSidebarProps) {
   const [expandedHubs, setExpandedHubs] = useState<Set<string>>(() => new Set());
 
-  useEffect(() => {
-    setExpandedHubs(new Set(hubs.map((hub) => hub.name)));
+  const indexPage = useMemo(() => {
+    const hub = hubs.find(isIndexHub);
+    return hub?.pages.find((page) => page.page_id === "index") ?? null;
   }, [hubs]);
+
+  const folderHubs = useMemo(() => hubs.filter((hub) => !isIndexHub(hub)), [hubs]);
 
   const visibleExpanded = useMemo(() => {
     const next = new Set(expandedHubs);
-    for (const hub of hubs) {
+    for (const hub of folderHubs) {
       if (hub.pages.some((page) => page.page_id === activePageId)) {
         next.add(hub.name);
       }
     }
     return next;
-  }, [activePageId, expandedHubs, hubs]);
+  }, [activePageId, expandedHubs, folderHubs]);
 
   function toggleHub(name: string) {
     setExpandedHubs((current) => {
@@ -100,7 +109,20 @@ export function WikiSidebar({
         <p className="wiki-tree-empty">暂无目录</p>
       ) : (
         <ul className="wiki-hub-list">
-          {hubs.map((hub) => {
+          {indexPage ? (
+            <li className="wiki-hub wiki-index-entry">
+              <button
+                type="button"
+                className={
+                  activePageId === "index" ? "wiki-page-item wiki-index-item active" : "wiki-page-item wiki-index-item"
+                }
+                onClick={() => onSelectPage("index")}
+              >
+                {indexPage.title}
+              </button>
+            </li>
+          ) : null}
+          {folderHubs.map((hub) => {
             const expanded = visibleExpanded.has(hub.name);
             return (
               <li key={hub.name} className="wiki-hub">
@@ -113,7 +135,6 @@ export function WikiSidebar({
                   <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
                   <span>{hub.name}</span>
                 </button>
-                {hub.description ? <p className="wiki-hub-desc">{hub.description}</p> : null}
                 {expanded ? (
                   <ul className="wiki-page-list">
                     {hub.pages.map((page) => (

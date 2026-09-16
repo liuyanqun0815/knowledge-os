@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchWikiPage, fetchWikiTree, searchWiki } from "./wiki";
+import { compileWiki, fetchWikiPage, fetchWikiTree, searchWiki } from "./wiki";
 
 const { apiFetch } = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -42,5 +42,23 @@ describe("wiki api", () => {
     await searchWiki("kb-1", "发票", 10);
 
     expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/wiki/search?q=%E5%8F%91%E7%A5%A8&limit=10");
+  });
+
+  it("compileWiki posts to compile endpoint", async () => {
+    apiFetch.mockResolvedValue({
+      json: async () => ({
+        kb_id: "kb-1",
+        wiki_root: "data/kb/kb-1/wiki",
+        pages_written: 2,
+        topics: [],
+        source_ids: [],
+      }),
+    });
+
+    await compileWiki("kb-1");
+
+    expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/wiki/compile", {
+      method: "POST",
+    });
   });
 });

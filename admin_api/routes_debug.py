@@ -44,6 +44,7 @@ def debug_ask(
         procedure_id=answer.procedure_id,
         as_of=answer.as_of,
         trace=result.trace,
+        duration_ms=answer.duration_ms,
     )
 
 

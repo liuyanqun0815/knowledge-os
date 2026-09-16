@@ -93,8 +93,34 @@ export function TraceStepDetail({ node, detail }: TraceStepDetailProps) {
     const claimHits = asChunkHits(detail.claim_hit_items);
     const fusedHits = asChunkHits(detail.fused_hits).filter((hit) => hit.hit_type === "chunk" || hit.chunk_id);
     const displayHits = chunkHits.length > 0 ? chunkHits : fusedHits;
+    const timingKeys = [
+      ["claim_ms", "Claim"],
+      ["chunk_ms", "Chunk"],
+      ["wiki_ms", "Wiki"],
+      ["fuse_ms", "融合"],
+      ["rerank_ms", "Rerank"],
+    ] as const;
+    const timings = timingKeys
+      .map(([key, label]) => {
+        const value = detail[key];
+        return typeof value === "number" ? { key, label, value } : null;
+      })
+      .filter((item): item is { key: string; label: string; value: number } => item !== null);
     return (
       <div className="trace-detail-panel">
+        {timings.length > 0 ? (
+          <div className="trace-detail-section">
+            <h3>分阶段耗时</h3>
+            <ul className="trace-timing-list">
+              {timings.map((item) => (
+                <li key={item.key}>
+                  <span>{item.label}</span>
+                  <strong>{item.value} ms</strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {renderChunkHitTable("命中 Chunk", displayHits)}
         {claimHits.length > 0 ? renderChunkHitTable("命中 Claim", claimHits) : null}
         <details className="trace-raw-detail">

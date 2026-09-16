@@ -23,14 +23,100 @@ def _cached_orchestrator(client: TestClient, kb_id: str):
 
 
 def _seed_graph(client: TestClient, kb_id: str = DEFAULT_IN_MEMORY_KB_ID) -> tuple[str, str]:
+    from datetime import datetime, timezone
+
+    from knowledge.models import Claim
+
     orch = _cached_orchestrator(client, kb_id)
     graph = orch.deps.graph
+    knowledge = orch.deps.knowledge
     rule_id = _entity_id("七天无理由", "RefundRule")
     seller_id = _entity_id("卖家", "Concept")
     graph.upsert_entity(rule_id, "RefundRule", {"name": "七天无理由"})
     graph.upsert_entity(seller_id, "Concept", {"name": "卖家"})
     graph.upsert_relation(rule_id, "运费承担方", seller_id, {})
+    knowledge.append_claim(
+        Claim(
+            id="c-active-freight",
+            family_id="fam-freight",
+            version=1,
+            subject="七天无理由",
+            predicate="运费承担方",
+            object="卖家",
+            subject_type="RefundRule",
+            object_type="Concept",
+            confidence=0.9,
+            status="active",
+            valid_from=datetime.now(timezone.utc),
+            valid_to=None,
+            source_ids=["s1"],
+        )
+    )
     return rule_id, seller_id
+
+
+def test_graph_snapshot_hides_non_active_claim_edges(admin_client):
+    from datetime import datetime, timezone
+
+    from knowledge.models import Claim
+
+    kb_id = DEFAULT_IN_MEMORY_KB_ID
+    orch = _cached_orchestrator(admin_client, kb_id)
+    graph = orch.deps.graph
+    knowledge = orch.deps.knowledge
+
+    a = _entity_id("规则A", "RefundRule")
+    b = _entity_id("买家", "Concept")
+    c = _entity_id("卖家", "Concept")
+    graph.upsert_entity(a, "RefundRule", {"name": "规则A"})
+    graph.upsert_entity(b, "Concept", {"name": "买家"})
+    graph.upsert_entity(c, "Concept", {"name": "卖家"})
+    graph.upsert_relation(a, "运费承担方", b, {})
+    graph.upsert_relation(a, "运费承担方", c, {})
+
+    now = datetime.now(timezone.utc)
+    knowledge.append_claim(
+        Claim(
+            id="c-super",
+            family_id="fam1",
+            version=1,
+            subject="规则A",
+            predicate="运费承担方",
+            object="买家",
+            subject_type="RefundRule",
+            object_type="Concept",
+            confidence=0.9,
+            status="superseded",
+            valid_from=now,
+            valid_to=now,
+            source_ids=["s1"],
+        )
+    )
+    knowledge.append_claim(
+        Claim(
+            id="c-active",
+            family_id="fam1",
+            version=2,
+            subject="规则A",
+            predicate="运费承担方",
+            object="卖家",
+            subject_type="RefundRule",
+            object_type="Concept",
+            confidence=0.9,
+            status="active",
+            valid_from=now,
+            valid_to=None,
+            source_ids=["s2"],
+        )
+    )
+
+    response = admin_client.get(f"/admin/knowledge-bases/{kb_id}/graph/snapshot")
+    assert response.status_code == 200
+    body = response.json()
+    edges = body["edges"]
+    assert len(edges) == 1
+    assert edges[0]["dst_name"] == "卖家"
+    assert all(e["dst_name"] != "买家" for e in edges)
 
 
 def test_graph_snapshot_returns_entities_and_edges(admin_client):

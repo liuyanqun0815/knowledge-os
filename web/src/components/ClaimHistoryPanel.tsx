@@ -9,7 +9,7 @@ type ClaimHistoryPanelProps = {
 
 const STATUS_LABELS: Record<string, string> = {
   active: "生效",
-  superseded: "已取代",
+  superseded: "过期",
   staging: "暂存",
   quarantined: "隔离",
 };

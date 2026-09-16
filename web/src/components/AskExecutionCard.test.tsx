@@ -22,6 +22,9 @@ describe("AskExecutionCard", () => {
       />,
     );
     expect(screen.getByText(/执行结果/)).toBeInTheDocument();
+    expect(screen.queryByText(/混合检索|retrieve/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /执行结果/ }));
     expect(screen.getByText(/混合检索|retrieve/)).toBeInTheDocument();
     expect(screen.getByText(/1\.20 秒|1200/)).toBeInTheDocument();
     expect(screen.queryByText("命中 3 条")).not.toBeInTheDocument();
@@ -41,6 +44,7 @@ describe("AskExecutionCard", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: /执行结果/ }));
     await user.click(screen.getByRole("button", { name: /混合检索|retrieve/ }));
     expect(screen.queryByText("仅在 verify 展示")).not.toBeInTheDocument();
 
