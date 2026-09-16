@@ -6,6 +6,7 @@ from infra.pg_graph import PgGraph
 from infra.settings import Settings
 from knowledge.models import Claim
 from knowledge.topic_service import rebuild_topic_clusters
+from wiki.cleanup import purge_wiki_for_deleted_source
 
 
 def sole_source_claims(knowledge, source_id: str) -> list[Claim]:
@@ -53,3 +54,15 @@ def purge_source_side_effects(
         purge_orphans = getattr(deps.graph, "purge_orphans", None)
         if callable(purge_orphans):
             purge_orphans()
+
+    if cfg.wiki_compile:
+        purge_wiki_for_deleted_source(
+            kb_id=deps.knowledge_base_id,
+            source_id=source_id,
+            knowledge=deps.knowledge,
+            data_root=cfg.data_root,
+            settings=cfg,
+            graph=getattr(deps, "graph", None),
+            llm_client=getattr(deps, "llm_client", None),
+            wiki_retrieval=getattr(deps, "wiki_retrieval", None),
+        )

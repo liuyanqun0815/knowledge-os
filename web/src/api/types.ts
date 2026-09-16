@@ -89,7 +89,10 @@ export type SourceChunkItem = {
 export type TraceChunkHit = {
   hit_type?: string;
   chunk_id?: string;
+  claim_id?: string;
   source_id?: string;
+  ref_id?: string;
+  path?: string;
   chunk_index?: number;
   title?: string | null;
   score?: number;

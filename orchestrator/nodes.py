@@ -169,12 +169,26 @@ def verify_sample_node(state: IngestState, deps: Any) -> dict:
 
 def recall_node(state: AskState, deps: Any) -> dict:
     started = time.perf_counter()
-    memory_agent.recall(deps.memory, state["question"], state.get("session_id"))
+    session_id = state.get("session_id")
+    context = memory_agent.recall(deps.memory, state["question"], session_id)
+    episodes = list(context.episodes or [])
+    semantics = list(context.semantics or [])
+    summary = (
+        f"召回 {len(episodes)} 条历史会话"
+        if episodes
+        else ("无会话记忆" if not session_id else "当前会话暂无历史")
+    )
     return {
         "trace": [
             trace_step(
                 "recall",
-                summary="会话回忆",
+                summary=summary,
+                detail={
+                    "session_id": session_id,
+                    "episode_count": len(episodes),
+                    "episodes": episodes,
+                    "semantics": semantics,
+                },
                 duration_ms=_node_duration_ms(started),
             )
         ],
@@ -213,15 +227,26 @@ def normalize_node(state: AskState, deps: Any) -> dict:
     started = time.perf_counter()
     question = state["question"]
     normalized = question
+    replacements: list[dict[str, str]] = []
     for alias in deps.domain.get_aliases():
         if alias in normalized:
-            normalized = normalized.replace(alias, deps.ontology.normalize_term(alias))
+            canonical = deps.ontology.normalize_term(alias)
+            if canonical != alias:
+                replacements.append({"from": alias, "to": canonical})
+            normalized = normalized.replace(alias, canonical)
+    changed = normalized != question
     return {
         "normalized_question": normalized,
         "trace": [
             trace_step(
                 "normalize",
-                summary="问题归一化",
+                summary="问题已归一化" if changed else "无需归一化",
+                detail={
+                    "input": question,
+                    "output": normalized,
+                    "changed": changed,
+                    "replacements": replacements,
+                },
                 duration_ms=_node_duration_ms(started),
             )
         ],
@@ -326,61 +351,108 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
         fused_hits = fuse_hits(claim_hits, chunk_hits, claim_weight=route_fusion_weights(question))
     fuse_ms = _node_duration_ms(fuse_started)
 
-    reranker = getattr(deps, "reranker", None)
-    reranked_hits = fused_hits
-    rerank_started = time.perf_counter()
-    if settings.rerank_enabled and reranker is not None and fused_hits:
-        reranked_hits = rerank_content_hits_preserving_claims(
-            question,
-            fused_hits,
-            reranker,
-            settings,
-            knowledge=deps.knowledge,
-        )
-    rerank_ms = _node_duration_ms(rerank_started)
-
     mode_value = mode.value if isinstance(mode, RetrievalMode) else str(mode)
     duration_ms = _node_duration_ms(started)
     parallel_ms = max(claim_ms, chunk_ms, wiki_ms)
     return {
-        "hits": reranked_hits,
+        "hits": fused_hits,
         "chunk_hits": chunk_hits,
         "wiki_hits": wiki_hits,
         "trace": [
             trace_step(
                 "retrieve",
                 summary=(
-                    f"命中 {len(reranked_hits)} 条"
-                    f"（Claim {len(claim_hits)} / Wiki {len(wiki_hits)} / Chunk {len(chunk_hits)}"
-                    f"{'; rerank' if reranked_hits is not fused_hits else ''}）；"
+                    f"命中 {len(fused_hits)} 条"
+                    f"（Claim {len(claim_hits)} / Wiki {len(wiki_hits)} / Chunk {len(chunk_hits)}）；"
                     f" embed {embed_ms}ms / parallel {parallel_ms}ms"
                     f" (claim {claim_ms}ms / chunk {chunk_ms}ms / wiki {wiki_ms}ms)"
-                    f" / fuse {fuse_ms}ms / rerank {rerank_ms}ms"
+                    f" / fuse {fuse_ms}ms"
                 ),
                 detail={
-                    "hit_count": len(reranked_hits),
+                    "hit_count": len(fused_hits),
                     "claim_hits": len(claim_hits),
                     "wiki_hits": len(wiki_hits),
                     "chunk_hits": len(chunk_hits),
                     "retrieval_mode": mode_value,
                     "parallel": True,
                     "shared_query_embedding": query_embedding is not None,
-                    "rerank_enabled": settings.rerank_enabled and reranker is not None,
-                    "rerank_input_count": len(fused_hits),
-                    "rerank_output_count": len(reranked_hits),
                     "embed_ms": embed_ms,
                     "claim_ms": claim_ms,
                     "chunk_ms": chunk_ms,
                     "wiki_ms": wiki_ms,
                     "parallel_ms": parallel_ms,
                     "fuse_ms": fuse_ms,
-                    "rerank_ms": rerank_ms,
-                    "fused_hits": serialize_hits_for_trace(reranked_hits, deps.knowledge),
+                    "fused_hits": serialize_hits_for_trace(fused_hits, deps.knowledge),
                     "claim_hit_items": serialize_hits_for_trace(claim_hits, deps.knowledge),
                     "wiki_hit_items": serialize_hits_for_trace(wiki_hits, deps.knowledge),
                     "chunk_hit_items": serialize_hits_for_trace(chunk_hits, deps.knowledge),
                 },
                 duration_ms=duration_ms,
+            )
+        ],
+    }
+
+
+def rerank_node(state: AskState, deps: Any) -> dict:
+    """Rerank chunk/wiki hits only; keep claim hits ahead for downstream synthesis."""
+    started = time.perf_counter()
+    settings = get_settings()
+    question = state.get("normalized_question") or state["question"]
+    hits = list(state.get("hits") or [])
+    reranker = getattr(deps, "reranker", None)
+    enabled = bool(settings.rerank_enabled and reranker is not None and hits)
+
+    if not enabled:
+        return {
+            "hits": hits,
+            "trace": [
+                trace_step(
+                    "rerank",
+                    status="skipped",
+                    summary="重排序已跳过",
+                    detail={
+                        "rerank_enabled": bool(settings.rerank_enabled),
+                        "reranker_loaded": reranker is not None,
+                        "input_count": len(hits),
+                        "skipped_reason": (
+                            "disabled"
+                            if not settings.rerank_enabled
+                            else "no_reranker"
+                            if reranker is None
+                            else "no_hits"
+                        ),
+                    },
+                    duration_ms=_node_duration_ms(started),
+                )
+            ],
+        }
+
+    reranked_hits = rerank_content_hits_preserving_claims(
+        question,
+        hits,
+        reranker,
+        settings,
+        knowledge=deps.knowledge,
+    )
+    return {
+        "hits": reranked_hits,
+        "trace": [
+            trace_step(
+                "rerank",
+                summary=(
+                    f"重排序完成：输入 {len(hits)} → 输出 {len(reranked_hits)} "
+                    f"（仅 chunk/wiki，Claim 保持前置）"
+                ),
+                detail={
+                    "rerank_enabled": True,
+                    "input_count": len(hits),
+                    "output_count": len(reranked_hits),
+                    "rerank_top_n": settings.rerank_top_n,
+                    "rerank_min_score": settings.rerank_min_score,
+                    "input_hits": serialize_hits_for_trace(hits, deps.knowledge),
+                    "output_hits": serialize_hits_for_trace(reranked_hits, deps.knowledge),
+                },
+                duration_ms=_node_duration_ms(started),
             )
         ],
     }
@@ -898,14 +970,34 @@ def answer_node(state: AskState, deps: Any) -> dict:
 
 
 def remember_node(state: AskState, deps: Any) -> dict:
-    # Phase: in-memory chat UI — do not persist episodes
+    started = time.perf_counter()
+    session_id = state.get("session_id")
+    answer = state.get("answer")
+    if not session_id or answer is None:
+        return {
+            "trace": [
+                trace_step(
+                    "remember",
+                    status="skipped",
+                    summary="无会话或回答，跳过写入记忆",
+                    detail={"session_id": session_id, "has_answer": answer is not None},
+                    duration_ms=_node_duration_ms(started),
+                )
+            ]
+        }
+
+    episode = {
+        "q": state.get("normalized_question") or state.get("question") or "",
+        "a": getattr(answer, "text", "") or "",
+    }
+    memory_agent.remember(deps.memory, session_id, episode)
     return {
         "trace": [
             trace_step(
                 "remember",
-                status="skipped",
-                summary="本阶段不写入会话记忆",
-                duration_ms=0,
+                summary="已写入会话记忆",
+                detail={"session_id": session_id, "episode": episode},
+                duration_ms=_node_duration_ms(started),
             )
         ]
     }

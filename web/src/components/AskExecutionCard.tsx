@@ -15,6 +15,7 @@ const NODE_LABELS: Record<string, string> = {
   normalize: "问题归一化",
   route_mode: "路由检索",
   retrieve: "混合检索",
+  rerank: "相关性重排",
   verify: "Claim 核验",
   explain: "证据解释",
   synthesize: "LLM 综合",

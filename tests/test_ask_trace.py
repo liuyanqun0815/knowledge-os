@@ -14,6 +14,7 @@ def test_ask_with_include_trace_returns_node_names(seeded_kb_id):
     assert result.trace
     node_names = {entry["node"] for entry in result.trace}
     assert "retrieve" in node_names
+    assert "rerank" in node_names
     assert "verify" in node_names
     assert result.answer.duration_ms is not None
     assert result.answer.duration_ms >= 0
@@ -52,6 +53,7 @@ def test_ask_api_includes_verification_status_and_trace(tmp_path):
     assert body["duration_ms"] >= 0
     node_names = {entry["node"] for entry in body["trace"]}
     assert "retrieve" in node_names
+    assert "rerank" in node_names
     assert "verify" in node_names
 
 

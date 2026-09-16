@@ -42,13 +42,26 @@ class InMemoryKnowledge:
         self._sources.pop(source_id, None)
         self._source_texts.pop(source_id, None)
         self.mark_chunks_stale(source_id)
+        sole_claim_ids: list[str] = []
         for claim in self._claims.values():
             if source_id not in claim.source_ids:
                 continue
             if len(claim.source_ids) == 1:
-                self.mark_superseded(claim.id)
+                sole_claim_ids.append(claim.id)
             else:
                 claim.source_ids = [item for item in claim.source_ids if item != source_id]
+        for claim_id in sole_claim_ids:
+            claim = self._claims.pop(claim_id, None)
+            if claim is None:
+                continue
+            family_ids = self._families.get(claim.family_id)
+            if family_ids is None:
+                continue
+            remaining = [cid for cid in family_ids if cid != claim_id]
+            if remaining:
+                self._families[claim.family_id] = remaining
+            else:
+                self._families.pop(claim.family_id, None)
 
     def update_source_status(self, source_id: str, status: str) -> None:
         source = self._sources.get(source_id)

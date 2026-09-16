@@ -144,8 +144,14 @@ class PgKnowledge:
         with self._engine.begin() as conn:
             conn.execute(
                 text("""
-                    UPDATE claims
-                    SET status = 'superseded', valid_to = COALESCE(valid_to, NOW())
+                    DELETE FROM claim_evidence
+                    WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM claims
                     WHERE knowledge_base_id = :knowledge_base_id
                       AND source_ids @> CAST(:source_ids AS jsonb)
                       AND jsonb_array_length(source_ids) = 1
@@ -159,13 +165,6 @@ class PgKnowledge:
                     WHERE knowledge_base_id = :knowledge_base_id
                       AND source_ids @> CAST(:source_ids AS jsonb)
                       AND jsonb_array_length(source_ids) > 1
-                    """),
-                params,
-            )
-            conn.execute(
-                text("""
-                    DELETE FROM claim_evidence
-                    WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
                     """),
                 params,
             )

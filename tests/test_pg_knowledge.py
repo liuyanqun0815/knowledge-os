@@ -159,9 +159,7 @@ def test_pg_delete_source_updates_claim_references(pg_knowledge):
 
     assert pg_knowledge.get_source(source_id) is None
     assert pg_knowledge.get_source_text(source_id) is None
-    superseded = pg_knowledge.get_claim("c-del-1")
-    assert superseded is not None
-    assert superseded.status == "superseded"
+    assert pg_knowledge.get_claim("c-del-1") is None
     kept = pg_knowledge.get_claim("c-del-2")
     assert kept is not None
     assert kept.source_ids == ["s-keep"]

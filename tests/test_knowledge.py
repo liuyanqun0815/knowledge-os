@@ -57,7 +57,7 @@ def test_delete_source_updates_claim_references():
 
     assert repo.get_source("s1") is None
     assert repo.get_source_text("s1") is None
-    assert only_source.status == "superseded"
+    assert repo.get_claim("c1") is None
     assert shared.source_ids == ["s2"]
 
 
