@@ -30,6 +30,10 @@ class LoanFinanceDomain:
 
     def llm_extraction_spec(self) -> LlmExtractionSpec:
         return LlmExtractionSpec(
-            allowed_predicates=["适用客户", "利率_年化", "最高额度"],
+            allowed_predicates=["适用客户", "利率_年化", "最高额度", "还款方式"],
             entity_types=["Product", "RateRule", "RiskLevel"],
+            few_shot_hints=[
+                "正例：subject=青银理财成就系列（低波共享），predicate=还款方式，object=等额本息、等额本金",
+                "反例：subject=还款方式（禁止：属性词不可单独作 subject）",
+            ],
         )

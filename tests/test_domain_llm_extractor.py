@@ -6,6 +6,7 @@ from compiler.domain_llm_extractor import DomainLlmExtractor
 from compiler.extraction_spec import LlmExtractionSpec
 from compiler.llm_extractor import LlmExtractor, create_corporate_extractor
 from domains.corporate_culture.domain import CorporateCultureDomain
+from domains.loan_finance.domain import LoanFinanceDomain
 
 
 class FakeLlmClient:
@@ -79,10 +80,24 @@ def test_prompt_contains_spec_and_json_schema() -> None:
     DomainLlmExtractor(client, _spec()).extract("公司倡导诚信经营。")
 
     prompt = client.messages[0]["content"]
-    assert '"allowed_predicates": ["倡导", "禁止", "适用于"]' in prompt
-    assert '"entity_types": ["Value", "Behavior", "Policy", "Department"]' in prompt
+    assert '"suggested_predicates": ["倡导", "禁止", "适用于"]' in prompt
+    assert '"suggested_entity_types": ["Value", "Behavior", "Policy", "Department"]' in prompt
     assert '"subject": "string"' in prompt
     assert '"start"' not in prompt
+
+
+def test_loan_finance_hints_in_prompt() -> None:
+    class FakeClient:
+        is_configured = True
+
+        def chat_completions(self, messages, **kwargs):
+            return "[]"
+
+    spec = LoanFinanceDomain().llm_extraction_spec()
+    extractor = DomainLlmExtractor(FakeClient(), spec)
+    prompt = extractor._build_prompt("x", document_anchor="青银理财成就系列（低波共享）")
+    assert "正例" in prompt or "成就系列" in prompt
+    assert "few_shot_hints" in prompt
 
 
 def test_build_prompt_includes_subject_rules_and_anchor() -> None:

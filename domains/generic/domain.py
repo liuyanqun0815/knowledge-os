@@ -42,4 +42,8 @@ class GenericDomain:
         return LlmExtractionSpec(
             allowed_predicates=["规定", "适用于", "禁止", "要求"],
             entity_types=["Concept", "Policy"],
+            few_shot_hints=[
+                "正例：subject=具体政策或主题实体，predicate=规定，object=…",
+                "反例：subject=属性词（禁止单独作 subject）",
+            ],
         )

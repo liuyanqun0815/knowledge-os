@@ -36,11 +36,15 @@ def test_generic_spec_has_wide_predicates() -> None:
     assert spec.entity_types == ["Concept", "Policy"]
 
 
-def test_loan_finance_spec_is_minimal_placeholder() -> None:
+def test_loan_finance_spec_has_product_subject_hints() -> None:
     spec = LoanFinanceDomain().llm_extraction_spec()
 
-    assert spec.allowed_predicates == ["适用客户", "利率_年化", "最高额度"]
+    assert spec.allowed_predicates == ["适用客户", "利率_年化", "最高额度", "还款方式"]
     assert spec.entity_types == ["Product", "RateRule", "RiskLevel"]
+    assert spec.few_shot_hints is not None
+    assert len(spec.few_shot_hints) >= 2
+    assert any("正例" in hint for hint in spec.few_shot_hints)
+    assert any("反例" in hint for hint in spec.few_shot_hints)
 
 
 @pytest.mark.parametrize("domain_type", ["ecommerce_cs", "corporate_culture", "generic", "loan_finance"])
