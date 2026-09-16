@@ -156,6 +156,7 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
     import compiler.intersect as intersect_module
 
     calls: list[str | None] = []
+    resolve_calls: list[str | None] = []
 
     class FakeExtractor:
         def __init__(self, *args, **kwargs):
@@ -169,7 +170,7 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
     monkeypatch.setattr(
         intersect_module,
         "resolve_document_anchor",
-        lambda text, title=None: "锚点产品",
+        lambda text, title=None: resolve_calls.append(title) or "锚点产品",
     )
 
     class MockLlm:
@@ -182,6 +183,13 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
             return LlmExtractionSpec(allowed_predicates=["倡导"], entity_types=["Concept"])
 
     settings = Settings(extract_llm=True, chunk_max_chars=3000, llm_api_key="test")
-    extract_llm_claims_from_text("公司倡导诚信经营。", MockLlm(), MockDomain(), settings)
+    extract_llm_claims_from_text(
+        "公司倡导诚信经营。",
+        MockLlm(),
+        MockDomain(),
+        settings,
+        title="产品说明书.md",
+    )
 
     assert calls and calls[0] == "锚点产品"
+    assert resolve_calls == ["产品说明书.md"]

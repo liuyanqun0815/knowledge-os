@@ -91,10 +91,12 @@ def extract_llm_claims_from_text(
     llm_client,
     domain,
     settings: Settings,
+    *,
+    title: str | None = None,
 ) -> list[ExtractedClaim]:
     """Extract LLM claims from text, chunking when the document exceeds configured limits."""
     extractor = DomainLlmExtractor(llm_client, apply_open_flag(domain.llm_extraction_spec(), settings))
-    anchor = resolve_document_anchor(text)
+    anchor = resolve_document_anchor(text, title=title)
     if len(text) <= settings.chunk_max_chars:
         return extractor.extract(text, document_anchor=anchor)
 
@@ -123,6 +125,7 @@ def select_hybrid_candidates(
     domain,
     settings: Settings,
     ontology: OntologyPort | None = None,
+    title: str | None = None,
 ) -> list[ExtractedClaim]:
     """Combine rule and LLM extraction according to AKOS_EXTRACT_RULES / AKOS_EXTRACT_LLM settings."""
     rule_claims = rule_extractor.extract(text) if settings.extract_rules else []
@@ -130,7 +133,7 @@ def select_hybrid_candidates(
     if not use_llm:
         return rule_claims
 
-    llm_claims = extract_llm_claims_from_text(text, llm_client, domain, settings)
+    llm_claims = extract_llm_claims_from_text(text, llm_client, domain, settings, title=title)
     if settings.extract_rules and settings.extract_llm:
         return union_extracted(rule_claims, llm_claims, ontology)
     return llm_claims

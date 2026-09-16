@@ -72,6 +72,7 @@ class KnowledgeCompiler:
         from infra.settings import Settings, get_settings
 
         resolved_settings = settings or get_settings()
+        source = self._knowledge.get_source(source_id)
         candidates = select_hybrid_candidates(
             text,
             rule_extractor=self._extractor,
@@ -79,6 +80,7 @@ class KnowledgeCompiler:
             domain=domain,
             settings=resolved_settings,
             ontology=self._ontology,
+            title=getattr(source, "title", None) if source else None,
         )
 
         claims_created = 0

@@ -13,9 +13,15 @@ CCCJGX24109
 
 def test_prefers_product_short_name():
     anchor = resolve_document_anchor(SAMPLE)
-    assert anchor is not None
-    assert "成就系列" in anchor
-    assert "低波共享" in anchor
+    assert anchor == "青银理财成就系列（低波共享）2024 年109 期"
+    assert "璀璨人生" not in anchor
+
+
+def test_falls_back_to_full_name_when_short_missing():
+    text = "产品名称\n青银理财璀璨人生成就系列人民币个人理财计划（低波共享）2024 年109 期\n"
+    assert resolve_document_anchor(text) == (
+        "青银理财璀璨人生成就系列人民币个人理财计划（低波共享）2024 年109 期"
+    )
 
 
 def test_falls_back_to_title_when_no_fields():
