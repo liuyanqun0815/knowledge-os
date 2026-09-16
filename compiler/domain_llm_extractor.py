@@ -40,6 +40,8 @@ _CLAIM_JSON_SCHEMA = {
 _PROMPT = """Extract knowledge claims from the text.
 Respond with only a JSON array matching json_schema.
 Each quote must be an exact, non-empty substring of the source text.
+10. subject 必须是原文中的具体产品名、政策/规则名或主题实体；禁止单独使用属性词（如「利率」「额度」「还款方式」「收入要求」）作 subject。属性写入 predicate，取值写入 object。
+11. 若配置中提供 document_anchor：本段 Claim 的 subject 应使用该锚点（或原文中与之同指的产品全称/简称），不要改用泛化属性词。
 Extraction configuration:
 {configuration}
 json_schema:
@@ -64,17 +66,19 @@ class DomainLlmExtractor:
         self._client = client
         self._spec = spec
 
-    def extract(self, text: str) -> list[ExtractedClaim]:
+    def extract(self, text: str, *, document_anchor: str | None = None) -> list[ExtractedClaim]:
         if not self._client.is_configured:
             return []
 
         try:
-            content = self._client.chat_completions([{"role": "user", "content": self._build_prompt(text)}])
+            content = self._client.chat_completions(
+                [{"role": "user", "content": self._build_prompt(text, document_anchor=document_anchor)}]
+            )
         except LlmConfigError:
             return []
         return self._parse_response(content, text)
 
-    def _build_prompt(self, text: str) -> str:
+    def _build_prompt(self, text: str, *, document_anchor: str | None = None) -> str:
         if self._spec.open_predicates:
             configuration = {
                 "mode": "open",
@@ -95,6 +99,8 @@ class DomainLlmExtractor:
                 "prompt_locale": self._spec.prompt_locale,
                 "few_shot_hints": self._spec.few_shot_hints or [],
             }
+        if document_anchor:
+            configuration["document_anchor"] = document_anchor
         return _PROMPT.format(
             configuration=json.dumps(configuration, ensure_ascii=False),
             json_schema=json.dumps(_CLAIM_JSON_SCHEMA, ensure_ascii=False),

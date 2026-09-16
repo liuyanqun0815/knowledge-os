@@ -85,6 +85,30 @@ def test_prompt_contains_spec_and_json_schema() -> None:
     assert '"start"' not in prompt
 
 
+def test_build_prompt_includes_subject_rules_and_anchor() -> None:
+    class FakeClient:
+        is_configured = True
+
+        def chat_completions(self, messages, **kwargs):
+            return "[]"
+
+    extractor = DomainLlmExtractor(
+        FakeClient(),
+        LlmExtractionSpec(
+            allowed_predicates=["还款方式"],
+            entity_types=["Product"],
+        ),
+    )
+    prompt = extractor._build_prompt(
+        "还款方式包含等额本息。",
+        document_anchor="青银理财成就系列（低波共享）",
+    )
+    assert "还款方式" in prompt
+    assert "青银理财成就系列（低波共享）" in prompt
+    assert "document_anchor" in prompt
+    assert "禁止单独使用属性词" in prompt or "属性词" in prompt
+
+
 def test_open_prompt_uses_suggested_predicates_and_allows_novel() -> None:
     client = FakeLlmClient([])
     spec = LlmExtractionSpec(

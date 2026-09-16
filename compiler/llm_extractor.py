@@ -24,10 +24,10 @@ class LlmExtractor(DomainLlmExtractor):
         self._domain = domain
         super().__init__(client or OpenAiCompatibleClient(), _corporate_spec())
 
-    def extract(self, text: str) -> list[ExtractedClaim]:
+    def extract(self, text: str, **kwargs) -> list[ExtractedClaim]:
         if self._domain != "corporate_culture":
             return []
-        return super().extract(text)
+        return super().extract(text, **kwargs)
 
 
 def create_corporate_extractor(client: OpenAiCompatibleClient | None = None) -> ExtractorPort:
