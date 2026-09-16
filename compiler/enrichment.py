@@ -6,6 +6,7 @@ from typing import Any
 from langsmith import traceable
 
 from compiler.chunker import chunk_text
+from compiler.document_anchor import resolve_document_anchor
 from compiler.domain_llm_extractor import DomainLlmExtractor
 from compiler.ports import ExtractedClaim
 from compiler.spec_utils import apply_open_flag
@@ -34,6 +35,11 @@ def enrich_source(
         if text is None:
             raise RuntimeError(f"source text not found: {source_id}")
 
+        source = deps.knowledge.get_source(source_id)
+        anchor = resolve_document_anchor(
+            text,
+            title=getattr(source, "title", None) if source else None,
+        )
         result = chunk_text(
             text,
             max_chars=settings.chunk_max_chars,
@@ -47,7 +53,7 @@ def enrich_source(
         for chunk in result.chunks:
             for attempt in range(2):
                 try:
-                    extracted.extend(extractor.extract(chunk))
+                    extracted.extend(extractor.extract(chunk, document_anchor=anchor))
                     break
                 except Exception:
                     if attempt == 1:

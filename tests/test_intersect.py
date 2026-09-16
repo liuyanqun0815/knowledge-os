@@ -1,4 +1,9 @@
-from compiler.intersect import intersect_extracted, select_hybrid_candidates, union_extracted
+from compiler.intersect import (
+    extract_llm_claims_from_text,
+    intersect_extracted,
+    select_hybrid_candidates,
+    union_extracted,
+)
 from compiler.ports import ExtractedClaim
 from compiler.rule_extractor import RuleExtractor
 from domains.ecommerce_cs.seed import register_ecommerce_cs
@@ -120,7 +125,7 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
         def __init__(self, client, spec):
             pass
 
-        def extract(self, chunk: str):
+        def extract(self, chunk: str, *, document_anchor=None):
             return llm_claims
 
     import compiler.intersect as intersect_module
@@ -145,3 +150,38 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
     assert "运费承担方" in predicates
     assert ("排除", "定制商品") in objects
     assert ("排除", "平台") in objects
+
+
+def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
+    import compiler.intersect as intersect_module
+
+    calls: list[str | None] = []
+
+    class FakeExtractor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def extract(self, text, *, document_anchor=None):
+            calls.append(document_anchor)
+            return []
+
+    monkeypatch.setattr(intersect_module, "DomainLlmExtractor", FakeExtractor)
+    monkeypatch.setattr(
+        intersect_module,
+        "resolve_document_anchor",
+        lambda text, title=None: "锚点产品",
+    )
+
+    class MockLlm:
+        is_configured = True
+
+    class MockDomain:
+        def llm_extraction_spec(self):
+            from compiler.extraction_spec import LlmExtractionSpec
+
+            return LlmExtractionSpec(allowed_predicates=["倡导"], entity_types=["Concept"])
+
+    settings = Settings(extract_llm=True, chunk_max_chars=3000, llm_api_key="test")
+    extract_llm_claims_from_text("公司倡导诚信经营。", MockLlm(), MockDomain(), settings)
+
+    assert calls and calls[0] == "锚点产品"

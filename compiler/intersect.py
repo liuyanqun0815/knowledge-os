@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from compiler.chunker import chunk_text
+from compiler.document_anchor import resolve_document_anchor
 from compiler.domain_llm_extractor import DomainLlmExtractor
 from compiler.ports import ExtractedClaim
 from compiler.spec_utils import apply_open_flag
@@ -93,8 +94,9 @@ def extract_llm_claims_from_text(
 ) -> list[ExtractedClaim]:
     """Extract LLM claims from text, chunking when the document exceeds configured limits."""
     extractor = DomainLlmExtractor(llm_client, apply_open_flag(domain.llm_extraction_spec(), settings))
+    anchor = resolve_document_anchor(text)
     if len(text) <= settings.chunk_max_chars:
-        return extractor.extract(text)
+        return extractor.extract(text, document_anchor=anchor)
 
     result = chunk_text(
         text,
@@ -104,7 +106,7 @@ def extract_llm_claims_from_text(
     claims: list[ExtractedClaim] = []
     seen: set[tuple[str, str, str]] = set()
     for chunk in result.chunks:
-        for claim in extractor.extract(chunk):
+        for claim in extractor.extract(chunk, document_anchor=anchor):
             key = (claim.subject.strip(), claim.predicate.strip(), claim.object.strip())
             if key in seen:
                 continue

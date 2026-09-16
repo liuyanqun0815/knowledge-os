@@ -191,3 +191,29 @@ def test_enrich_source_marks_fatal_errors_failed() -> None:
         enrich_source(kb_id="kb-1", source_id="source-1", deps=deps, settings=_settings())
 
     assert deps.knowledge.get_source("source-1").status == "failed"
+
+
+def test_enrich_source_passes_document_anchor(monkeypatch) -> None:
+    from compiler import enrichment
+
+    calls: list[str | None] = []
+
+    class FakeExtractor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def extract(self, text, *, document_anchor=None):
+            calls.append(document_anchor)
+            return []
+
+    monkeypatch.setattr(enrichment, "DomainLlmExtractor", FakeExtractor)
+    monkeypatch.setattr(
+        enrichment,
+        "resolve_document_anchor",
+        lambda text, title=None: "锚点产品",
+    )
+    deps = _deps("公司倡导诚信经营。", MockLlmClient([]))
+
+    enrich_source(kb_id="kb-1", source_id="source-1", deps=deps, settings=_settings())
+
+    assert calls and calls[0] == "锚点产品"
