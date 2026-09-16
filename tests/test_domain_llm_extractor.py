@@ -96,7 +96,9 @@ def test_loan_finance_hints_in_prompt() -> None:
     spec = LoanFinanceDomain().llm_extraction_spec()
     extractor = DomainLlmExtractor(FakeClient(), spec)
     prompt = extractor._build_prompt("x", document_anchor="青银理财成就系列（低波共享）")
-    assert "正例" in prompt or "成就系列" in prompt
+    assert "正例" in prompt
+    assert "反例" in prompt
+    assert "还款方式（禁止" in prompt
     assert "few_shot_hints" in prompt
 
 
