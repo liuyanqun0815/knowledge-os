@@ -1,22 +1,5 @@
-from dataclasses import dataclass
-from typing import Protocol
+"""Backward-compatible shim — prefer ``akos.domain.ports.graph``."""
 
+from akos.domain.ports.graph import Edge, GraphPort
 
-@dataclass
-class Edge:
-    src: str
-    predicate: str
-    dst: str
-    props: dict
-
-
-class GraphPort(Protocol):
-    def upsert_entity(self, entity_id: str, type: str, props: dict) -> None: ...
-
-    def upsert_relation(self, src: str, predicate: str, dst: str, props: dict) -> None: ...
-
-    def neighbors(self, entity_id: str, predicates: list[str] | None = None, depth: int = 1) -> list[Edge]: ...
-
-    def list_entities(self) -> list[tuple[str, dict]]: ...
-
-    def get_entity(self, entity_id: str) -> dict | None: ...
+__all__ = ["Edge", "GraphPort"]

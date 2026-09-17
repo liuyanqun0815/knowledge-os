@@ -1,27 +1,7 @@
+"""Backward-compatible shim — prefer ``akos.domain.ports.domain``."""
+
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from akos.domain.ports.domain import DomainPort
 
-from compiler.extraction_spec import LlmExtractionSpec
-from compiler.ports import ExtractorPort
-from knowledge.models import Claim
-from ontology.ports import OntologyPort
-
-
-@runtime_checkable
-class DomainPort(Protocol):
-    name: str
-
-    def register_ontology(self, ontology: OntologyPort) -> None: ...
-
-    def get_extractor(self) -> ExtractorPort: ...
-
-    def get_aliases(self) -> list[str]: ...
-
-    def format_claim(self, claim: Claim) -> str: ...
-
-    def low_confidence_message(self) -> str: ...
-
-    def high_risk_predicates(self) -> list[str]: ...
-
-    def llm_extraction_spec(self) -> LlmExtractionSpec: ...
+__all__ = ["DomainPort"]

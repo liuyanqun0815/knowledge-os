@@ -42,10 +42,11 @@ akos = "cli.main:app"
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
+  "akos*",
   "agents*", "app*", "cli*", "compiler*", "domains*", "evidence*", "evolution*", "graph*",
   "verification*",
   "infra*", "knowledge*", "knowledge_base*", "memory*", "ontology*",
-  "orchestrator*", "retrieval*",
+  "orchestrator*", "retrieval*", "wiki*", "admin_api*",
 ]
 
 [tool.pytest.ini_options]

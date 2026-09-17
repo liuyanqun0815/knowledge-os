@@ -1,17 +1,5 @@
-from dataclasses import dataclass
-from typing import Any, Protocol
+"""Backward-compatible shim — prefer ``akos.domain.ports.evidence``."""
 
-from knowledge.models import TextSpan
+from akos.domain.ports.evidence import EvidenceBundle, EvidencePort
 
-
-@dataclass
-class EvidenceBundle:
-    conclusion: str
-    items: list[dict[str, Any]]
-    confidence: float
-
-
-class EvidencePort(Protocol):
-    def bind(self, claim_id: str, source_id: str, span: TextSpan, weight: float) -> None: ...
-
-    def explain(self, claim_ids: list[str]) -> EvidenceBundle: ...
+__all__ = ["EvidenceBundle", "EvidencePort"]
