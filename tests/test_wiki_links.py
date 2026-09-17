@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from wiki.links import topic_page_name, topic_page_path, topic_wikilink
+from wiki.links import topic_page_name, topic_page_path, topic_wikilink, wiki_page_path
+
+
+def test_wiki_page_path_preserves_nested_folder_segments() -> None:
+    assert wiki_page_path("贷款产品/贷款产品合集", "_index") == "贷款产品/贷款产品合集/_index"
+    assert wiki_page_path("贷款产品/贷款产品合集", "个人信用贷款") == "贷款产品/贷款产品合集/个人信用贷款"
+
+
+def test_wiki_page_path_sanitizes_each_segment_only() -> None:
+    assert wiki_page_path("a/b:c", "d?e") == "a/b_c/d_e"
 
 
 def test_topic_page_path_hub_only_uses_index() -> None:

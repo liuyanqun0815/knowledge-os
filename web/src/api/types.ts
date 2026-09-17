@@ -58,6 +58,8 @@ export type ZipUploadResponse = SourceUploadResponse;
 export type UploadSourceOptions = {
   replacesSourceId?: string;
   relativePath?: string;
+  /** auto | on | off — bind generic subjects (本产品/投资者…) to document product anchor */
+  subjectBindMode?: "auto" | "on" | "off";
 };
 
 export type SourceContent = {

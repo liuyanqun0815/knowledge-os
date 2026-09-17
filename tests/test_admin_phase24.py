@@ -156,6 +156,84 @@ def test_list_claims_filters_by_status_and_subject(admin_client):
     assert all(item["subject"] == subject for item in filtered.json())
 
 
+def test_approve_and_reject_staging_claims(tmp_path, monkeypatch):
+    monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
+    monkeypatch.setenv("AKOS_USE_PG", "false")
+    from infra.settings import get_settings
+
+    get_settings.cache_clear()
+    client = TestClient(create_app(data_root=str(tmp_path)))
+    kb_id = DEFAULT_IN_MEMORY_KB_ID
+    orch = _cached_orchestrator(client, kb_id)
+    knowledge = orch.deps.knowledge
+    now = datetime.now(timezone.utc)
+    family_id = "fam-staging-review"
+    knowledge.append_claim(
+        Claim(
+            id="c-active-old",
+            family_id=family_id,
+            version=1,
+            subject="七天无理由",
+            predicate="运费承担方",
+            object="买家",
+            subject_type="RefundRule",
+            object_type="Concept",
+            confidence=0.9,
+            status="active",
+            valid_from=now,
+            valid_to=None,
+            source_ids=["s1"],
+        )
+    )
+    knowledge.append_claim(
+        Claim(
+            id="c-staging-new",
+            family_id=family_id,
+            version=2,
+            subject="七天无理由",
+            predicate="运费承担方",
+            object="平台",
+            subject_type="RefundRule",
+            object_type="Concept",
+            confidence=0.95,
+            status="staging",
+            valid_from=now,
+            valid_to=None,
+            source_ids=["s2"],
+        )
+    )
+    knowledge.append_claim(
+        Claim(
+            id="c-staging-reject",
+            family_id="fam-staging-reject",
+            version=1,
+            subject="七天无理由",
+            predicate="退货时限_天",
+            object="15",
+            subject_type="RefundRule",
+            object_type="Concept",
+            confidence=0.8,
+            status="staging",
+            valid_from=now,
+            valid_to=None,
+            source_ids=["s3"],
+        )
+    )
+
+    approved = client.post(f"/admin/knowledge-bases/{kb_id}/claims/c-staging-new/approve-staging")
+    assert approved.status_code == 200, approved.text
+    body = approved.json()
+    assert body["status"] == "active"
+    assert body["object"] == "平台"
+    assert knowledge.get_claim("c-active-old").status == "superseded"
+    assert knowledge.get_claim("c-staging-new").status == "superseded"
+
+    rejected = client.post(f"/admin/knowledge-bases/{kb_id}/claims/c-staging-reject/reject-staging")
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["claim"]["status"] == "superseded"
+    assert knowledge.get_claim("c-staging-reject").status == "superseded"
+
+
 def test_debug_ask_returns_trace(admin_client):
     kb_id = DEFAULT_IN_MEMORY_KB_ID
     _seed_kb(admin_client, kb_id)

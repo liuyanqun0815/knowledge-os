@@ -94,6 +94,65 @@ def _heading_level(line: str) -> int:
     return level if level <= 6 else 0
 
 
+def detect_chunk_mode(text: str, *, min_level1_or_2: int = 2) -> str:
+    """Return ``heading`` when enough H1/H2 headings exist, else ``general``."""
+    count = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not _HEADING_RE.match(stripped):
+            continue
+        level = _heading_level(stripped)
+        if 1 <= level <= 2:
+            count += 1
+            if count >= min_level1_or_2:
+                return "heading"
+    return "general"
+
+
+def _collect_heading_spans(
+    text: str,
+    *,
+    heading_level: int = 2,
+) -> list[tuple[int, int, list[str], str | None]]:
+    """Split on headings with level <= heading_level; deeper headings stay inside the block."""
+    if not text:
+        return []
+
+    split_level = max(1, min(6, heading_level))
+    boundaries: list[tuple[int, str | None, list[str]]] = []
+    section_path: list[str] = []
+    pos = 0
+
+    for line in text.splitlines(keepends=True):
+        line_start = pos
+        pos += len(line)
+        stripped = line.strip()
+        if not _HEADING_RE.match(stripped):
+            continue
+        level = _heading_level(stripped)
+        if level == 0 or level > split_level:
+            if level > 0:
+                heading = stripped.lstrip("#").strip()
+                section_path = section_path[: level - 1]
+                section_path.append(heading)
+            continue
+        heading = stripped.lstrip("#").strip()
+        section_path = section_path[: level - 1]
+        section_path.append(heading)
+        boundaries.append((line_start, heading or None, list(section_path)))
+
+    if not boundaries:
+        return [(0, len(text), [], None)]
+
+    spans: list[tuple[int, int, list[str], str | None]] = []
+    if boundaries[0][0] > 0:
+        spans.append((0, boundaries[0][0], [], None))
+    for index, (start, title, path) in enumerate(boundaries):
+        end = boundaries[index + 1][0] if index + 1 < len(boundaries) else len(text)
+        spans.append((start, end, path, title))
+    return spans
+
+
 def _collect_section_spans(text: str) -> list[tuple[int, int, list[str], str | None]]:
     if not text:
         return []
@@ -159,12 +218,27 @@ def _split_span(
     return pieces
 
 
-def chunk_document(text: str, max_chars: int, max_chunks: int) -> DocumentChunkResult:
+def chunk_document(
+    text: str,
+    max_chars: int,
+    max_chunks: int,
+    *,
+    mode: str = "general",
+    heading_level: int = 2,
+) -> DocumentChunkResult:
     if not text:
         return DocumentChunkResult(chunks=[], truncated=False)
 
+    resolved_mode = mode
+    if mode == "auto":
+        resolved_mode = detect_chunk_mode(text)
+    if resolved_mode == "heading":
+        base_spans = _collect_heading_spans(text, heading_level=heading_level)
+    else:
+        base_spans = _collect_section_spans(text)
+
     raw_spans: list[tuple[int, int, list[str], str | None]] = []
-    for start, end, section_path, title in _collect_section_spans(text):
+    for start, end, section_path, title in base_spans:
         raw_spans.extend(_split_span(text, start, end, section_path, title, max_chars))
 
     truncated = len(raw_spans) > max_chunks

@@ -180,6 +180,35 @@ def test_build_tree_includes_index_when_present(tmp_path: Path):
     assert page["title"] == "综合概览"
 
 
+def test_build_tree_includes_hub_that_only_has_index_page(tmp_path: Path):
+    """product_bundle / catalog hubs whose only page is ``_index.md`` must still appear."""
+    from wiki.browser import build_wiki_tree
+
+    wiki = tmp_path / "wiki"
+    page_dir = wiki / "理财产品" / "青银理财成就系列（低波共享）"
+    page_dir.mkdir(parents=True)
+    (page_dir / "_index.md").write_text("# 青银理财\n\n正文\n", encoding="utf-8")
+    (wiki / "index.md").write_text("# Wiki Index\n", encoding="utf-8")
+    save_pages_meta(
+        wiki,
+        {
+            "理财产品/青银理财成就系列（低波共享）/_index": WikiPageMeta(
+                path="理财产品/青银理财成就系列（低波共享）/_index.md",
+                title="青银理财成就系列（低波共享）",
+                kind="source_page",
+                content_hash="h",
+                source_ids=["wealth"],
+                hub="理财产品/青银理财成就系列（低波共享）",
+                summary="理财产品总览",
+            )
+        },
+    )
+    tree = build_wiki_tree(wiki)
+    hub = next(h for h in tree["hubs"] if h["name"] == "理财产品/青银理财成就系列（低波共享）")
+    assert hub["pages"][0]["page_id"] == "理财产品/青银理财成就系列（低波共享）/_index"
+    assert hub["pages"][0]["title"] == "青银理财成就系列（低波共享）"
+
+
 def test_read_wiki_page_works_with_relative_wiki_root(tmp_path: Path, monkeypatch: object):
     from wiki.browser import read_wiki_page
 
@@ -207,7 +236,7 @@ def test_read_wiki_page_works_with_relative_wiki_root(tmp_path: Path, monkeypatc
     assert "正文" in page["markdown"]
 
 
-def test_build_tree_and_search_skip_hub_index(tmp_path: Path):
+def test_build_tree_and_search_include_hub_index(tmp_path: Path):
     from wiki.browser import build_wiki_tree, search_wiki_pages
 
     wiki = tmp_path / "wiki"
@@ -238,11 +267,12 @@ def test_build_tree_and_search_skip_hub_index(tmp_path: Path):
     )
     tree = build_wiki_tree(wiki)
     page_ids = [p["page_id"] for h in tree["hubs"] for p in h["pages"]]
-    assert "售后/_index" not in page_ids
+    assert page_ids[0] == "售后/_index"
     assert "售后/叶子" in page_ids
 
     by_index = search_wiki_pages(wiki, "_indexneedle")
-    assert by_index["total"] == 0
+    assert by_index["total"] == 1
+    assert by_index["hits"][0]["page_id"] == "售后/_index"
     by_leaf = search_wiki_pages(wiki, "leafneedle")
     assert by_leaf["total"] == 1
     assert by_leaf["hits"][0]["page_id"] == "售后/叶子"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from dataclasses import replace
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any, Protocol
 
 from infra.settings import Settings
 from retrieval.embedder import configure_hf_hub, resolve_modelscope_model_dir
+from retrieval.fusion import normalize_hit_scores
 from retrieval.ports import Hit
 
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
@@ -115,7 +117,17 @@ class BceCrossEncoderReranker:
         if isinstance(self._model, _TransformersPairScorer):
             return self._model.predict(list(pairs))
         raw_scores = self._model.predict(list(pairs), show_progress_bar=False)
-        return [float(score) for score in raw_scores]
+        return to_unit_interval([float(score) for score in raw_scores])
+
+
+def to_unit_interval(scores: list[float]) -> list[float]:
+    """Ensure scores lie in ``[0, 1]``; apply sigmoid when values look like logits."""
+    if not scores:
+        return scores
+    if any(score < 0.0 or score > 1.0 for score in scores):
+        return [1.0 / (1.0 + math.exp(-float(score))) for score in scores]
+    return [float(score) for score in scores]
+
 
 def _tokenize(text: str) -> list[str]:
     tokens = _TOKEN_PATTERN.findall(text.lower())
@@ -205,7 +217,7 @@ def rerank_hits(
     top_n = min(max(settings.rerank_top_n, 1), len(hits))
     candidates = hits[:top_n]
     pairs = [(query, passage_for_hit(hit, knowledge)) for hit in candidates]
-    scores = reranker.score_pairs(pairs)
+    scores = to_unit_interval(reranker.score_pairs(pairs))
     ranked = sorted(zip(candidates, scores), key=lambda item: item[1], reverse=True)
 
     min_score = settings.rerank_min_score
@@ -213,12 +225,12 @@ def rerank_hits(
     for hit, score in ranked:
         if min_score > 0 and score < min_score:
             continue
-        reranked.append(replace(hit, score=score))
+        reranked.append(replace(hit, score=float(score)))
 
     top_k = max(settings.retrieval_top_k, 1)
     if not reranked:
-        return hits[:top_k]
-    return reranked[:top_k]
+        return normalize_hit_scores(hits[:top_k])
+    return normalize_hit_scores(reranked[:top_k])
 
 
 def _is_content_hit(hit: Hit) -> bool:
@@ -233,11 +245,24 @@ def rerank_content_hits_preserving_claims(
     *,
     knowledge: Any | None = None,
 ) -> list[Hit]:
-    """Rerank only chunk/wiki hits; keep claim hits ahead in fuse order."""
+    """Rerank chunk/wiki; keep claims ahead; score everyone onto ``[0, 1]``."""
     claim_hits = [hit for hit in hits if not _is_content_hit(hit)]
     content_hits = [hit for hit in hits if _is_content_hit(hit)]
+    query = question.strip()
     if not content_hits:
-        return claim_hits
+        if not claim_hits or not query:
+            return claim_hits
+        pairs = [(query, passage_for_hit(hit, knowledge)) for hit in claim_hits]
+        scores = to_unit_interval(reranker.score_pairs(pairs))
+        scored_claims = [replace(hit, score=float(score)) for hit, score in zip(claim_hits, scores)]
+        return normalize_hit_scores(scored_claims)
+
+    scored_claims = claim_hits
+    if claim_hits and query:
+        claim_pairs = [(query, passage_for_hit(hit, knowledge)) for hit in claim_hits]
+        claim_scores = to_unit_interval(reranker.score_pairs(claim_pairs))
+        scored_claims = [replace(hit, score=float(score)) for hit, score in zip(claim_hits, claim_scores)]
+
     reranked_content = rerank_hits(
         question,
         content_hits,
@@ -245,4 +270,4 @@ def rerank_content_hits_preserving_claims(
         settings,
         knowledge=knowledge,
     )
-    return claim_hits + reranked_content
+    return normalize_hit_scores(scored_claims + reranked_content)

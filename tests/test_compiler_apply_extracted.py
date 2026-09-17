@@ -134,6 +134,22 @@ def test_apply_extracted_claims_open_registers_and_writes_novel_predicate():
     assert any(h.claim_id == claim.id for h in hits)
 
 
+def test_apply_extracted_claims_skips_exact_spo_even_when_explicit_staging():
+    """Same SPO must skip even if caller asks for staging — no active+staging twins."""
+    compiler, knowledge, _, _, _ = _build_compiler()
+    existing = _append_existing_claim(knowledge)
+
+    report = compiler.apply_extracted_claims(
+        "source-1",
+        [_extracted()],
+        staging=True,
+    )
+
+    assert report.claims_created == 0
+    assert knowledge.get_claim_history(existing.family_id) == [existing]
+    assert not knowledge.get_claims_by_status("staging")
+
+
 def test_apply_extracted_claims_skips_existing_family_and_object():
     compiler, knowledge, graph, evidence, _ = _build_compiler()
     existing = _append_existing_claim(knowledge)

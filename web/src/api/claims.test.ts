@@ -38,7 +38,7 @@ describe("listClaims", () => {
     expect(claims).toEqual([sampleClaim]);
   });
 
-  it("passes status and subject query params", async () => {
+  it("passes status and SPO fuzzy query params", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -49,9 +49,14 @@ describe("listClaims", () => {
       ),
     );
     const { listClaims } = await import("./claims");
-    await listClaims("kb-1", { status: "active", subject: "Product A" });
+    await listClaims("kb-1", {
+      status: "active",
+      subject: "Product",
+      predicate: "price",
+      object: "99",
+    });
     expect(fetch).toHaveBeenCalledWith(
-      "/admin/knowledge-bases/kb-1/claims?status=active&subject=Product+A",
+      "/admin/knowledge-bases/kb-1/claims?status=active&subject=Product&predicate=price&object=99",
       expect.any(Object),
     );
   });
@@ -92,5 +97,48 @@ describe("fetchClaimHistory", () => {
       expect.any(Object),
     );
     expect(history).toEqual([historyItem]);
+  });
+});
+
+describe("staging review api", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+  });
+
+  it("approveStagingClaim posts to approve-staging", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ...sampleClaim, status: "active" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const { approveStagingClaim } = await import("./claims");
+    await approveStagingClaim("kb-1", "claim-staging");
+    expect(fetch).toHaveBeenCalledWith(
+      "/admin/knowledge-bases/kb-1/claims/claim-staging/approve-staging",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("rejectStagingClaim posts to reject-staging", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ claim: { ...sampleClaim, status: "superseded" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const { rejectStagingClaim } = await import("./claims");
+    await rejectStagingClaim("kb-1", "claim-staging");
+    expect(fetch).toHaveBeenCalledWith(
+      "/admin/knowledge-bases/kb-1/claims/claim-staging/reject-staging",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

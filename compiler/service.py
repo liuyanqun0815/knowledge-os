@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from compiler.ports import CompileReport, ExtractedClaim, ExtractorPort
+from compiler.claim_merge import is_exclusive_predicate, join_claim_objects, merge_complementary_extracted
 from compiler.intersect import select_hybrid_candidates
 from evidence.ports import EvidencePort
 from graph.ports import GraphPort
@@ -49,6 +50,79 @@ class KnowledgeCompiler:
     def ontology(self) -> OntologyPort:
         return self._ontology
 
+    def _exact_spo_covered(self, history: list[Claim], obj: str) -> bool:
+        for claim in history:
+            if claim.object == obj:
+                return True
+            if claim.status in ("active", "staging") and join_claim_objects(claim.object, obj) == claim.object:
+                return True
+        return False
+
+    def _fold_complementary_into_actives(
+        self,
+        *,
+        family_id: str,
+        history: list[Claim],
+        subject: str,
+        predicate: str,
+        obj: str,
+        subject_type: str,
+        object_type: str,
+        confidence: float,
+        source_id: str,
+        quote: str,
+        quote_start: int,
+        quote_end: int,
+    ) -> Claim:
+        """Supersede active peers and write one active claim with joined objects."""
+        actives = [claim for claim in history if claim.status == "active"]
+        merged_obj = join_claim_objects(*([claim.object for claim in actives] + [obj]))
+
+        now = datetime.now(timezone.utc)
+        source_ids: list[str] = []
+        for peer in actives:
+            for sid in peer.source_ids:
+                if sid not in source_ids:
+                    source_ids.append(sid)
+            self._knowledge.mark_superseded(peer.id, valid_to=now)
+            if self._retrieval is not None and hasattr(self._retrieval, "remove_claim"):
+                self._retrieval.remove_claim(peer.id)
+        if source_id not in source_ids:
+            source_ids.append(source_id)
+
+        claim_id = str(uuid.uuid4())
+        claim = Claim(
+            id=claim_id,
+            family_id=family_id,
+            version=max((item.version for item in history), default=0) + 1,
+            subject=subject,
+            predicate=predicate,
+            object=merged_obj,
+            subject_type=subject_type,
+            object_type=object_type,
+            confidence=max([confidence] + [peer.confidence for peer in actives]),
+            status="active",
+            valid_from=now,
+            valid_to=None,
+            source_ids=source_ids,
+        )
+        self._knowledge.append_claim(claim)
+
+        subject_entity = _entity_id(subject, subject_type)
+        object_entity = _entity_id(merged_obj, object_type)
+        self._graph.upsert_entity(subject_entity, subject_type, {"name": subject})
+        self._graph.upsert_entity(object_entity, object_type, {"name": merged_obj})
+        self._graph.upsert_relation(subject_entity, predicate, object_entity, {})
+        self._evidence.bind(
+            claim_id,
+            source_id,
+            TextSpan(source_id, quote_start, quote_end, quote),
+            confidence,
+        )
+        if self._retrieval is not None:
+            self._retrieval.index_claim(claim)
+        return claim
+
     def ingest(
         self,
         source_id: str,
@@ -73,6 +147,7 @@ class KnowledgeCompiler:
 
         resolved_settings = settings or get_settings()
         source = self._knowledge.get_source(source_id)
+        stored_chunks = self._knowledge.list_chunks(source_id, status="active")
         candidates = select_hybrid_candidates(
             text,
             rule_extractor=self._extractor,
@@ -81,7 +156,9 @@ class KnowledgeCompiler:
             settings=resolved_settings,
             ontology=self._ontology,
             title=getattr(source, "title", None) if source else None,
+            source_chunks=stored_chunks or None,
         )
+        candidates = merge_complementary_extracted(candidates)
 
         claims_created = 0
         entities_upserted = 0
@@ -109,12 +186,42 @@ class KnowledgeCompiler:
                 quarantined += 1
                 continue
 
+            family_id = _family_id(subject, extracted.predicate, object_type)
+            history = self._knowledge.get_claim_history(family_id)
+            if self._exact_spo_covered(history, obj):
+                continue
+
+            actives = [claim for claim in history if claim.status == "active"]
+            if actives and not is_exclusive_predicate(extracted.predicate):
+                merged_obj = join_claim_objects(*([claim.object for claim in actives] + [obj]))
+                if len(actives) == 1 and merged_obj == actives[0].object:
+                    continue
+                self._fold_complementary_into_actives(
+                    family_id=family_id,
+                    history=history,
+                    subject=subject,
+                    predicate=extracted.predicate,
+                    obj=obj,
+                    subject_type=subject_type,
+                    object_type=object_type,
+                    confidence=extracted.confidence,
+                    source_id=source_id,
+                    quote=extracted.quote,
+                    quote_start=extracted.start,
+                    quote_end=extracted.end,
+                )
+                claims_created += 1
+                entities_upserted += 2
+                evidence_links += 1
+                continue
+
             claim_id = str(uuid.uuid4())
-            claim_status = "staging" if staging else "active"
+            has_active_conflict = any(claim.status == "active" and claim.object != obj for claim in history)
+            claim_status = "staging" if staging or has_active_conflict else "active"
             claim = Claim(
                 id=claim_id,
-                family_id=_family_id(subject, extracted.predicate, object_type),
-                version=1,
+                family_id=family_id,
+                version=max((item.version for item in history), default=0) + 1,
                 subject=subject,
                 predicate=extracted.predicate,
                 object=obj,
@@ -144,7 +251,7 @@ class KnowledgeCompiler:
             )
             evidence_links += 1
 
-            if self._retrieval is not None and not staging:
+            if self._retrieval is not None and claim_status == "active":
                 self._retrieval.index_claim(claim)
 
         return CompileReport(
@@ -181,8 +288,6 @@ class KnowledgeCompiler:
         entities_upserted = 0
         evidence_links = 0
         quarantined = 0
-
-        from compiler.claim_merge import merge_complementary_extracted
 
         # Quarantine low-confidence first so complementary merge cannot
         # absorb them via confidence=max(...) and skip low_confidence isolation.
@@ -252,7 +357,31 @@ class KnowledgeCompiler:
 
             family_id = _family_id(subject, candidate.predicate, object_type)
             history = self._knowledge.get_claim_history(family_id)
-            if existing_skip and any(claim.object == obj for claim in history):
+            if existing_skip and self._exact_spo_covered(history, obj):
+                continue
+
+            actives = [claim for claim in history if claim.status == "active"]
+            if actives and not is_exclusive_predicate(candidate.predicate):
+                merged_obj = join_claim_objects(*([claim.object for claim in actives] + [obj]))
+                if len(actives) == 1 and merged_obj == actives[0].object:
+                    continue
+                self._fold_complementary_into_actives(
+                    family_id=family_id,
+                    history=history,
+                    subject=subject,
+                    predicate=candidate.predicate,
+                    obj=obj,
+                    subject_type=subject_type,
+                    object_type=object_type,
+                    confidence=candidate.confidence,
+                    source_id=source_id,
+                    quote=candidate.quote,
+                    quote_start=quote_start,
+                    quote_end=quote_start + len(candidate.quote),
+                )
+                claims_created += 1
+                entities_upserted += 2
+                evidence_links += 1
                 continue
 
             has_active_conflict = any(claim.status == "active" and claim.object != obj for claim in history)

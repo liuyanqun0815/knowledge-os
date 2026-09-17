@@ -193,6 +193,72 @@ def test_enrich_source_marks_fatal_errors_failed() -> None:
     assert deps.knowledge.get_source("source-1").status == "failed"
 
 
+def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) -> None:
+    from datetime import datetime, timezone
+
+    from compiler import enrichment
+    from knowledge.models import SourceChunk
+
+    calls: list[str | None] = []
+
+    class FakeExtractor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def extract(self, text, *, document_anchor=None):
+            calls.append(document_anchor)
+            return []
+
+    monkeypatch.setattr(enrichment, "DomainLlmExtractor", FakeExtractor)
+    monkeypatch.setattr(enrichment, "resolve_document_anchor", lambda text, title=None: "文档级产品")
+
+    text = "## 个人信用贷款\n\n无需抵押。\n\n## 房屋贷款\n\n有抵押。\n"
+    client = MockLlmClient([])
+    deps = _deps(text, client)
+    now = datetime.now(timezone.utc)
+    deps.knowledge.save_chunks(
+        "source-1",
+        [
+            SourceChunk(
+                id="c1",
+                source_id="source-1",
+                chunk_index=0,
+                title="个人信用贷款",
+                summary=None,
+                text="## 个人信用贷款\n\n无需抵押。\n\n",
+                start=0,
+                end=20,
+                section_path=["个人信用贷款"],
+                topics=[],
+                token_count=5,
+                status="active",
+                content_hash="h1",
+                created_at=now,
+            ),
+            SourceChunk(
+                id="c2",
+                source_id="source-1",
+                chunk_index=1,
+                title="房屋贷款",
+                summary=None,
+                text="## 房屋贷款\n\n有抵押。\n",
+                start=20,
+                end=40,
+                section_path=["房屋贷款"],
+                topics=[],
+                token_count=4,
+                status="active",
+                content_hash="h2",
+                created_at=now,
+            ),
+        ],
+    )
+
+    enrich_source(kb_id="kb-1", source_id="source-1", deps=deps, settings=_settings())
+
+    assert calls == ["个人信用贷款", "房屋贷款"]
+
+
 def test_enrich_source_passes_document_anchor(monkeypatch) -> None:
     from compiler import enrichment
 

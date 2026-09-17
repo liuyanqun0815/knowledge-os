@@ -97,21 +97,71 @@ describe("sources page", () => {
   it("uploads the selected file and refreshes the list", async () => {
     const user = userEvent.setup();
     render(<SourcesPage />);
-    await screen.findByText(/guide.md/);
+    await screen.findByRole("tree");
     const file = new File(["# New"], "new.md", { type: "text/markdown" });
 
     await user.upload(screen.getByLabelText("选择文件"), file);
     await user.click(screen.getByRole("button", { name: "上传" }));
 
     await waitFor(() => {
-      expect(uploadSource).toHaveBeenCalledWith("kb-1", file);
+      expect(uploadSource).toHaveBeenCalledWith("kb-1", file, { subjectBindMode: "auto" });
     });
+  });
+
+  it("passes replacesSourceId when replacing a historical document", async () => {
+    const user = userEvent.setup();
+    render(<SourcesPage />);
+    await screen.findByRole("tree");
+    const file = new File(["# New"], "new.md", { type: "text/markdown" });
+
+    await user.upload(screen.getByLabelText("选择文件"), file);
+    await user.selectOptions(screen.getByLabelText("替换历史文档"), "source-1");
+    await user.click(screen.getByRole("button", { name: "上传" }));
+
+    await waitFor(() => {
+      expect(uploadSource).toHaveBeenCalledWith("kb-1", file, {
+        replacesSourceId: "source-1",
+        subjectBindMode: "auto",
+      });
+    });
+  });
+
+  it("includes partially succeeded sources as replace candidates", async () => {
+    listSources.mockResolvedValue([
+      source,
+      {
+        ...source,
+        id: "source-partial",
+        filename: "贷款产品合集.md",
+        relative_path: "贷款产品合集.md",
+        compile_status: "succeeded_partial" as const,
+      },
+    ]);
+    render(<SourcesPage />);
+    await screen.findByRole("tree");
+
+    const options = [...screen.getByLabelText("替换历史文档").querySelectorAll("option")].map(
+      (option) => option.textContent,
+    );
+    expect(options).toContain("贷款产品合集.md");
+  });
+
+  it("disables replace picker for folder uploads", async () => {
+    const user = userEvent.setup();
+    render(<SourcesPage />);
+    await screen.findByRole("tree");
+    const file = new File(["# Policy"], "refund.md", { type: "text/markdown" });
+    Object.defineProperty(file, "webkitRelativePath", { value: "policies/refund.md" });
+
+    await user.upload(screen.getByLabelText("选择文件夹"), file);
+
+    expect(screen.getByLabelText("替换历史文档")).toBeDisabled();
   });
 
   it("accepts a dropped file and reports upload failures", async () => {
     uploadSource.mockRejectedValue(new Error("network error"));
     render(<SourcesPage />);
-    await screen.findByText(/guide.md/);
+    await screen.findByRole("tree");
     const file = new File(["bad"], "bad.md", { type: "text/markdown" });
 
     fireEvent.drop(screen.getByTestId("source-drop-zone"), {
@@ -126,7 +176,7 @@ describe("sources page", () => {
   it("uploads a selected folder with browser relative paths", async () => {
     const user = userEvent.setup();
     render(<SourcesPage />);
-    await screen.findByText(/guide.md/);
+    await screen.findByRole("tree");
     const file = new File(["# Policy"], "refund.md", { type: "text/markdown" });
     Object.defineProperty(file, "webkitRelativePath", { value: "policies/refund.md" });
 
@@ -134,7 +184,11 @@ describe("sources page", () => {
     await user.click(screen.getByRole("button", { name: "上传" }));
 
     await waitFor(() => {
-      expect(uploadTree).toHaveBeenCalledWith("kb-1", [{ file, relativePath: "policies/refund.md" }]);
+      expect(uploadTree).toHaveBeenCalledWith(
+        "kb-1",
+        [{ file, relativePath: "policies/refund.md" }],
+        { subjectBindMode: "auto" },
+      );
     });
   });
 
@@ -166,7 +220,7 @@ describe("sources page", () => {
       .mockResolvedValueOnce([{ ...source, id: "a", filename: "a.md", compile_status: "succeeded" as const }]);
 
     render(<SourcesPage />);
-    await screen.findByText(/guide.md/);
+    await screen.findByRole("tree");
     const file = new File(["# A"], "a.md", { type: "text/markdown" });
 
     await user.upload(screen.getByLabelText("选择文件"), file);

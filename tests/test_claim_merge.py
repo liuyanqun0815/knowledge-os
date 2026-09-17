@@ -93,6 +93,112 @@ def test_apply_extracted_claims_merges_complementary_objects() -> None:
     assert "轮换穿着" in claims[0].object
 
 
+def test_apply_extracted_claims_folds_complementary_into_existing_active() -> None:
+    """Non-exclusive different objects merge into one active claim (no staging twin)."""
+    from datetime import datetime, timezone
+
+    from compiler.service import _family_id
+    from knowledge.models import Claim
+
+    text = "手机银行申请。银行柜台申请。"
+    ontology = InMemoryOntology()
+    knowledge = InMemoryKnowledge()
+    knowledge.save_source_text("s1", text)
+    graph = InMemoryGraph()
+    retrieval = HybridRetrieval(knowledge, graph)
+    compiler = KnowledgeCompiler(
+        ontology,
+        knowledge,
+        graph,
+        InMemoryEvidence(),
+        _UnusedExtractor(),
+        retrieval,
+    )
+    existing = Claim(
+        id="c-old",
+        family_id=_family_id("信用卡分期", "申请方式", "Concept"),
+        version=1,
+        subject="信用卡分期",
+        predicate="申请方式",
+        object="手机银行申请",
+        subject_type="Concept",
+        object_type="Concept",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=["old"],
+    )
+    knowledge.append_claim(existing)
+    retrieval.index_claim(existing)
+
+    report = compiler.apply_extracted_claims(
+        "s1",
+        [_claim("信用卡分期", "申请方式", "银行柜台申请", "银行柜台申请")],
+        open_predicates=True,
+    )
+
+    assert report.claims_created == 1
+    assert not knowledge.get_claims_by_status("staging")
+    assert knowledge.get_claim("c-old").status == "superseded"
+    actives = [c for c in knowledge.get_claims_by_status("active") if c.predicate == "申请方式"]
+    assert len(actives) == 1
+    assert "手机银行申请" in actives[0].object
+    assert "银行柜台申请" in actives[0].object
+
+
+def test_apply_extracted_claims_exclusive_still_stages_on_conflict() -> None:
+    from datetime import datetime, timezone
+
+    from compiler.service import _family_id
+    from knowledge.models import Claim
+
+    text = "七天无理由的运费承担方是平台。"
+    ontology = InMemoryOntology()
+    ontology.register_entity("七天无理由", "Policy")
+    ontology.register_entity("买家", "Party")
+    ontology.register_entity("平台", "Party")
+    ontology.register_predicate("Policy", "运费承担方", "Party")
+    knowledge = InMemoryKnowledge()
+    knowledge.save_source_text("s1", text)
+    compiler = KnowledgeCompiler(
+        ontology,
+        knowledge,
+        InMemoryGraph(),
+        InMemoryEvidence(),
+        _UnusedExtractor(),
+        HybridRetrieval(knowledge, InMemoryGraph()),
+    )
+    knowledge.append_claim(
+        Claim(
+            id="c-old",
+            family_id=_family_id("七天无理由", "运费承担方", "Party"),
+            version=1,
+            subject="七天无理由",
+            predicate="运费承担方",
+            object="买家",
+            subject_type="Policy",
+            object_type="Party",
+            confidence=1.0,
+            status="active",
+            valid_from=datetime.now(timezone.utc),
+            valid_to=None,
+            source_ids=["old"],
+        )
+    )
+
+    report = compiler.apply_extracted_claims(
+        "s1",
+        [_claim("七天无理由", "运费承担方", "平台", "运费承担方是平台")],
+    )
+
+    assert report.claims_created == 1
+    staging = knowledge.get_claims_by_status("staging")
+    assert len(staging) == 1
+    assert staging[0].object == "平台"
+    assert knowledge.get_claim("c-old").status == "active"
+
+
 def test_apply_extracted_claims_quarantines_low_confidence_before_merge() -> None:
     text = "公司倡导诚信经营。公司倡导持续学习。"
     knowledge = InMemoryKnowledge()

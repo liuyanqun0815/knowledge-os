@@ -232,8 +232,228 @@ def test_compile_source_plan_falls_back_to_template(tmp_path: Path) -> None:
     assert report.pages_written == 1
     page = compile_wiki_root(tmp_path, "kb1") / "商品咨询" / "尺码选择指南.md"
     body = page.read_text(encoding="utf-8")
-    assert "## 问答" in body
+    assert "## 要点" in body
+    assert "## 常见问题" in body
     assert "七天无理由退换" in body
+    assert "退换货政策" in body  # FAQ 需带 subject
+    # 要点不应只剩一句空泛摘要：至少 2 条
+    assert body.count("\n- ") >= 2
+
+
+def test_compile_bundle_fallback_clusters_by_chunk_topics(tmp_path: Path) -> None:
+    from wiki.compile import compile_topics_for_source
+
+    knowledge = InMemoryKnowledge()
+    source_id = "贷款产品合集"
+    body = ("贷款产品说明。" * 600) + "\n".join(
+        [
+            "## 1. 个人信用贷款",
+            "信用贷正文" * 200,
+            "## 2. 房屋抵押贷款",
+            "房贷正文" * 200,
+        ]
+    )
+    knowledge.save_source_text(source_id, body)
+    knowledge.save_source(
+        Source(
+            id=source_id,
+            title="贷款产品合集.md",
+            type="md",
+            uri=f"file://{source_id}",
+            version="1",
+            created_at=_now(),
+            status="active",
+        )
+    )
+    knowledge.save_chunks(
+        source_id,
+        [
+            SourceChunk(
+                id="c-credit",
+                source_id=source_id,
+                chunk_index=0,
+                title="个人信用贷款",
+                summary="信用贷摘要",
+                text="个人信用贷款无需抵押。",
+                start=0,
+                end=20,
+                section_path=["个人信用贷款"],
+                topics=["个人信用贷款"],
+                status="active",
+                created_at=_now(),
+            ),
+            SourceChunk(
+                id="c-mortgage",
+                source_id=source_id,
+                chunk_index=1,
+                title="房屋抵押贷款",
+                summary="房贷摘要",
+                text="房屋抵押贷款额度高。",
+                start=20,
+                end=40,
+                section_path=["房屋抵押贷款"],
+                topics=["房屋抵押贷款"],
+                status="active",
+                created_at=_now(),
+            ),
+            SourceChunk(
+                id="c-auto",
+                source_id=source_id,
+                chunk_index=2,
+                title="汽车贷款",
+                summary="车贷摘要",
+                text="汽车贷款专用于购车。",
+                start=40,
+                end=60,
+                section_path=["汽车贷款"],
+                topics=["汽车贷款"],
+                status="active",
+                created_at=_now(),
+            ),
+        ],
+    )
+    knowledge.append_claim(
+        Claim(
+            id="cl-credit-limit",
+            family_id="fam-credit-limit",
+            version=1,
+            subject="个人信用贷款",
+            predicate="额度范围",
+            object="1万元-50万元",
+            subject_type="Product",
+            object_type="Concept",
+            confidence=0.9,
+            status="active",
+            valid_from=_now(),
+            valid_to=None,
+            source_ids=[source_id],
+        )
+    )
+
+    settings = Settings(
+        wiki_compile=True,
+        wiki_hierarchy=True,
+        wiki_source_plan=True,
+        wiki_source_plan_llm=False,
+        wiki_split_min_chars=5000,
+        data_root=str(tmp_path),
+        _env_file=None,
+    )
+    report = compile_topics_for_source(
+        knowledge,
+        "kb1",
+        source_id,
+        str(tmp_path),
+        settings,
+        graph=None,
+        llm_client=None,
+    )
+    wiki_root = compile_wiki_root(tmp_path, "kb1")
+    assert (wiki_root / "贷款产品" / "贷款产品合集" / "_index.md").is_file()
+    assert (wiki_root / "贷款产品" / "贷款产品合集" / "个人信用贷款.md").is_file()
+    assert (wiki_root / "贷款产品" / "贷款产品合集" / "房屋抵押贷款.md").is_file()
+    assert (wiki_root / "贷款产品" / "贷款产品合集" / "汽车贷款.md").is_file()
+    assert report.pages_written >= 4
+
+    credit = (wiki_root / "贷款产品" / "贷款产品合集" / "个人信用贷款.md").read_text(encoding="utf-8")
+    assert "## 要点" in credit
+    assert "## 常见问题" in credit
+    assert "### 个人信用贷款：额度范围" in credit
+    assert credit.count("### ") <= 8
+
+
+def test_compile_bundle_fallback_uses_topics_not_rigid_chapters(tmp_path: Path) -> None:
+    from wiki.compile import compile_topics_for_source
+
+    knowledge = InMemoryKnowledge()
+    source_id = "青银理财成就系列"
+    body = "青银理财产品说明书前言，业绩比较基准与托管人说明。\n" + ("条款内容" * 1500)
+    assert len(body) >= 5000
+    knowledge.save_source_text(source_id, body)
+    knowledge.save_source(
+        Source(
+            id=source_id,
+            title="青银理财成就系列（低波共享）.md",
+            type="md",
+            uri=f"file://{source_id}",
+            version="1",
+            created_at=_now(),
+            status="active",
+        )
+    )
+    knowledge.save_chunks(
+        source_id,
+        [
+            SourceChunk(
+                id="c-risk",
+                source_id=source_id,
+                chunk_index=0,
+                title="风险揭示",
+                summary="风险摘要",
+                text="风险内容",
+                start=0,
+                end=10,
+                topics=["风险揭示"],
+                status="active",
+                created_at=_now(),
+            ),
+            SourceChunk(
+                id="c-fee",
+                source_id=source_id,
+                chunk_index=1,
+                title="产品费用",
+                summary="费用摘要",
+                text="费用内容",
+                start=10,
+                end=20,
+                topics=["产品费用"],
+                status="active",
+                created_at=_now(),
+            ),
+            SourceChunk(
+                id="c-redeem",
+                source_id=source_id,
+                chunk_index=2,
+                title="申购赎回",
+                summary="赎回摘要",
+                text="赎回内容",
+                start=20,
+                end=30,
+                topics=["申购赎回"],
+                status="active",
+                created_at=_now(),
+            ),
+        ],
+    )
+    settings = Settings(
+        wiki_compile=True,
+        wiki_hierarchy=True,
+        wiki_source_plan=True,
+        wiki_source_plan_llm=False,
+        wiki_split_min_chars=5000,
+        data_root=str(tmp_path),
+        _env_file=None,
+    )
+    report = compile_topics_for_source(
+        knowledge,
+        "kb1",
+        source_id,
+        str(tmp_path),
+        settings,
+        graph=None,
+        llm_client=None,
+    )
+    wiki_root = compile_wiki_root(tmp_path, "kb1")
+    product_dir = wiki_root / "理财产品" / "青银理财成就系列（低波共享）"
+    assert (product_dir / "_index.md").is_file()
+    assert (product_dir / "风险揭示.md").is_file()
+    assert (product_dir / "产品费用.md").is_file()
+    assert (product_dir / "申购赎回.md").is_file()
+    assert report.pages_written >= 4
+    fee = (product_dir / "产品费用.md").read_text(encoding="utf-8")
+    assert "## 要点" in fee
+    assert "## 常见问题" in fee
+    assert "## 问答" not in fee
 
 
 def test_compile_source_plan_purges_old_fragmented_pages(tmp_path: Path) -> None:

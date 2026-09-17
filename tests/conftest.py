@@ -70,6 +70,7 @@ def pg_engine():
     run_sql_script(engine, ROOT / "infra" / "migrations" / "004_procedures.sql")
     run_sql_script(engine, ROOT / "infra" / "migrations" / "005_source_chunks.sql")
     run_sql_script(engine, ROOT / "infra" / "migrations" / "006_topic_clusters.sql")
+    run_sql_script(engine, ROOT / "infra" / "migrations" / "008_source_chunks_stale_unique.sql")
     yield engine
     reset_engine()
 

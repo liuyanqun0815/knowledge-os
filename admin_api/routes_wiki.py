@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from admin_api.routes_sources import _resolve_active_kb
 from admin_api.schemas import (
@@ -14,6 +15,7 @@ from admin_api.schemas import (
 )
 from app.deps import build_orchestrator_for_request
 from infra.bootstrap import build_wiki_compile_deps
+from wiki.archive import build_wiki_zip
 from wiki.browser import build_wiki_tree, read_wiki_page, search_wiki_pages
 from wiki.compile import CompileReport, compile_topics_for_source
 from wiki.export import export_wiki, resolve_wiki_output_dir
@@ -64,6 +66,28 @@ def search_wiki(
         return WikiSearchResponse(query=q, total=0, hits=[])
     payload = search_wiki_pages(wiki_root, q, limit=limit)
     return WikiSearchResponse(**payload)
+
+
+@router.get("/{kb_id}/wiki/download")
+def download_wiki_zip(
+    kb_id: str,
+    request: Request,
+    _: None = Depends(_resolve_active_kb),
+) -> Response:
+    settings = request.app.state.settings
+    wiki_root = compile_wiki_root(settings.data_root, kb_id)
+    if not wiki_root.is_dir():
+        raise HTTPException(status_code=404, detail="wiki_not_found")
+    try:
+        payload = build_wiki_zip(wiki_root)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="wiki_not_found") from exc
+    filename = f"{kb_id}-wiki.zip"
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{kb_id}/wiki/export", response_model=WikiExportResponse)

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { compileWiki, fetchWikiPage, fetchWikiTree, searchWiki } from "./wiki";
+import { compileWiki, downloadWikiZip, fetchWikiPage, fetchWikiTree, searchWiki } from "./wiki";
 
 const { apiFetch } = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -31,7 +31,9 @@ describe("wiki api", () => {
 
     await fetchWikiPage("kb-1", "政策/发票政策");
 
-    expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/wiki/pages/%E6%94%BF%E7%AD%96/%E5%8F%91%E7%A5%A8%E6%94%BF%E7%AD%96");
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/admin/knowledge-bases/kb-1/wiki/pages/%E6%94%BF%E7%AD%96/%E5%8F%91%E7%A5%A8%E6%94%BF%E7%AD%96",
+    );
   });
 
   it("searchWiki passes query and limit params", async () => {
@@ -60,5 +62,35 @@ describe("wiki api", () => {
     expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/wiki/compile", {
       method: "POST",
     });
+  });
+
+  it("downloadWikiZip fetches zip and triggers browser download", async () => {
+    const click = vi.fn();
+    const revokeObjectURL = vi.fn();
+    const createObjectURL = vi.fn(() => "blob:wiki");
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    const appendChild = vi.spyOn(document.body, "appendChild").mockImplementation((node) => node);
+    const remove = vi.fn();
+    const createElement = vi.spyOn(document, "createElement").mockReturnValue({
+      href: "",
+      download: "",
+      click,
+      remove,
+    } as unknown as HTMLAnchorElement);
+
+    apiFetch.mockResolvedValue({
+      blob: async () => new Blob(["PK"], { type: "application/zip" }),
+    });
+
+    await downloadWikiZip("kb-1");
+
+    expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/wiki/download");
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:wiki");
+
+    createElement.mockRestore();
+    appendChild.mockRestore();
+    vi.unstubAllGlobals();
   });
 });

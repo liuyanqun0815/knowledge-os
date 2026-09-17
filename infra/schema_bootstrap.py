@@ -34,7 +34,14 @@ def ensure_pg_schema(settings: Settings | None = None) -> None:
     from infra.db import get_engine
 
     run_sql_script(get_engine(cfg), _SCHEMA_PATH)
-    migration_path = Path(__file__).resolve().parent / "migrations" / "007_embeddings_1024.sql"
-    if migration_path.exists():
-        run_sql_script(get_engine(cfg), migration_path)
+    migrations_dir = Path(__file__).resolve().parent / "migrations"
+    for name in (
+        "005_source_chunks.sql",
+        "006_topic_clusters.sql",
+        "007_embeddings_1024.sql",
+        "008_source_chunks_stale_unique.sql",
+    ):
+        migration_path = migrations_dir / name
+        if migration_path.exists():
+            run_sql_script(get_engine(cfg), migration_path)
     _schema_ready.add(cache_key)

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 
+import httpx
+import pytest
+
 from compiler.domain_llm_extractor import DomainLlmExtractor
 from compiler.extraction_spec import LlmExtractionSpec
 from compiler.llm_extractor import LlmExtractor, create_corporate_extractor
@@ -123,6 +126,11 @@ def test_build_prompt_includes_subject_rules_and_anchor() -> None:
     assert "还款方式" in prompt
     assert "青银理财成就系列（低波共享）" in prompt
     assert "document_anchor" in prompt
+    assert "subject_priority" in prompt
+    assert "bind_generic_deixis_to_document_anchor" in prompt
+    assert "Prefer a concrete named entity" in prompt
+    assert "generic/deictic" in prompt
+    assert "Never let document_anchor override" in prompt
     assert "禁止单独使用属性词" in prompt or "属性词" in prompt
 
 
@@ -141,7 +149,41 @@ def test_open_prompt_uses_suggested_predicates_and_allows_novel() -> None:
     assert '"allowed_predicates"' not in prompt
 
 
-def test_claim_with_quote_outside_source_is_returned_for_quarantine() -> None:
+def test_extract_rebinds_generic_subject_when_anchor_present() -> None:
+    class FakeClient:
+        is_configured = True
+
+        def chat_completions(self, messages, **kwargs):
+            return json.dumps(
+                [
+                    {
+                        "subject": "本理财计划",
+                        "predicate": "产品类型",
+                        "object": "非保本浮动收益型",
+                        "confidence": 0.9,
+                        "quote": "本理财计划",
+                    }
+                ],
+                ensure_ascii=False,
+            )
+
+    text = "本理财计划为非保本浮动收益型。"
+    claims = DomainLlmExtractor(FakeClient(), _spec()).extract(
+        text,
+        document_anchor="青银理财成就系列（低波共享）",
+    )
+    assert len(claims) == 1
+    assert claims[0].subject == "青银理财成就系列（低波共享）"
+
+    class FlakyClient:
+        is_configured = True
+
+        def chat_completions(self, messages, **kwargs):
+            raise httpx.ConnectError("SSL EOF")
+
+    with pytest.raises(httpx.ConnectError):
+        DomainLlmExtractor(FlakyClient(), _spec()).extract("公司倡导诚信经营。")
+
     client = FakeLlmClient(
         [
             {

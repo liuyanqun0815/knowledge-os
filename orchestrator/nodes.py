@@ -13,6 +13,11 @@ from agents.verification_agent import service as verification_agent
 from compiler.chunk_service import index_source_chunks
 from infra.settings import get_settings
 from knowledge.models import Answer
+from orchestrator.question_rewrite import (
+    collect_domain_terms,
+    try_llm_rewrite,
+    try_rule_rewrite,
+)
 from orchestrator.state import AskState, IngestState
 from orchestrator.synthesis import build_synthesis_context, synthesize_answer
 from orchestrator.trace_utils import (
@@ -174,11 +179,10 @@ def recall_node(state: AskState, deps: Any) -> dict:
     episodes = list(context.episodes or [])
     semantics = list(context.semantics or [])
     summary = (
-        f"召回 {len(episodes)} 条历史会话"
-        if episodes
-        else ("无会话记忆" if not session_id else "当前会话暂无历史")
+        f"召回 {len(episodes)} 条历史会话" if episodes else ("无会话记忆" if not session_id else "当前会话暂无历史")
     )
     return {
+        "recall_episodes": episodes,
         "trace": [
             trace_step(
                 "recall",
@@ -225,27 +229,68 @@ def parse_time_node(state: AskState, deps: Any) -> dict:
 
 def normalize_node(state: AskState, deps: Any) -> dict:
     started = time.perf_counter()
+    settings = get_settings()
     question = state["question"]
     normalized = question
     replacements: list[dict[str, str]] = []
+    methods: list[str] = []
+    rewrite_detail: dict[str, Any] = {}
+
     for alias in deps.domain.get_aliases():
         if alias in normalized:
             canonical = deps.ontology.normalize_term(alias)
             if canonical != alias:
                 replacements.append({"from": alias, "to": canonical})
             normalized = normalized.replace(alias, canonical)
+    if replacements:
+        methods.append("alias")
+
+    episodes = list(state.get("recall_episodes") or [])
+    terms = collect_domain_terms(deps.ontology, deps.domain)
+    rule_hit = try_rule_rewrite(normalized, episodes=episodes, terms=terms)
+    if rule_hit is not None:
+        normalized = rule_hit.text
+        methods.append("rule")
+        rewrite_detail = {
+            "anchor": rule_hit.anchor,
+            "reason": rule_hit.reason,
+        }
+    elif settings.ask_normalize_llm and episodes:
+        try:
+            llm_hit = try_llm_rewrite(
+                normalized,
+                episodes=episodes,
+                llm_client=getattr(deps, "llm_client", None),
+            )
+        except Exception:
+            llm_hit = None
+        if llm_hit is not None:
+            normalized = llm_hit.text
+            methods.append("llm")
+            rewrite_detail = {"reason": llm_hit.reason}
+
     changed = normalized != question
+    method = "+".join(methods) if methods else "none"
+    summary = "问题已归一化" if changed else "无需归一化"
+    if "rule" in methods:
+        summary = "规则补全问句"
+    elif "llm" in methods:
+        summary = "LLM 改写问句"
+
     return {
         "normalized_question": normalized,
         "trace": [
             trace_step(
                 "normalize",
-                summary="问题已归一化" if changed else "无需归一化",
+                summary=summary,
                 detail={
                     "input": question,
                     "output": normalized,
                     "changed": changed,
+                    "method": method,
                     "replacements": replacements,
+                    "rewrite": rewrite_detail,
+                    "episode_count": len(episodes),
                 },
                 duration_ms=_node_duration_ms(started),
             )
@@ -417,9 +462,7 @@ def rerank_node(state: AskState, deps: Any) -> dict:
                         "skipped_reason": (
                             "disabled"
                             if not settings.rerank_enabled
-                            else "no_reranker"
-                            if reranker is None
-                            else "no_hits"
+                            else "no_reranker" if reranker is None else "no_hits"
                         ),
                     },
                     duration_ms=_node_duration_ms(started),
@@ -440,8 +483,7 @@ def rerank_node(state: AskState, deps: Any) -> dict:
             trace_step(
                 "rerank",
                 summary=(
-                    f"重排序完成：输入 {len(hits)} → 输出 {len(reranked_hits)} "
-                    f"（仅 chunk/wiki，Claim 保持前置）"
+                    f"重排序完成：输入 {len(hits)} → 输出 {len(reranked_hits)} " f"（仅 chunk/wiki，Claim 保持前置）"
                 ),
                 detail={
                     "rerank_enabled": True,
@@ -639,6 +681,7 @@ def synthesize_node(state: AskState, deps: Any) -> dict:
         claim_ids=claim_ids,
         chunk_ids=chunk_ids,
         wiki_pages=wiki_pages,
+        hits=state.get("hits") or [],
         deps=deps,
         settings=settings,
     )

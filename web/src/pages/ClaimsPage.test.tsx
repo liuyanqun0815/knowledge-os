@@ -5,15 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { ClaimsPage } from "./ClaimsPage";
 
-const { listClaims, fetchClaimHistory, useKb } = vi.hoisted(() => ({
+const { listClaims, fetchClaimHistory, approveStagingClaim, rejectStagingClaim, useKb } = vi.hoisted(() => ({
   listClaims: vi.fn(),
   fetchClaimHistory: vi.fn(),
+  approveStagingClaim: vi.fn(),
+  rejectStagingClaim: vi.fn(),
   useKb: vi.fn(),
 }));
 
 vi.mock("../api/claims", () => ({
   listClaims,
   fetchClaimHistory,
+  approveStagingClaim,
+  rejectStagingClaim,
 }));
 
 vi.mock("../app/KbContext", () => ({
@@ -95,16 +99,23 @@ describe("ClaimsPage", () => {
     expect(listClaims).toHaveBeenCalledWith("kb-1", {});
   });
 
-  it("passes status and subject filters to listClaims", async () => {
+  it("passes status and SPO fuzzy filters to listClaims", async () => {
     const user = userEvent.setup();
     render(<ClaimsPage />);
     await screen.findByText("七天无理由");
 
     await user.selectOptions(screen.getByLabelText("状态"), "active");
     await user.type(screen.getByLabelText("主体"), "七天");
+    await user.type(screen.getByLabelText("谓词"), "适用");
+    await user.type(screen.getByLabelText("客体"), "普通");
 
     await waitFor(() => {
-      expect(listClaims).toHaveBeenCalledWith("kb-1", { status: "active", subject: "七天" });
+      expect(listClaims).toHaveBeenCalledWith("kb-1", {
+        status: "active",
+        subject: "七天",
+        predicate: "适用",
+        object: "普通",
+      });
     });
   });
 
@@ -147,6 +158,50 @@ describe("ClaimsPage", () => {
     expect(await screen.findByText("主体-20")).toBeInTheDocument();
     expect(screen.queryByText("主体-10")).not.toBeInTheDocument();
     expect(screen.getByText("共 25 条，第 3 / 3 页")).toBeInTheDocument();
+  });
+
+  it("approves staging claim after confirm and reloads list", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const stagingClaim = {
+      ...claim,
+      id: "claim-staging",
+      status: "staging",
+      object: "平台",
+    };
+    listClaims.mockResolvedValue([stagingClaim]);
+    approveStagingClaim.mockResolvedValue({ ...stagingClaim, status: "active" });
+
+    render(<ClaimsPage />);
+    await screen.findByText("平台");
+    await user.click(screen.getByRole("button", { name: "通过" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(approveStagingClaim).toHaveBeenCalledWith("kb-1", "claim-staging"));
+    expect(await screen.findByText(/已通过暂存 Claim/)).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  it("rejects staging claim after confirm and reloads list", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const stagingClaim = {
+      ...claim,
+      id: "claim-staging",
+      status: "staging",
+      object: "平台",
+    };
+    listClaims.mockResolvedValue([stagingClaim]);
+    rejectStagingClaim.mockResolvedValue({ claim: { ...stagingClaim, status: "superseded" } });
+
+    render(<ClaimsPage />);
+    await screen.findByText("平台");
+    await user.click(screen.getByRole("button", { name: "拒绝" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(rejectStagingClaim).toHaveBeenCalledWith("kb-1", "claim-staging"));
+    expect(await screen.findByText(/已拒绝暂存 Claim/)).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it("wires the claims page into the application router", async () => {

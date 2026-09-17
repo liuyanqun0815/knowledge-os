@@ -671,9 +671,15 @@ button {
 }
 
 .claims-filters {
-  grid-template-columns: auto minmax(8rem, 12rem) auto minmax(12rem, 1fr);
+  grid-template-columns: auto minmax(7rem, 10rem) auto minmax(8rem, 1fr) auto minmax(8rem, 1fr) auto minmax(8rem, 1fr);
   align-items: center;
   gap: 0.75rem 1rem;
+}
+
+.claims-table .claim-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .claims-filters label {
@@ -1798,6 +1804,54 @@ button {
 .wiki-article p,
 .wiki-article li {
   line-height: 1.7;
+}
+
+.wiki-table-wrap {
+  width: 100%;
+  margin: 0.75rem 0 1.25rem;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+.wiki-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.wiki-table th,
+.wiki-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+  word-break: break-word;
+}
+
+.wiki-table th {
+  position: sticky;
+  top: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-border));
+}
+
+.wiki-table tr:last-child td {
+  border-bottom: none;
+}
+
+.wiki-table td:first-child {
+  min-width: 7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wiki-table td:nth-child(2) {
+  min-width: 12rem;
+  max-width: 22rem;
 }
 
 .wiki-wikilink {

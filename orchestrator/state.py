@@ -27,6 +27,7 @@ class AskState(TypedDict):
     session_id: str | None
     as_of: datetime | None
     normalized_question: str | None
+    recall_episodes: NotRequired[list[dict]]
     retrieval_mode: RetrievalMode | None
     hits: list[Hit]
     chunk_hits: list[Hit]

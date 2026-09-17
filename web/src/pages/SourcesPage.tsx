@@ -34,6 +34,8 @@ export function SourcesPage() {
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedTreeEntries, setSelectedTreeEntries] = useState<UploadTreeEntry[]>([]);
+  const [replacesSourceId, setReplacesSourceId] = useState("");
+  const [subjectBindMode, setSubjectBindMode] = useState<"auto" | "on" | "off">("auto");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
@@ -44,6 +46,12 @@ export function SourcesPage() {
   const pollGenerationRef = useRef(0);
 
   const hasSelectedUpload = selectedFile !== null || selectedTreeEntries.length > 0;
+  const isZipSelected = Boolean(selectedFile?.name.toLowerCase().endsWith(".zip"));
+  const canReplaceHistorical =
+    selectedFile !== null && !isZipSelected && selectedTreeEntries.length === 0;
+  const replaceCandidates = sources.filter((item) =>
+    ["succeeded", "succeeded_partial", "ready"].includes(item.compile_status),
+  );
 
   const loadSources = useCallback(async () => {
     if (!kbId) {
@@ -76,6 +84,8 @@ export function SourcesPage() {
     setSources([]);
     setSelectedFile(null);
     setSelectedTreeEntries([]);
+    setReplacesSourceId("");
+    setSubjectBindMode("auto");
     setUploadSummary(null);
     setExpandedSourceId(null);
     setSearchQuery("");
@@ -108,6 +118,7 @@ export function SourcesPage() {
     }
     setSelectedFile(file);
     setSelectedTreeEntries([]);
+    setReplacesSourceId("");
     setUploadSummary(null);
     setError(null);
   }
@@ -128,6 +139,7 @@ export function SourcesPage() {
     }
     setSelectedFile(null);
     setSelectedTreeEntries(entries);
+    setReplacesSourceId("");
     setUploadSummary(null);
     setError(null);
   }
@@ -151,10 +163,15 @@ export function SourcesPage() {
     try {
       const result =
         selectedTreeEntries.length > 0
-          ? await uploadTree(kbId, selectedTreeEntries)
-          : await uploadSource(kbId, selectedFile as File);
+          ? await uploadTree(kbId, selectedTreeEntries, { subjectBindMode })
+          : await uploadSource(kbId, selectedFile as File, {
+              ...(canReplaceHistorical && replacesSourceId ? { replacesSourceId } : {}),
+              subjectBindMode,
+            });
       setSelectedFile(null);
       setSelectedTreeEntries([]);
+      setReplacesSourceId("");
+      setSubjectBindMode("auto");
       setUploadSummary(
         result.accepted_async !== false
           ? `已接收 ${result.results.length} 个文件，后台编译中`
@@ -250,6 +267,36 @@ export function SourcesPage() {
           {selectedFile ? <p>已选择：{selectedFile.name}</p> : null}
           {selectedTreeEntries.length > 0 ? <p>已选择文件夹：{selectedTreeEntries.length} 个文档</p> : null}
         </div>
+        <label htmlFor="replaces-source-id">替换历史文档</label>
+        <select
+          id="replaces-source-id"
+          value={canReplaceHistorical ? replacesSourceId : ""}
+          onChange={(event) => setReplacesSourceId(event.target.value)}
+          disabled={isUploading || !canReplaceHistorical}
+        >
+          <option value="">
+            可选：用新文件替换已有文档，将自动 Diff 并 supersede 相关 Claim
+          </option>
+          {replaceCandidates.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.relative_path || item.filename}
+            </option>
+          ))}
+        </select>
+        {!canReplaceHistorical && hasSelectedUpload ? (
+          <p className="form-helper">仅单文件（非 ZIP）支持替换历史文档并触发 Claim 演化。</p>
+        ) : null}
+        <label htmlFor="subject-bind-mode">主体绑定产品</label>
+        <select
+          id="subject-bind-mode"
+          value={subjectBindMode}
+          onChange={(event) => setSubjectBindMode(event.target.value as "auto" | "on" | "off")}
+          disabled={isUploading}
+        >
+          <option value="auto">自动（推荐）</option>
+          <option value="on">强制绑定</option>
+          <option value="off">关闭</option>
+        </select>
         <div className="form-actions">
           <button className="button button-primary" type="submit" disabled={!hasSelectedUpload || isUploading}>
             {isUploading ? "上传中…" : "上传"}

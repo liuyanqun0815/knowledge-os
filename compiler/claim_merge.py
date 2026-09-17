@@ -19,21 +19,39 @@ def is_exclusive_predicate(predicate: str) -> bool:
     return predicate.strip() in EXCLUSIVE_PREDICATES
 
 
+def _split_object_parts(value: str) -> list[str]:
+    """Split only on join separators we emit (；), never on natural顿号 inside a value."""
+    text = value.strip()
+    if not text:
+        return []
+    for sep in ("；", ";"):
+        if sep in text:
+            return [part.strip() for part in text.split(sep) if part.strip()]
+    return [text]
+
+
 def _join_objects(parts: list[str]) -> str:
     unique: list[str] = []
     seen: set[str] = set()
     for part in parts:
-        text = part.strip()
-        if not text or text in seen:
-            continue
-        if any(text in existing and text != existing for existing in unique):
-            continue
-        unique = [existing for existing in unique if existing not in text]
-        unique.append(text)
-        seen.add(text)
-    if any(len(item) > 8 or "，" in item or "。" in item for item in unique):
+        for piece in _split_object_parts(part):
+            text = piece.strip()
+            if not text or text in seen:
+                continue
+            if any(text in existing and text != existing for existing in unique):
+                continue
+            unique = [existing for existing in unique if existing not in text]
+            unique.append(text)
+            seen.add(text)
+    # Prefer顿号 for short tokens; semicolon for long / punctuated values.
+    if any(len(item) > 8 or "，" in item or "。" in item or "、" in item for item in unique):
         return "；".join(unique)
     return "、".join(unique)
+
+
+def join_claim_objects(*parts: str) -> str:
+    """Public helper: dedupe and join complementary object values."""
+    return _join_objects(list(parts))
 
 
 def _join_quotes(claims: list[ExtractedClaim]) -> tuple[str, int, int]:

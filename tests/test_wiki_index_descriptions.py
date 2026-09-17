@@ -70,3 +70,31 @@ def test_rebuild_wiki_index_includes_page_and_folder_descriptions(tmp_path: Path
     assert "> 涵盖七天无理由退货、退换货流程。" in index_body
     assert "- [[售后/七天无理由退货|七天无理由退货]] — 说明七天无理由退货的适用范围与申请流程。" in index_body
     assert "- [[售后/退换货流程|退换货流程]] — 介绍退换货申请步骤与审核时效。" in index_body
+
+
+def test_rebuild_wiki_index_includes_sole_index_page(tmp_path: Path) -> None:
+    wiki_root = tmp_path / "wiki"
+    page_dir = wiki_root / "理财产品" / "青银理财"
+    page_dir.mkdir(parents=True)
+    (page_dir / "_index.md").write_text(
+        "# 青银理财\n\n## 摘要\n\n> 理财产品说明书摘要。\n",
+        encoding="utf-8",
+    )
+    pages_meta = {
+        "理财产品/青银理财/_index": WikiPageMeta(
+            path="理财产品/青银理财/_index.md",
+            title="青银理财",
+            kind="source_page",
+            content_hash="c",
+            source_ids=["w1"],
+            updated_at=datetime.now(timezone.utc),
+            hub="理财产品/青银理财",
+            role="leaf",
+            summary="理财产品说明书摘要。",
+        )
+    }
+    save_pages_meta(wiki_root, pages_meta)
+    rebuild_wiki_index(wiki_root, "kb1", pages_meta)
+    index_body = (wiki_root / "index.md").read_text(encoding="utf-8")
+    assert "### 理财产品/青银理财" in index_body
+    assert "[[理财产品/青银理财/_index|青银理财]]" in index_body

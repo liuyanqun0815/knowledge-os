@@ -51,6 +51,17 @@ def test_rerank_content_hits_preserves_claims_first():
     assert content[0].chunk_id == "c2"
     assert all(hit.hit_type == "claim" for hit in merged if hit.claim_id == "cl1")
     assert [hit.claim_id for hit in merged if hit.hit_type == "claim"] == ["cl1"]
+    assert all(0.0 <= hit.score <= 1.0 for hit in merged)
+    assert max(hit.score for hit in merged) == 1.0
+
+
+def test_to_unit_interval_applies_sigmoid_for_logits():
+    from retrieval.reranker import to_unit_interval
+
+    scores = to_unit_interval([2.0, 0.0, -2.0])
+    assert all(0.0 < s < 1.0 for s in scores)
+    assert scores[0] > scores[1] > scores[2]
+    assert to_unit_interval([0.2, 0.8]) == [0.2, 0.8]
 
 
 def test_rerank_hits_respects_min_score_threshold():
@@ -68,7 +79,8 @@ def test_rerank_hits_respects_min_score_threshold():
         Hit(score=0.4, snippet="另一段无关文本", hit_type="claim", claim_id="cl1"),
     ]
     reranked = rerank_hits("节假日发货", hits, reranker, settings)
-    assert reranked == hits[: settings.retrieval_top_k]
+    assert [hit.ref_id or hit.claim_id for hit in reranked] == ["w1", "cl1"]
+    assert all(0.0 <= hit.score <= 1.0 for hit in reranked)
 
 
 def test_passage_for_hit_uses_claim_triple():

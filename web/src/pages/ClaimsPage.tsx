@@ -1,5 +1,5 @@
 import { type ChangeEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { listClaims } from "../api/claims";
+import { approveStagingClaim, listClaims, rejectStagingClaim } from "../api/claims";
 import type { ClaimListItem } from "../api/types";
 import { useKb } from "../app/KbContext";
 import { ClaimHistoryPanel } from "../components/ClaimHistoryPanel";
@@ -31,10 +31,14 @@ export function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [subjectFilter, setSubjectFilter] = useState("");
+  const [predicateFilter, setPredicateFilter] = useState("");
+  const [objectFilter, setObjectFilter] = useState("");
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(false);
+  const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
 
@@ -49,6 +53,8 @@ export function ClaimsPage() {
       const items = await listClaims(kbId, {
         status: statusFilter === "all" ? undefined : statusFilter,
         subject: subjectFilter.trim() || undefined,
+        predicate: predicateFilter.trim() || undefined,
+        object: objectFilter.trim() || undefined,
       });
       if (requestSequence.current === requestId) {
         setClaims(items);
@@ -63,7 +69,7 @@ export function ClaimsPage() {
         setIsLoading(false);
       }
     }
-  }, [kbId, statusFilter, subjectFilter]);
+  }, [kbId, statusFilter, subjectFilter, predicateFilter, objectFilter]);
 
   useEffect(() => {
     requestSequence.current += 1;
@@ -83,7 +89,7 @@ export function ClaimsPage() {
   useEffect(() => {
     setPage(1);
     setExpandedFamilyId(null);
-  }, [statusFilter, subjectFilter, pageSize]);
+  }, [statusFilter, subjectFilter, predicateFilter, objectFilter, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(claims.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -104,12 +110,62 @@ export function ClaimsPage() {
     setSubjectFilter(event.target.value);
   }
 
+  function handlePredicateChange(event: ChangeEvent<HTMLInputElement>) {
+    setPredicateFilter(event.target.value);
+  }
+
+  function handleObjectChange(event: ChangeEvent<HTMLInputElement>) {
+    setObjectFilter(event.target.value);
+  }
+
   function handlePageSizeChange(event: ChangeEvent<HTMLSelectElement>) {
     setPageSize(Number(event.target.value));
   }
 
   function toggleHistory(familyId: string) {
     setExpandedFamilyId((current) => (current === familyId ? null : familyId));
+  }
+
+  async function handleApproveStaging(claimId: string) {
+    if (!kbId) {
+      return;
+    }
+    if (!window.confirm("通过后将用该暂存结论覆盖同主谓下的生效 Claim，是否继续？")) {
+      return;
+    }
+    setIsReviewingId(claimId);
+    setError(null);
+    setNotice(null);
+    try {
+      await approveStagingClaim(kbId, claimId);
+      setNotice("已通过暂存 Claim，旧生效版本已过期。");
+      await loadClaims();
+    } catch {
+      setError("通过暂存 Claim 失败，请稍后重试。");
+    } finally {
+      setIsReviewingId(null);
+    }
+  }
+
+  async function handleRejectStaging(claimId: string) {
+    if (!kbId) {
+      return;
+    }
+    if (!window.confirm("拒绝后该暂存 Claim 将标记为过期，不影响现有生效版本。是否继续？")) {
+      return;
+    }
+    setIsReviewingId(claimId);
+    setError(null);
+    setNotice(null);
+    try {
+      await rejectStagingClaim(kbId, claimId);
+      setNotice("已拒绝暂存 Claim。");
+      await loadClaims();
+    } catch {
+      setError("拒绝暂存 Claim 失败，请稍后重试。");
+    } finally {
+      setIsReviewingId(null);
+    }
   }
 
   if (!kbId) {
@@ -121,11 +177,16 @@ export function ClaimsPage() {
       <div className="page-header">
         <div>
           <h1>Claim 浏览</h1>
-          <p>按状态与主体筛选 Claim，点击行查看版本历史。</p>
+          <p>按状态与主体/谓词/客体模糊筛选 Claim，点击行查看版本历史。</p>
         </div>
       </div>
 
       {error ? <ErrorBanner message={error} /> : null}
+      {notice ? (
+        <p className="success-banner" role="status">
+          {notice}
+        </p>
+      ) : null}
 
       <div className="form-card claims-filters">
         <label htmlFor="claim-status">状态</label>
@@ -142,7 +203,23 @@ export function ClaimsPage() {
           type="text"
           value={subjectFilter}
           onChange={handleSubjectChange}
-          placeholder="按主体筛选"
+          placeholder="模糊匹配主体"
+        />
+        <label htmlFor="claim-predicate">谓词</label>
+        <input
+          id="claim-predicate"
+          type="text"
+          value={predicateFilter}
+          onChange={handlePredicateChange}
+          placeholder="模糊匹配谓词"
+        />
+        <label htmlFor="claim-object">客体</label>
+        <input
+          id="claim-object"
+          type="text"
+          value={objectFilter}
+          onChange={handleObjectChange}
+          placeholder="模糊匹配客体"
         />
       </div>
 
@@ -161,6 +238,7 @@ export function ClaimsPage() {
                 <th className="claims-col-status">状态</th>
                 <th>版本</th>
                 <th>置信度</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -177,10 +255,34 @@ export function ClaimsPage() {
                     <td className="claims-col-status">{STATUS_LABELS[claim.status] ?? claim.status}</td>
                     <td>{claim.version}</td>
                     <td>{claim.confidence.toFixed(2)}</td>
+                    <td>
+                      {claim.status === "staging" ? (
+                        <div className="claim-row-actions" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            className="button button-primary"
+                            type="button"
+                            disabled={isReviewingId === claim.id}
+                            onClick={() => void handleApproveStaging(claim.id)}
+                          >
+                            通过
+                          </button>
+                          <button
+                            className="button button-secondary"
+                            type="button"
+                            disabled={isReviewingId === claim.id}
+                            onClick={() => void handleRejectStaging(claim.id)}
+                          >
+                            拒绝
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="form-helper">—</span>
+                      )}
+                    </td>
                   </tr>
                   {expandedFamilyId === claim.family_id ? (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <ClaimHistoryPanel kbId={kbId} familyId={claim.family_id} />
                       </td>
                     </tr>

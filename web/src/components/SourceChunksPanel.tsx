@@ -21,7 +21,7 @@ export function SourceChunksPanel({ kbId, sourceId }: SourceChunksPanelProps) {
     let active = true;
     setIsLoading(true);
     setError(null);
-    fetchSourceChunks(kbId, sourceId, "active")
+    fetchSourceChunks(kbId, sourceId, "all")
       .then((items) => {
         if (active) {
           setChunks(items);
@@ -52,12 +52,23 @@ export function SourceChunksPanel({ kbId, sourceId }: SourceChunksPanelProps) {
   }
 
   if (chunks.length === 0) {
-    return <p className="form-helper">该文档尚未生成 Chunk（请确认已开启 AKOS_CHUNK_INDEX）。</p>;
+    return (
+      <p className="form-helper">
+        该文档没有 Chunk 记录。上传流程会在萃取 Claim 之后切分；若二次 LLM 切分失败，也可能只留下已过期段。
+      </p>
+    );
   }
+
+  const activeCount = chunks.filter((chunk) => chunk.status === "active").length;
 
   return (
     <div className="chunks-panel">
-      <p className="form-helper">共 {chunks.length} 段（仅显示生效）</p>
+      <p className="form-helper">
+        共 {chunks.length} 段（生效 {activeCount}）
+        {activeCount === 0
+          ? "。当前全部为已过期，Ask 检索不会使用它们；可重新上传该文件以再切分。"
+          : null}
+      </p>
       <div className="chunks-list">
         {chunks.map((chunk) => (
           <details key={chunk.id} className="chunk-item">

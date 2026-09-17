@@ -126,6 +126,7 @@ class LangGraphOrchestrator:
                 "session_id": session_id,
                 "as_of": as_of,
                 "normalized_question": None,
+                "recall_episodes": [],
                 "retrieval_mode": None,
                 "hits": [],
                 "chunk_hits": [],

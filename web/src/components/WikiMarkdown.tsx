@@ -10,7 +10,18 @@ export type WikiMarkdownProps = {
   onNavigate: (pageId: string) => void;
 };
 
-const WIKILINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+/** Private-use placeholder so GFM tables do not split on wikilink `|`. */
+const WIKILINK_PIPE = "\uE000";
+
+const WIKILINK_RE = new RegExp(
+  String.raw`\[\[([^\]${WIKILINK_PIPE}]+)(?:[${WIKILINK_PIPE}|]([^\]]+))?\]\]`,
+  "g",
+);
+
+/** Protect `[[target|label]]` pipes before remark-gfm parses markdown tables. */
+export function protectWikilinkPipes(markdown: string): string {
+  return markdown.replace(/\[\[([\s\S]*?)\]\]/g, (match) => match.replace(/\|/g, WIKILINK_PIPE));
+}
 
 function renderTextWithWikilinks(
   text: string,
@@ -98,9 +109,20 @@ function makeElement(
   };
 }
 
+function WikiTable({ children, ...props }: MarkdownElementProps) {
+  return (
+    <div className="wiki-table-wrap">
+      <table className="wiki-table" {...props}>
+        {children}
+      </table>
+    </div>
+  );
+}
+
 export function WikiMarkdown({ markdown, pageIds, highlightQuery, onNavigate }: WikiMarkdownProps) {
   const wrap = (Tag: keyof JSX.IntrinsicElements) =>
     makeElement(Tag, pageIds, onNavigate, highlightQuery);
+  const safeMarkdown = protectWikilinkPipes(markdown);
 
   return (
     <ReactMarkdown
@@ -120,9 +142,10 @@ export function WikiMarkdown({ markdown, pageIds, highlightQuery, onNavigate }: 
         em: wrap("em"),
         blockquote: wrap("blockquote"),
         a: wrap("a"),
+        table: WikiTable,
       }}
     >
-      {markdown}
+      {safeMarkdown}
     </ReactMarkdown>
   );
 }

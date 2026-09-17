@@ -44,6 +44,20 @@ export async function compileWiki(kbId: string, sourceId?: string): Promise<Wiki
   return response.json() as Promise<WikiCompileResponse>;
 }
 
+/** Download compiled wiki tree as a zip (same layout as the left sidebar). */
+export async function downloadWikiZip(kbId: string): Promise<void> {
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/wiki/download`);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = `${kbId}-wiki.zip`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 export type WikiTreePageItem = { page_id: string; title: string; summary?: string | null };
 export type WikiTreeHubItem = { name: string; description?: string | null; pages: WikiTreePageItem[] };
 export type WikiTreeResponse = { kb_id: string; wiki_root: string; hubs: WikiTreeHubItem[] };

@@ -41,8 +41,8 @@ describe("SourceChunksPanel", () => {
     render(<SourceChunksPanel kbId="kb-1" sourceId="source-1" />);
 
     expect(await screen.findByText(/退货说明/)).toBeInTheDocument();
-    expect(screen.getByText(/共 1 段/)).toBeInTheDocument();
-    expect(fetchSourceChunks).toHaveBeenCalledWith("kb-1", "source-1", "active");
+    expect(screen.getByText(/共 1 段（生效 1）/)).toBeInTheDocument();
+    expect(fetchSourceChunks).toHaveBeenCalledWith("kb-1", "source-1", "all");
 
     await user.click(screen.getByText(/退货说明/));
     expect(screen.getByText("买家可在七天内申请退货。")).toBeInTheDocument();

@@ -5,9 +5,9 @@ from typing import Any
 
 from langsmith import traceable
 
-from compiler.chunker import chunk_text
 from compiler.document_anchor import resolve_document_anchor
 from compiler.domain_llm_extractor import DomainLlmExtractor
+from compiler.intersect import resolve_extraction_units
 from compiler.ports import ExtractedClaim
 from compiler.spec_utils import apply_open_flag
 from infra.settings import Settings
@@ -36,24 +36,26 @@ def enrich_source(
             raise RuntimeError(f"source text not found: {source_id}")
 
         source = deps.knowledge.get_source(source_id)
-        anchor = resolve_document_anchor(
+        document_anchor = resolve_document_anchor(
             text,
             title=getattr(source, "title", None) if source else None,
         )
-        result = chunk_text(
+        stored_chunks = deps.knowledge.list_chunks(source_id, status="active")
+        units, truncated = resolve_extraction_units(
             text,
-            max_chars=settings.chunk_max_chars,
-            max_chunks=settings.chunk_max_per_doc,
+            settings,
+            source_chunks=stored_chunks or None,
         )
         spec = apply_open_flag(deps.domain.llm_extraction_spec(), settings)
         extractor = DomainLlmExtractor(client, spec)
         extracted: list[ExtractedClaim] = []
         failed_chunks = 0
 
-        for chunk in result.chunks:
+        for unit in units:
+            unit_anchor = (unit.title or "").strip() or document_anchor
             for attempt in range(2):
                 try:
-                    extracted.extend(extractor.extract(chunk, document_anchor=anchor))
+                    extracted.extend(extractor.extract(unit.text, document_anchor=unit_anchor))
                     break
                 except Exception:
                     if attempt == 1:
@@ -66,13 +68,14 @@ def enrich_source(
             open_predicates=settings.extract_open_predicates,
         )
         logger.info(
-            "LLM enrichment finished for source %s in kb %s: extracted=%s claims",
+            "LLM enrichment finished for source %s in kb %s: extracted=%s claims units=%s",
             source_id,
             kb_id,
             len(extracted),
+            len(units),
         )
-        failure_ratio = failed_chunks / len(result.chunks) if result.chunks else 0.0
-        final_status = "succeeded_partial" if result.truncated or failure_ratio >= 0.5 else "succeeded"
+        failure_ratio = failed_chunks / len(units) if units else 0.0
+        final_status = "succeeded_partial" if truncated or failure_ratio >= 0.5 else "succeeded"
         deps.knowledge.update_source_status(source_id, final_status)
     except Exception:
         logger.exception("LLM enrichment failed for source %s in kb %s", source_id, kb_id)

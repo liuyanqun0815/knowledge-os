@@ -96,6 +96,7 @@ def _schedule_upload_processing(
     originals: list[Path],
     source_type: str,
     replaces_source_id: str | None = None,
+    subject_bind_mode: str | None = None,
 ) -> list[ZipUploadItemResponse]:
     orchestrator = build_orchestrator_for_request(kb_id, request)
     settings = request.app.state.settings
@@ -120,6 +121,7 @@ def _schedule_upload_processing(
             settings=settings,
             orchestrator=orchestrator,
             replaces_source_id=replaces_source_id if single else None,
+            subject_bind_mode=subject_bind_mode,
         )
     return results
 
@@ -151,6 +153,7 @@ def _upload_zip_bytes(
     kb_dir: Path,
     zip_bytes: bytes,
     source_type: str,
+    subject_bind_mode: str | None = None,
 ) -> SourceUploadResponse:
     extracted, extract_errors = extract_zip_documents(zip_bytes, kb_dir)
     results = _schedule_upload_processing(
@@ -160,6 +163,7 @@ def _upload_zip_bytes(
         kb_dir,
         extracted,
         source_type,
+        subject_bind_mode=subject_bind_mode,
     )
     return _async_upload_response(
         upload_mode="zip",
@@ -179,6 +183,7 @@ async def upload_source(
     source_type: str = Form("policy"),
     replaces_source_id: str | None = Form(None),
     relative_path: str | None = Form(None),
+    subject_bind_mode: str | None = Form(None),
 ) -> SourceUploadResponse:
     """统一上传：按扩展名分流单文件或 ZIP；ZIP 须在 suffix 白名单校验之前处理。"""
     filename = Path(file.filename or "").name
@@ -196,7 +201,15 @@ async def upload_source(
                 status_code=400,
                 detail="replaces_source_id and relative_path are not supported for zip upload",
             )
-        return _upload_zip_bytes(kb_id, request, background_tasks, kb_dir, content, source_type)
+        return _upload_zip_bytes(
+            kb_id,
+            request,
+            background_tasks,
+            kb_dir,
+            content,
+            source_type,
+            subject_bind_mode=subject_bind_mode,
+        )
 
     target_relative_path = relative_path or filename
     suffix = Path(target_relative_path).suffix.lower()
@@ -218,6 +231,7 @@ async def upload_source(
         [dest],
         source_type,
         replaces_source_id,
+        subject_bind_mode=subject_bind_mode,
     )
     return _async_upload_response(upload_mode="single", files_total=1, results=results)
 
@@ -231,6 +245,7 @@ async def upload_tree(
     files: list[UploadFile] = File(...),
     relative_paths: list[str] = Form(...),
     source_type: str = Form("policy"),
+    subject_bind_mode: str | None = Form(None),
 ) -> SourceUploadResponse:
     if len(files) != len(relative_paths):
         raise HTTPException(status_code=400, detail="files and relative_paths must have matching lengths")
@@ -264,6 +279,7 @@ async def upload_tree(
         kb_dir,
         destinations,
         source_type,
+        subject_bind_mode=subject_bind_mode,
     )
     return _async_upload_response(
         upload_mode="tree",

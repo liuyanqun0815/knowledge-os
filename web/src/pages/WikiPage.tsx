@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  compileWiki,
+  downloadWikiZip,
   fetchWikiPage,
   fetchWikiTree,
   searchWiki,
@@ -266,12 +266,10 @@ export function WikiPage() {
     setNotice(null);
     setIsCompilingWiki(true);
     try {
-      const result = await compileWiki(kbId);
-      const topicHint = result.topics.length > 0 ? `（${result.topics.length} 个主题）` : "";
-      setNotice(`Wiki 已写入编译目录：${result.pages_written} 页${topicHint} → ${result.wiki_root}`);
-      setTreeReloadToken((token) => token + 1);
+      await downloadWikiZip(kbId);
+      setNotice("Wiki zip 已开始下载。");
     } catch {
-      setError("Wiki 导出失败，请稍后重试。");
+      setError("Wiki 导出失败：请确认已编译 Wiki，或稍后重试。");
     } finally {
       setIsCompilingWiki(false);
     }
@@ -313,7 +311,7 @@ export function WikiPage() {
         </div>
         {error ? <ErrorBanner message={error} /> : null}
         {notice ? <p className="success-banner">{notice}</p> : null}
-        <EmptyState title="暂无 Wiki" description="尚未编译 Wiki，可点击右上角「导出 Wiki」写入编译目录。" />
+        <EmptyState title="暂无 Wiki" description="尚未编译 Wiki，请先完成文档萃取；有内容后可点击右上角「导出 Wiki」下载 zip。" />
       </section>
     );
   }

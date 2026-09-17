@@ -18,22 +18,98 @@ def build_synthesis_context(
     deps: Any,
     settings: Settings,
     wiki_pages: list[dict[str, Any]] | None = None,
+    hits: list[Any] | None = None,
 ) -> dict[str, Any]:
+    """Pack LLM context from verified claims + rerank hits (claim-first).
+
+    When ``hits`` is provided, non-claim records follow that order (no
+    ``ask_synthesis_max_chunks`` cap); each chunk/wiki body is truncated to
+    ``ask_synthesis_content_max_chars``.
+    """
+    max_chars = max(int(settings.ask_synthesis_content_max_chars), 1)
+    allowed_claims = set(claim_ids)
+
     claims = []
     evidence = []
-    for claim_id in claim_ids:
-        claim = deps.knowledge.get_claim(claim_id)
-        if claim is None:
-            continue
-        claims.append(
-            {
-                "id": claim.id,
-                "subject": claim.subject,
-                "predicate": claim.predicate,
-                "object": claim.object,
-                "confidence": claim.confidence,
-            }
-        )
+    chunks: list[dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
+    seen_chunks: set[str] = set()
+    seen_wiki: set[str] = set()
+
+    if hits:
+        for hit in hits:
+            hit_type = getattr(hit, "hit_type", None) or "claim"
+            if hit_type == "chunk":
+                chunk_id = getattr(hit, "chunk_id", None)
+                if not chunk_id or chunk_id in seen_chunks:
+                    continue
+                chunk = deps.knowledge.get_chunk(chunk_id)
+                if chunk is None:
+                    continue
+                seen_chunks.add(chunk_id)
+                chunks.append(_chunk_payload(chunk, max_chars=max_chars))
+            elif hit_type == "wiki":
+                key = getattr(hit, "ref_id", None) or getattr(hit, "path", None) or getattr(hit, "snippet", None) or ""
+                if not key or key in seen_wiki:
+                    continue
+                seen_wiki.add(key)
+                pages.append(_wiki_payload(hit, max_chars=max_chars))
+            else:
+                claim_id = getattr(hit, "claim_id", None)
+                if not claim_id or claim_id not in allowed_claims:
+                    continue
+                if any(item["id"] == claim_id for item in claims):
+                    continue
+                claim = deps.knowledge.get_claim(claim_id)
+                if claim is None:
+                    continue
+                claims.append(
+                    {
+                        "id": claim.id,
+                        "subject": claim.subject,
+                        "predicate": claim.predicate,
+                        "object": claim.object,
+                        "confidence": claim.confidence,
+                    }
+                )
+        # Include verified claims missing from hits (e.g. explain-only ids).
+        for claim_id in claim_ids:
+            if any(item["id"] == claim_id for item in claims):
+                continue
+            claim = deps.knowledge.get_claim(claim_id)
+            if claim is None:
+                continue
+            claims.append(
+                {
+                    "id": claim.id,
+                    "subject": claim.subject,
+                    "predicate": claim.predicate,
+                    "object": claim.object,
+                    "confidence": claim.confidence,
+                }
+            )
+    else:
+        for claim_id in claim_ids:
+            claim = deps.knowledge.get_claim(claim_id)
+            if claim is None:
+                continue
+            claims.append(
+                {
+                    "id": claim.id,
+                    "subject": claim.subject,
+                    "predicate": claim.predicate,
+                    "object": claim.object,
+                    "confidence": claim.confidence,
+                }
+            )
+        for chunk_id in chunk_ids[: settings.ask_synthesis_max_chunks]:
+            chunk = deps.knowledge.get_chunk(chunk_id)
+            if chunk is None:
+                continue
+            chunks.append(_chunk_payload(chunk, max_chars=max_chars))
+        for page in list(wiki_pages or [])[: settings.ask_synthesis_max_chunks]:
+            pages.append(_truncate_wiki_page(page, max_chars=max_chars))
+
     if claim_ids:
         bundle = deps.evidence.explain(claim_ids)
         for item in bundle.items:
@@ -45,14 +121,6 @@ def build_synthesis_context(
                 }
             )
 
-    chunks = []
-    for chunk_id in chunk_ids[: settings.ask_synthesis_max_chunks]:
-        chunk = deps.knowledge.get_chunk(chunk_id)
-        if chunk is None:
-            continue
-        chunks.append(_chunk_payload(chunk))
-
-    pages = list(wiki_pages or [])[: settings.ask_synthesis_max_chunks]
     return {
         "question": question,
         "claims": claims,
@@ -62,8 +130,8 @@ def build_synthesis_context(
     }
 
 
-def _chunk_payload(chunk: SourceChunk) -> dict[str, Any]:
-    excerpt = chunk.text[:500]
+def _chunk_payload(chunk: SourceChunk, *, max_chars: int = 800) -> dict[str, Any]:
+    excerpt = (chunk.text or "")[:max_chars]
     return {
         "id": chunk.id,
         "source_id": chunk.source_id,
@@ -72,6 +140,33 @@ def _chunk_payload(chunk: SourceChunk) -> dict[str, Any]:
         "text_excerpt": excerpt,
         "quote": excerpt[:120],
     }
+
+
+def _truncate_text(value: str | None, max_chars: int) -> str:
+    text = value or ""
+    return text[:max_chars]
+
+
+def _wiki_payload(hit: Any, *, max_chars: int) -> dict[str, Any]:
+    content = _truncate_text(getattr(hit, "content", None) or getattr(hit, "snippet", None), max_chars)
+    excerpt = _truncate_text(getattr(hit, "snippet", None) or content, max_chars)
+    return {
+        "title": getattr(hit, "title", None) or getattr(hit, "ref_id", None) or "",
+        "excerpt": excerpt,
+        "content": content,
+        "path": getattr(hit, "path", None) or "",
+        "links": [],
+        "ref_id": getattr(hit, "ref_id", None),
+    }
+
+
+def _truncate_wiki_page(page: dict[str, Any], *, max_chars: int) -> dict[str, Any]:
+    out = dict(page)
+    if isinstance(out.get("content"), str):
+        out["content"] = out["content"][:max_chars]
+    if isinstance(out.get("excerpt"), str):
+        out["excerpt"] = out["excerpt"][:max_chars]
+    return out
 
 
 def _build_prompt(context: dict[str, Any]) -> str:

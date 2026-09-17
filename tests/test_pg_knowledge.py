@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from knowledge.models import Claim, Source
+from knowledge.models import Claim, Source, SourceChunk
 from tests.conftest import pg_enabled
 
 pytestmark = pytest.mark.skipif(
@@ -163,3 +163,39 @@ def test_pg_delete_source_updates_claim_references(pg_knowledge):
     kept = pg_knowledge.get_claim("c-del-2")
     assert kept is not None
     assert kept.source_ids == ["s-keep"]
+
+
+def _chunk(chunk_id: str, source_id: str, index: int, text: str) -> SourceChunk:
+    from datetime import datetime, timezone
+
+    return SourceChunk(
+        id=chunk_id,
+        source_id=source_id,
+        chunk_index=index,
+        title=f"section-{index}",
+        summary=None,
+        text=text,
+        start=0,
+        end=len(text),
+        section_path=[],
+        topics=[],
+        token_count=1,
+        status="active",
+        content_hash=text,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def test_pg_save_chunks_allows_same_index_after_stale(pg_knowledge):
+    source_id = "s-chunk-replace"
+    pg_knowledge.save_source(_source(source_id))
+    pg_knowledge.save_chunks(
+        source_id,
+        [_chunk("old-0", source_id, 0, "first"), _chunk("old-1", source_id, 1, "second")],
+    )
+    pg_knowledge.save_chunks(source_id, [_chunk("new-0", source_id, 0, "rewritten")])
+
+    active = pg_knowledge.list_chunks(source_id, status="active")
+    stale = pg_knowledge.list_chunks(source_id, status="stale")
+    assert [item.id for item in active] == ["new-0"]
+    assert {item.id for item in stale} == {"old-0", "old-1"}

@@ -30,8 +30,13 @@ def entity_wikilink(subject: str) -> str:
 
 
 def wiki_page_path(folder: str, slug: str) -> str:
-    """Source-plan page path without ``.md`` suffix."""
-    return f"{sanitize_filename(folder)}/{sanitize_filename(slug)}"
+    """Source-plan page path without ``.md`` suffix.
+
+    Nested folders keep ``/`` separators; each segment is sanitized independently.
+    """
+    parts = [sanitize_filename(part) for part in str(folder).replace("\\", "/").split("/") if part.strip()]
+    folder_path = "/".join(parts) if parts else "未分类"
+    return f"{folder_path}/{sanitize_filename(slug)}"
 
 
 def wiki_page_wikilink(folder: str, slug: str, label: str | None = None) -> str:

@@ -232,6 +232,10 @@ class ApproveQuarantineResponse(BaseModel):
     claim: ClaimListItemResponse
 
 
+class RejectStagingClaimResponse(BaseModel):
+    claim: ClaimListItemResponse
+
+
 class ApproveAllQuarantineFailure(BaseModel):
     id: int
     detail: str

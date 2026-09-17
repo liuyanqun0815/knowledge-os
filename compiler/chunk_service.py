@@ -16,7 +16,13 @@ def _content_hash(text: str) -> str:
 
 
 def build_source_chunks(source_id: str, text: str, settings: Settings) -> tuple[list[SourceChunk], bool]:
-    result = chunk_document(text, settings.chunk_max_chars, settings.chunk_max_per_doc)
+    result = chunk_document(
+        text,
+        settings.chunk_max_chars,
+        settings.chunk_max_per_doc,
+        mode=settings.chunk_mode,
+        heading_level=settings.chunk_heading_level,
+    )
     now = datetime.now(timezone.utc)
     chunks: list[SourceChunk] = []
     for draft in result.chunks:
@@ -73,7 +79,7 @@ def index_source_chunks(
             truncated=truncated,
             errors=[],
         )
-    except ValueError as exc:
+    except Exception as exc:
         return ChunkIndexReport(
             source_id=source_id,
             chunks_created=0,

@@ -46,6 +46,52 @@ def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:
     return knowledge, src_v4.id
 
 
+def test_staging_compile_skips_exact_spo_already_active():
+    """Identical SPO must not create a staging twin beside an existing active claim."""
+    onto = InMemoryOntology()
+    register_ecommerce_cs(onto)
+    knowledge = InMemoryKnowledge()
+    graph = InMemoryGraph()
+    evidence = InMemoryEvidence()
+    text = Path("samples/refund_policy_v3.md").read_text(encoding="utf-8")
+    src_old = Source(
+        id="refund_policy_old",
+        title="退换货政策old",
+        type="policy",
+        uri="samples/refund_policy_v3.md",
+        version="3",
+        created_at=datetime.now(timezone.utc),
+        status="ready",
+    )
+    src_new = Source(
+        id="refund_policy_new",
+        title="退换货政策new",
+        type="policy",
+        uri="samples/refund_policy_v3.md",
+        version="3b",
+        created_at=datetime.now(timezone.utc),
+        status="ready",
+        replaces_source_id=src_old.id,
+    )
+    knowledge.save_source(src_old)
+    knowledge.save_source(src_new)
+    knowledge.save_source_text(src_old.id, text)
+    knowledge.save_source_text(src_new.id, text)
+    compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor())
+    compiler.ingest(src_old.id)
+    active_before = {
+        (c.subject, c.predicate, c.object): c.id for c in knowledge.get_claims_by_status("active")
+    }
+    assert active_before
+
+    report = compiler.ingest(src_new.id, staging=True)
+
+    assert report.claims_created == 0
+    assert not knowledge.get_claims_by_status("staging")
+    active_after = {(c.subject, c.predicate, c.object): c.id for c in knowledge.get_claims_by_status("active")}
+    assert active_after == active_before
+
+
 def test_staging_compile_writes_staging_claims_not_active():
     knowledge, v4_id = _compile_v4(staging=True)
 
@@ -66,11 +112,18 @@ def test_staging_compile_writes_staging_claims_not_active():
 def test_default_compile_writes_active_claims():
     knowledge, v4_id = _compile_v4(staging=False)
 
-    active = knowledge.get_active_claims("七天无理由")
+    # Identical SPO vs v3 are skipped; exclusive object change becomes staging (not a second active).
     v4_claims = knowledge.get_claims_for_source(v4_id)
-    assert v4_claims
-    assert all(c.status == "active" for c in v4_claims)
-    assert not knowledge.get_claims_by_status("staging")
+    freight = [c for c in v4_claims if c.predicate == "运费承担方"]
+    assert len(freight) == 1
+    assert freight[0].status == "staging"
+    assert freight[0].object == "平台"
+    assert freight[0].source_ids == [v4_id]
+
+    active_freight = knowledge.get_active_claims("七天无理由", "运费承担方")
+    assert len(active_freight) == 1
+    assert active_freight[0].object == "买家"
+    assert not any(c.status == "active" and c.source_ids == [v4_id] for c in v4_claims)
 
 
 def test_save_source_persists_replaces_source_id():

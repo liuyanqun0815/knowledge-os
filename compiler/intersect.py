@@ -1,12 +1,23 @@
 from __future__ import annotations
 
-from compiler.chunker import chunk_text
+import logging
+from dataclasses import dataclass
+
+from compiler.chunker import chunk_document, chunk_text
 from compiler.document_anchor import resolve_document_anchor
 from compiler.domain_llm_extractor import DomainLlmExtractor
 from compiler.ports import ExtractedClaim
 from compiler.spec_utils import apply_open_flag
 from infra.settings import Settings
 from ontology.ports import OntologyPort
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ExtractionUnit:
+    text: str
+    title: str | None = None
 
 
 def claim_triple_key(
@@ -86,6 +97,44 @@ def union_extracted(
     return list(merged.values())
 
 
+def units_from_source_chunks(chunks: list) -> list[ExtractionUnit]:
+    """Convert stored SourceChunk rows into extraction units (title = subject anchor)."""
+    ordered = sorted(chunks, key=lambda item: getattr(item, "chunk_index", 0))
+    return [ExtractionUnit(text=chunk.text, title=getattr(chunk, "title", None)) for chunk in ordered if chunk.text]
+
+
+def resolve_extraction_units(
+    text: str,
+    settings: Settings,
+    *,
+    source_chunks: list | None = None,
+) -> tuple[list[ExtractionUnit], bool]:
+    """Prefer finalized source_chunks; otherwise chunk with the configured document mode."""
+    if source_chunks:
+        return units_from_source_chunks(source_chunks), False
+
+    mode = settings.chunk_mode
+    heading_level = settings.chunk_heading_level
+    try:
+        result = chunk_document(
+            text,
+            max_chars=settings.chunk_max_chars,
+            max_chunks=settings.chunk_max_per_doc,
+            mode=mode,
+            heading_level=heading_level,
+        )
+        units = [ExtractionUnit(text=draft.text, title=draft.title) for draft in result.chunks]
+        return units, result.truncated
+    except Exception:
+        # Keep older chunk_text path if document chunker fails unexpectedly.
+        legacy = chunk_text(
+            text,
+            max_chars=settings.chunk_max_chars,
+            max_chunks=settings.chunk_max_per_doc,
+        )
+        return [ExtractionUnit(text=piece) for piece in legacy.chunks], legacy.truncated
+
+
 def extract_llm_claims_from_text(
     text: str,
     llm_client,
@@ -93,22 +142,19 @@ def extract_llm_claims_from_text(
     settings: Settings,
     *,
     title: str | None = None,
+    source_chunks: list | None = None,
 ) -> list[ExtractedClaim]:
-    """Extract LLM claims from text, chunking when the document exceeds configured limits."""
+    """Extract LLM claims from text, preferring finalized source_chunks when available."""
     extractor = DomainLlmExtractor(llm_client, apply_open_flag(domain.llm_extraction_spec(), settings))
-    anchor = resolve_document_anchor(text, title=title)
-    if len(text) <= settings.chunk_max_chars:
-        return extractor.extract(text, document_anchor=anchor)
+    document_anchor = resolve_document_anchor(text, title=title)
+    units, _truncated = resolve_extraction_units(text, settings, source_chunks=source_chunks)
 
-    result = chunk_text(
-        text,
-        max_chars=settings.chunk_max_chars,
-        max_chunks=settings.chunk_max_per_doc,
-    )
     claims: list[ExtractedClaim] = []
     seen: set[tuple[str, str, str]] = set()
-    for chunk in result.chunks:
-        for claim in extractor.extract(chunk, document_anchor=anchor):
+    for unit in units:
+        # Section title (e.g. product heading) is a stronger subject anchor than doc-level name.
+        unit_anchor = (unit.title or "").strip() or document_anchor
+        for claim in extractor.extract(unit.text, document_anchor=unit_anchor):
             key = (claim.subject.strip(), claim.predicate.strip(), claim.object.strip())
             if key in seen:
                 continue
@@ -126,6 +172,7 @@ def select_hybrid_candidates(
     settings: Settings,
     ontology: OntologyPort | None = None,
     title: str | None = None,
+    source_chunks: list | None = None,
 ) -> list[ExtractedClaim]:
     """Combine rule and LLM extraction according to AKOS_EXTRACT_RULES / AKOS_EXTRACT_LLM settings."""
     rule_claims = rule_extractor.extract(text) if settings.extract_rules else []
@@ -133,7 +180,23 @@ def select_hybrid_candidates(
     if not use_llm:
         return rule_claims
 
-    llm_claims = extract_llm_claims_from_text(text, llm_client, domain, settings, title=title)
+    try:
+        llm_claims = extract_llm_claims_from_text(
+            text,
+            llm_client,
+            domain,
+            settings,
+            title=title,
+            source_chunks=source_chunks,
+        )
+    except Exception:
+        if settings.extract_rules and rule_claims:
+            logger.exception(
+                "LLM extraction failed; falling back to %s rule claims",
+                len(rule_claims),
+            )
+            return rule_claims
+        raise
     if settings.extract_rules and settings.extract_llm:
         return union_extracted(rule_claims, llm_claims, ontology)
     return llm_claims

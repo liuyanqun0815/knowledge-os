@@ -64,6 +64,9 @@ export async function uploadSource(
   if (options.relativePath) {
     formData.append("relative_path", options.relativePath);
   }
+  if (options.subjectBindMode) {
+    formData.append("subject_bind_mode", options.subjectBindMode);
+  }
 
   const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/upload`, {
     method: "POST",
@@ -77,11 +80,18 @@ export type UploadTreeEntry = {
   relativePath: string;
 };
 
-export async function uploadTree(kbId: string, entries: UploadTreeEntry[]): Promise<SourceUploadResponse> {
+export async function uploadTree(
+  kbId: string,
+  entries: UploadTreeEntry[],
+  options: Pick<UploadSourceOptions, "subjectBindMode"> = {},
+): Promise<SourceUploadResponse> {
   const formData = new FormData();
   for (const entry of entries) {
     formData.append("files", entry.file);
     formData.append("relative_paths", entry.relativePath);
+  }
+  if (options.subjectBindMode) {
+    formData.append("subject_bind_mode", options.subjectBindMode);
   }
   const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/upload-tree`, {
     method: "POST",

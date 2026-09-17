@@ -113,3 +113,93 @@ def test_sanitize_keeps_answer_when_citations_partially_invalid():
     assert sanitized is not None
     assert sanitized["answer"] == payload["answer"]
     assert len(sanitized["citations"]) == 1
+
+
+def test_build_synthesis_context_uses_rerank_hits_and_truncates_non_claims():
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from infra.settings import Settings
+    from knowledge.models import Claim, SourceChunk
+    from orchestrator.synthesis import build_synthesis_context
+    from retrieval.ports import Hit
+
+    claim = Claim(
+        id="cl1",
+        family_id="f1",
+        version=1,
+        subject="发货",
+        predicate="时效",
+        object="48小时",
+        subject_type="concept",
+        object_type="literal",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime.now(timezone.utc),
+        valid_to=None,
+        source_ids=["s1"],
+    )
+    long_text = "A" * 1200
+    chunk = SourceChunk(
+        id="ch1",
+        source_id="s1",
+        chunk_index=0,
+        title="发货说明",
+        summary="摘要",
+        text=long_text,
+        start=0,
+        end=1200,
+        status="active",
+    )
+    chunk2 = SourceChunk(
+        id="ch2",
+        source_id="s1",
+        chunk_index=1,
+        title="补充",
+        summary=None,
+        text="短正文",
+        start=0,
+        end=3,
+        status="active",
+    )
+    chunks_by_id = {"ch1": chunk, "ch2": chunk2}
+    knowledge = SimpleNamespace(
+        get_claim=lambda cid: claim if cid == "cl1" else None,
+        get_chunk=lambda cid: chunks_by_id.get(cid),
+    )
+    evidence = SimpleNamespace(explain=lambda ids: SimpleNamespace(items=[]))
+    deps = SimpleNamespace(knowledge=knowledge, evidence=evidence)
+    settings = Settings(_env_file=None, ask_synthesis_max_chunks=1, ask_synthesis_content_max_chars=800)
+
+    hits = [
+        Hit(score=1.0, snippet="claim", hit_type="claim", claim_id="cl1"),
+        Hit(score=0.9, snippet="chunk", hit_type="chunk", chunk_id="ch1", source_id="s1"),
+        Hit(
+            score=0.8,
+            snippet="wiki",
+            hit_type="wiki",
+            ref_id="物流/发货",
+            path="物流/发货.md",
+            title="发货时效",
+            content="B" * 1000,
+        ),
+        Hit(score=0.7, snippet="chunk2", hit_type="chunk", chunk_id="ch2", source_id="s1"),
+    ]
+
+    context = build_synthesis_context(
+        question="发货多久？",
+        claim_ids=["cl1"],
+        chunk_ids=["ch1"],
+        wiki_pages=[{"title": "旧页", "content": "旧", "path": "old.md"}],
+        hits=hits,
+        deps=deps,
+        settings=settings,
+    )
+
+    assert [c["id"] for c in context["claims"]] == ["cl1"]
+    # hits 路径忽略 ask_synthesis_max_chunks，按 rerank 顺序消费全部非 Claim
+    assert [c["id"] for c in context["chunks"]] == ["ch1", "ch2"]
+    assert len(context["chunks"][0]["text_excerpt"]) == 800
+    assert len(context["wiki_pages"]) == 1
+    assert context["wiki_pages"][0]["path"] == "物流/发货.md"
+    assert len(context["wiki_pages"][0]["content"]) == 800

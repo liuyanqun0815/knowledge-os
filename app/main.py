@@ -69,8 +69,18 @@ async def lifespan(app: FastAPI):
     configure_langsmith(app.state.settings)
     if app.state.settings.use_pg:
         ensure_pg_schema(app.state.settings)
-    asyncio.create_task(asyncio.to_thread(_resume_background_source_jobs, app))
-    yield
+    resume_task = asyncio.create_task(asyncio.to_thread(_resume_background_source_jobs, app))
+    try:
+        yield
+    finally:
+        if not resume_task.done():
+            resume_task.cancel()
+            try:
+                await resume_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("background source resume task failed during shutdown")
 
 
 def create_app(data_root: str | None = None) -> FastAPI:

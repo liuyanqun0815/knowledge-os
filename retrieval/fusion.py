@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from retrieval.ports import Hit
 
 _RRF_K = 60
@@ -7,6 +9,23 @@ _RRF_K = 60
 
 def rrf_score(rank: int, k: int = _RRF_K) -> float:
     return 1.0 / (k + rank)
+
+
+def normalize_hit_scores(hits: list[Hit]) -> list[Hit]:
+    """Map scores onto ``[0, 1]`` while preserving order.
+
+    Uses min-max stretch when there is range; falls back to rank-linear scores
+    when values are tied (common for raw RRF ~0.01x clusters).
+    """
+    if not hits:
+        return hits
+    scores = [float(hit.score) for hit in hits]
+    lo = min(scores)
+    hi = max(scores)
+    n = len(hits)
+    if hi - lo < 1e-12:
+        return [replace(hit, score=round((n - i) / n, 6)) for i, hit in enumerate(hits)]
+    return [replace(hit, score=round((float(hit.score) - lo) / (hi - lo), 6)) for hit in hits]
 
 
 def fuse_hits(
@@ -22,6 +41,7 @@ def fuse_hits(
 
     Two-way callers that omit ``wiki_hits`` and ``chunk_weight`` keep the
     legacy split ``chunk_weight = 1.0 - claim_weight``.
+    Returned scores are normalized to ``[0, 1]`` for readable relevance.
     """
     wiki_list = wiki_hits or []
     if chunk_weight is None:
@@ -68,7 +88,7 @@ def fuse_hits(
                 content=hit.content,
             )
         )
-    return fused
+    return normalize_hit_scores(fused)
 
 
 def route_fusion_weights(question: str) -> float:

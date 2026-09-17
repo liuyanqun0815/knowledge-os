@@ -49,10 +49,6 @@ def _first_h1_title(markdown: str) -> str | None:
     return None
 
 
-def _is_hub_index_page(meta: WikiPageMeta) -> bool:
-    return meta.path.endswith("_index.md")
-
-
 def build_wiki_tree(wiki_root: Path) -> dict:
     pages_meta = load_pages_meta(wiki_root)
     hub_descriptions: dict[str, str] = {}
@@ -64,12 +60,12 @@ def build_wiki_tree(wiki_root: Path) -> dict:
 
     hubs: dict[str, list[dict]] = {}
     for page_id, meta in pages_meta.items():
-        if _is_hub_index_page(meta):
-            continue
         if meta.hub:
             hub_name = meta.hub
+        elif page_id.endswith("/_index"):
+            hub_name = page_id[: -len("/_index")]
         elif "/" in page_id:
-            hub_name = page_id.split("/", 1)[0]
+            hub_name = page_id.rsplit("/", 1)[0]
         else:
             hub_name = "其他"
         hubs.setdefault(hub_name, []).append(
@@ -99,7 +95,10 @@ def build_wiki_tree(wiki_root: Path) -> dict:
     for hub_name in sorted(hubs):
         if hub_name == "总览":
             continue
-        pages = sorted(hubs[hub_name], key=lambda item: item["title"])
+        pages = sorted(
+            hubs[hub_name],
+            key=lambda item: (0 if str(item["page_id"]).endswith("/_index") else 1, item["title"] or ""),
+        )
         hub_items.append(
             {
                 "name": hub_name,
@@ -192,8 +191,6 @@ def search_wiki_pages(wiki_root: Path, query: str, *, limit: int = 50) -> dict:
     pages_meta = load_pages_meta(wiki_root)
     scored: list[tuple[int, str, dict]] = []
     for page_id, meta in pages_meta.items():
-        if _is_hub_index_page(meta):
-            continue
         match = _search_page(wiki_root, page_id, meta, needle)
         if match is None:
             continue

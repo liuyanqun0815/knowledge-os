@@ -111,21 +111,24 @@ def process_uploaded_source(
     settings,
     orchestrator,
     replaces_source_id: str | None = None,
+    subject_bind_mode: str | None = None,
 ) -> None:
     from compiler.chunk_enrichment import enrich_chunks
     from compiler.enrichment import enrich_source
+    from compiler.subject_bind import subject_bind_mode_override
 
     source_id = source_id_for_upload(kb_dir, original)
     try:
         deps.knowledge.update_source_status(source_id, "running")
         ingest_path = materialize_markdown_for_ingest(original)
-        report = orchestrator.ingest(
-            str(ingest_path),
-            source_type,
-            replaces_source_id=replaces_source_id,
-        )
-        source_id = report.source_id
-        enrich_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+        with subject_bind_mode_override(subject_bind_mode):
+            report = orchestrator.ingest(
+                str(ingest_path),
+                source_type,
+                replaces_source_id=replaces_source_id,
+            )
+            source_id = report.source_id
+            enrich_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
     except Exception as exc:
         _LOG.exception("async upload failed kb=%s source=%s: %s", kb_id, source_id, exc)
         try:

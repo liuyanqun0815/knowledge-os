@@ -120,6 +120,12 @@ export function TraceStepDetail({ node, detail }: TraceStepDetailProps) {
     const input = typeof detail.input === "string" ? detail.input : "";
     const output = typeof detail.output === "string" ? detail.output : "";
     const changed = detail.changed === true;
+    const method = typeof detail.method === "string" ? detail.method : "none";
+    const rewrite =
+      typeof detail.rewrite === "object" && detail.rewrite !== null
+        ? (detail.rewrite as Record<string, unknown>)
+        : {};
+    const anchor = typeof rewrite.anchor === "string" ? rewrite.anchor : null;
     const replacements = Array.isArray(detail.replacements)
       ? detail.replacements.filter(
           (item): item is { from: string; to: string } =>
@@ -137,6 +143,8 @@ export function TraceStepDetail({ node, detail }: TraceStepDetailProps) {
         </div>
         <div className="trace-detail-section">
           <h3>输出{changed ? "" : "（未变化）"}</h3>
+          <p className="trace-score-hint">方式：{method}</p>
+          {anchor ? <p className="trace-score-hint">规则锚点：{anchor}</p> : null}
           <p className="trace-io-text">{output || "—"}</p>
         </div>
         {replacements.length > 0 ? (
@@ -248,7 +256,7 @@ export function TraceStepDetail({ node, detail }: TraceStepDetailProps) {
         {renderChunkHitTable("命中 Chunk", chunkHits, { scoreLabel: "检索分" })}
         {renderChunkHitTable("融合结果 (RRF)", fusedHits, {
           scoreLabel: "融合分",
-          scoreHint: "加权 RRF：weight / (60 + 名次)，约 0.01x，只比相对高低",
+          scoreHint: "加权 RRF 后归一化到 0–1（保留相对高低，拉开区分度）",
         })}
         <details className="trace-raw-detail">
           <summary>原始 JSON</summary>
@@ -265,11 +273,11 @@ export function TraceStepDetail({ node, detail }: TraceStepDetailProps) {
       <div className="trace-detail-panel">
         {renderChunkHitTable("重排前", inputHits, {
           scoreLabel: "融合分",
-          scoreHint: "加权 RRF：weight / (60 + 名次)，约 0.01x，只比相对高低",
+          scoreHint: "加权 RRF 后归一化到 0–1（保留相对高低，拉开区分度）",
         })}
         {renderChunkHitTable("重排后", outputHits, {
           scoreLabel: "相关性分",
-          scoreHint: "Cross-encoder 重排分（通常更接近 0–1）",
+          scoreHint: "Cross-encoder 相关度，已归一化到 0–1",
         })}
         <details className="trace-raw-detail">
           <summary>原始 JSON</summary>

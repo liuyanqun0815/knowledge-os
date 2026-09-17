@@ -62,8 +62,15 @@ class Settings(BaseSettings):
     extract_llm: bool = True
     chunk_max_chars: int = 3000
     chunk_max_per_doc: int = 40
+    # auto=按标题密度选择；heading=按 H1/H2 切；general=段落/标题混合
+    chunk_mode: str = "auto"
+    # heading 模式下按此级别及更高层切分（更深标题留在块内）
+    chunk_heading_level: int = 2
     extract_min_confidence: float = 0.5
     extract_open_predicates: bool = True
+    # Claim 主体绑定产品：auto=有锚点时自动改写泛化主体；on=强制；off=关闭
+    # 上传表单可覆盖。词表不可穷举，主要靠提示词示例 + 轻量后处理。
+    subject_bind_mode: str = "auto"
 
     # Chunk 索引
     chunk_index: bool = True
@@ -77,6 +84,8 @@ class Settings(BaseSettings):
     ask_synthesis: bool = True
     ask_synthesis_temperature: float = 0.2
     ask_synthesis_max_chunks: int = 5
+    # 非 Claim（chunk/wiki）写入 LLM 时每条正文最大字符数
+    ask_synthesis_content_max_chars: int = 800
     ask_synthesis_max_tokens: int = 1024
 
     # 三路检索权重（Claim / Wiki 主题页 / 原文 Chunk）
@@ -99,6 +108,8 @@ class Settings(BaseSettings):
     # 以源文档为单位，由 LLM 规划 wiki 目录与拆分（优先于 topic-cluster 层级）
     wiki_source_plan: bool = True
     wiki_source_plan_llm: bool = True
+    # 源文档字数达到该阈值时，Wiki 按「类目/产品名」拆多页
+    wiki_split_min_chars: int = 5000
     wiki_migrate_flat: bool = True
     wiki_max_related: int = 12
 
@@ -130,6 +141,9 @@ class Settings(BaseSettings):
     topic_graph_chunks: bool = True
     topic_llm_summary: bool = False
     topic_claim_boost: float = 0.1
+
+    # Ask 问句归一化：规则未命中时是否用 LLM rewrite
+    ask_normalize_llm: bool = True
 
     # 管理台原文预览
     source_content_max_bytes: int = 1_048_576

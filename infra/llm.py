@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+import logging
+import time
+
 import httpx
 from langsmith import traceable
 
 from infra.settings import Settings, get_settings
+
+logger = logging.getLogger(__name__)
+
+_RETRYABLE_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+    httpx.RemoteProtocolError,
+    httpx.NetworkError,
+)
 
 
 class LlmConfigError(RuntimeError):
@@ -31,6 +46,7 @@ class OpenAiCompatibleClient:
         *,
         temperature: float = 0.0,
         timeout: float = 60.0,
+        max_retries: int = 3,
     ) -> str:
         api_key = self._settings.llm_api_key
         if not api_key:
@@ -63,11 +79,30 @@ class OpenAiCompatibleClient:
             "Content-Type": "application/json",
         }
 
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+        attempts = max(1, max_retries)
+        data = None
+        for attempt in range(1, attempts + 1):
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    response = client.post(url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+                break
+            except _RETRYABLE_EXCEPTIONS as exc:
+                if attempt >= attempts:
+                    raise
+                delay = min(2 ** (attempt - 1), 8)
+                logger.warning(
+                    "LLM request failed (%s), retry %s/%s in %ss: %s",
+                    type(exc).__name__,
+                    attempt,
+                    attempts,
+                    delay,
+                    exc,
+                )
+                time.sleep(delay)
 
+        assert data is not None
         choices = data.get("choices") or []
         if not choices:
             raise RuntimeError("LLM response missing choices")

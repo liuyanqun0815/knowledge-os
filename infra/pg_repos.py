@@ -574,8 +574,17 @@ class PgKnowledge:
         return [_row_to_event(row) for row in rows]
 
     def save_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
-        self.mark_chunks_stale(source_id)
         with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE source_chunks
+                    SET status = 'stale'
+                    WHERE knowledge_base_id = :knowledge_base_id AND source_id = :source_id
+                    """
+                ),
+                {"knowledge_base_id": self._knowledge_base_id, "source_id": source_id},
+            )
             for chunk in chunks:
                 conn.execute(
                     text("""
