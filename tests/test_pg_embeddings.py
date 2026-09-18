@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 
 import pytest
 
-from graph.memory_repo import InMemoryGraph
-from infra.pg_embeddings import PgEmbeddingStore
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.persistence.pg_embeddings import PgEmbeddingStore
 from knowledge.models import Claim
-from retrieval.embedder import HashEmbedder, claim_embedding_text
-from retrieval.hybrid import HybridRetrieval
-from retrieval.ports import RetrievalMode
+from akos.adapters.retrieval.embedder import HashEmbedder, claim_embedding_text
+from akos.adapters.retrieval.hybrid import HybridRetrieval
+from akos.domain.ports.retrieval import RetrievalMode
 
 
 @pytest.fixture

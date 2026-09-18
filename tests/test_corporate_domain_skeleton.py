@@ -4,10 +4,10 @@ import os
 
 import pytest
 
-from compiler.llm_extractor import LlmExtractor
+from akos.application.ingest.llm_extractor import LlmExtractor
 from domains.corporate_culture.formatter import format_corporate_claim
 from domains.registry import load_domain
-from infra.llm import LlmConfigError, OpenAiCompatibleClient
+from akos.adapters.llm.client import LlmConfigError, OpenAiCompatibleClient
 from infra.settings import Settings
 from knowledge.models import Claim
 from ontology.registry import InMemoryOntology

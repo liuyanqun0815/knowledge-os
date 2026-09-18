@@ -1,6 +1,6 @@
-from evidence.ports import EvidencePort
-from knowledge.ports import KnowledgePort
-from verification.ports import VerificationResult
+from akos.domain.ports.evidence import EvidencePort
+from akos.domain.ports.knowledge import KnowledgePort
+from akos.domain.ports.verification import VerificationResult
 
 
 class VerificationService:

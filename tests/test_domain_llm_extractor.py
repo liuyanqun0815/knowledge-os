@@ -5,9 +5,9 @@ import json
 import httpx
 import pytest
 
-from compiler.domain_llm_extractor import DomainLlmExtractor
-from compiler.extraction_spec import LlmExtractionSpec
-from compiler.llm_extractor import LlmExtractor, create_corporate_extractor
+from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
+from akos.application.ingest.extraction_spec import LlmExtractionSpec
+from akos.application.ingest.llm_extractor import LlmExtractor, create_corporate_extractor
 from domains.corporate_culture.domain import CorporateCultureDomain
 from domains.loan_finance.domain import LoanFinanceDomain
 

@@ -3,14 +3,14 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from infra.settings import Settings
-from orchestrator.nodes import rerank_node
-from retrieval.ports import Hit
-from retrieval.reranker import HashReranker
+from akos.application.ask.nodes import rerank_node
+from akos.domain.ports.retrieval import Hit
+from akos.adapters.retrieval.reranker import HashReranker
 
 
 def test_rerank_node_skips_when_disabled(monkeypatch):
     monkeypatch.setattr(
-        "orchestrator.nodes.get_settings",
+        "akos.application.ask.nodes.get_settings",
         lambda: Settings(_env_file=None, rerank_enabled=False),
     )
     deps = MagicMock()
@@ -27,7 +27,7 @@ def test_rerank_node_skips_when_disabled(monkeypatch):
 
 def test_rerank_node_reorders_content_and_keeps_claims_first(monkeypatch):
     monkeypatch.setattr(
-        "orchestrator.nodes.get_settings",
+        "akos.application.ask.nodes.get_settings",
         lambda: Settings(
             _env_file=None,
             rerank_enabled=True,

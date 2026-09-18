@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from admin_api.claim_helpers import approve_staging_claim, reject_staging_claim
+from akos.interfaces.api.admin_api.claim_helpers import approve_staging_claim, reject_staging_claim
 from knowledge.errors import DomainError
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim
 
 

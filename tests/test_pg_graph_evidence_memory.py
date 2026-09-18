@@ -42,7 +42,7 @@ def _sample_claim(claim_id: str = "c-gem-1", source_ids: list[str] | None = None
 
 
 def test_pg_graph_upsert_and_neighbors(pg_kb_repo, pg_engine):
-    from infra.pg_graph import PgGraph
+    from akos.adapters.persistence.pg_graph import PgGraph
 
     kb = pg_kb_repo.create(name="graph-test", domain_type="ecommerce_cs", description="")
     graph = PgGraph(pg_engine, kb.id)
@@ -57,7 +57,7 @@ def test_pg_graph_upsert_and_neighbors(pg_kb_repo, pg_engine):
 
 
 def test_two_kbs_graph_do_not_leak(pg_kb_repo, pg_engine):
-    from infra.pg_graph import PgGraph
+    from akos.adapters.persistence.pg_graph import PgGraph
 
     kb_a = pg_kb_repo.create(name="A-graph", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="B-graph", domain_type="ecommerce_cs", description="")
@@ -73,8 +73,8 @@ def test_two_kbs_graph_do_not_leak(pg_kb_repo, pg_engine):
 
 
 def test_pg_evidence_bind_and_explain(pg_kb_repo, pg_engine):
-    from infra.pg_evidence import PgEvidence
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_evidence import PgEvidence
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb = pg_kb_repo.create(name="evidence-test", domain_type="ecommerce_cs", description="")
     knowledge = PgKnowledge(pg_engine, kb.id)
@@ -91,8 +91,8 @@ def test_pg_evidence_bind_and_explain(pg_kb_repo, pg_engine):
 
 
 def test_two_kbs_evidence_do_not_leak(pg_kb_repo, pg_engine):
-    from infra.pg_evidence import PgEvidence
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_evidence import PgEvidence
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb_a = pg_kb_repo.create(name="A-evidence", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="B-evidence", domain_type="ecommerce_cs", description="")
@@ -109,7 +109,7 @@ def test_two_kbs_evidence_do_not_leak(pg_kb_repo, pg_engine):
 
 
 def test_pg_memory_episode_recall(pg_kb_repo, pg_engine):
-    from infra.pg_memory import PgMemory
+    from akos.adapters.persistence.pg_memory import PgMemory
 
     kb = pg_kb_repo.create(name="memory-test", domain_type="ecommerce_cs", description="")
     memory = PgMemory(pg_engine, kb.id)
@@ -121,7 +121,7 @@ def test_pg_memory_episode_recall(pg_kb_repo, pg_engine):
 
 
 def test_two_kbs_memory_do_not_leak(pg_kb_repo, pg_engine):
-    from infra.pg_memory import PgMemory
+    from akos.adapters.persistence.pg_memory import PgMemory
 
     kb_a = pg_kb_repo.create(name="A-memory", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="B-memory", domain_type="ecommerce_cs", description="")

@@ -1,4 +1,4 @@
-from compiler.document_anchor import resolve_document_anchor
+from akos.application.ingest.document_anchor import resolve_document_anchor
 
 SAMPLE = """
 二、产品概述

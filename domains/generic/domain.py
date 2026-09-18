@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from compiler.extraction_spec import LlmExtractionSpec
-from compiler.rule_extractor import RuleExtractor
+from akos.application.ingest.extraction_spec import LlmExtractionSpec
+from akos.application.ingest.rule_extractor import RuleExtractor
 from knowledge.models import Claim
-from ontology.ports import OntologyPort
+from akos.domain.ports.ontology import OntologyPort
 
 _GENERIC_PREDICATES = [
     ("Concept", "相关", "Concept"),

@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from admin_api.graph_helpers import build_snapshot
-from admin_api.source_cleanup import purge_source_side_effects, sole_source_claims
-from graph.memory_repo import InMemoryGraph
+from akos.interfaces.api.admin_api.graph_helpers import build_snapshot
+from akos.interfaces.api.admin_api.source_cleanup import purge_source_side_effects, sole_source_claims
+from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Source, SourceChunk
 from knowledge.topic_service import rebuild_topic_clusters
 

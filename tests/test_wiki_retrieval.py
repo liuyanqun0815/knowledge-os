@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.paths import compile_wiki_root
 
 
 def _write_page(wiki_root: Path, rel: str, title: str, body: str, related: list[str] | None = None) -> None:
@@ -37,7 +37,7 @@ def _write_index(wiki_root: Path, entries: list[tuple[str, str, str]]) -> None:
 
 
 def test_search_skips_without_index(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -51,7 +51,7 @@ def test_search_skips_without_index(tmp_path: Path):
 
 
 def test_search_skips_without_leaf_pages(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -62,14 +62,14 @@ def test_search_skips_without_leaf_pages(tmp_path: Path):
 
 
 def test_search_skips_without_wiki_root():
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     retrieval = WikiPageRetrieval()
     assert retrieval.search("发票") == []
 
 
 def test_search_index_seed_hit(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -97,7 +97,7 @@ def test_search_index_seed_hit(tmp_path: Path):
 
 
 def test_search_title_outweighs_body_only(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -120,7 +120,7 @@ def test_search_title_outweighs_body_only(tmp_path: Path):
 
 
 def test_one_hop_keeps_real_pages_drops_entities(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -147,7 +147,7 @@ def test_one_hop_keeps_real_pages_drops_entities(tmp_path: Path):
 
 
 def test_full_scan_when_index_misses_keywords(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -175,7 +175,7 @@ def test_full_scan_when_index_misses_keywords(tmp_path: Path):
 
 
 def test_llm_fallback_selects_paths(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -194,7 +194,7 @@ def test_llm_fallback_selects_paths(tmp_path: Path):
 
 
 def test_llm_fallback_bad_json_returns_empty(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -209,7 +209,7 @@ def test_llm_fallback_bad_json_returns_empty(tmp_path: Path):
 
 
 def test_top_k_capped_at_five(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -226,7 +226,7 @@ def test_top_k_capped_at_five(tmp_path: Path):
 
 
 def test_llm_fallback_drops_index_path(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -243,7 +243,7 @@ def test_llm_fallback_drops_index_path(tmp_path: Path):
 
 
 def test_llm_fallback_accepts_fenced_json(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -259,7 +259,7 @@ def test_llm_fallback_accepts_fenced_json(tmp_path: Path):
 
 
 def test_index_source_entries_are_not_seeds(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)
@@ -288,7 +288,7 @@ def test_index_source_entries_are_not_seeds(tmp_path: Path):
 
 
 def test_llm_rejects_path_escaping_wiki_root(tmp_path: Path):
-    from retrieval.wiki_index import WikiPageRetrieval
+    from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 
     wiki_root = compile_wiki_root(tmp_path, "kb-wiki")
     wiki_root.mkdir(parents=True)

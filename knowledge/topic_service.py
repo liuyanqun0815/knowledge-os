@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import hashlib
 
-from compiler.service import _entity_id
-from graph.ports import GraphPort
+from akos.application.ingest.service import _entity_id
+from akos.domain.ports.graph import GraphPort
 from infra.settings import Settings
 from knowledge.models import Claim, SourceChunk, TopicCluster
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 from knowledge.topic_cluster import build_topic_clusters
 
 

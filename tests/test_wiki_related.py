@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from wiki.meta import WikiPageMeta
-from wiki.related import ensure_related_topics_section, refresh_all_wiki_related_links, suggest_related_wiki_links
+from akos.application.wiki.meta import WikiPageMeta
+from akos.application.wiki.related import ensure_related_topics_section, refresh_all_wiki_related_links, suggest_related_wiki_links
 
 
 def _meta(path: str, title: str) -> WikiPageMeta:

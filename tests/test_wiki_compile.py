@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.paths import compile_wiki_root
 
 
 def _now() -> datetime:
@@ -60,7 +60,7 @@ def _claim(claim_id: str, *, source_ids: list[str]) -> Claim:
 
 
 def test_compile_topics_two_sources_share_topic_file(tmp_path: Path):
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-a", "policy_a.md"))
@@ -148,7 +148,7 @@ def test_compile_topics_two_sources_share_topic_file(tmp_path: Path):
     assert "## 主题" in index_body
     assert "[[topic-退款政策|退款政策]]" in index_body
 
-    from wiki.meta import load_pages_meta
+    from akos.application.wiki.meta import load_pages_meta
 
     meta = load_pages_meta(wiki_root)
     page = meta.get("topic-退款政策")

@@ -25,8 +25,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from retrieval.embedder import resolve_modelscope_model_dir
-    from retrieval.reranker import BceCrossEncoderReranker
+    from akos.adapters.retrieval.embedder import resolve_modelscope_model_dir
+    from akos.adapters.retrieval.reranker import BceCrossEncoderReranker
 
     model_dir = resolve_modelscope_model_dir(args.model, args.cache_dir)
     print(f"ModelScope dir: {model_dir}")

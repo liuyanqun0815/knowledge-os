@@ -77,6 +77,6 @@ def pg_engine():
 
 @pytest.fixture(scope="session")
 def pg_kb_repo(pg_engine):
-    from knowledge_base.pg_repo import PgKnowledgeBaseRepo
+    from akos.adapters.persistence.kb_pg import PgKnowledgeBaseRepo
 
     return PgKnowledgeBaseRepo(pg_engine)

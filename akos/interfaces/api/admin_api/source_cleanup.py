@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from akos.application.ingest.service import _entity_id
-from graph.memory_repo import InMemoryGraph
-from infra.pg_graph import PgGraph
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.persistence.pg_graph import PgGraph
 from infra.settings import Settings
 from knowledge.models import Claim
 from knowledge.topic_service import rebuild_topic_clusters

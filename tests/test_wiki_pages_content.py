@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from orchestrator.nodes import _wiki_pages_from_hits
-from retrieval.fusion import fuse_hits
-from retrieval.ports import Hit
+from akos.application.ask.nodes import _wiki_pages_from_hits
+from akos.adapters.retrieval.fusion import fuse_hits
+from akos.domain.ports.retrieval import Hit
 
 
 def test_wiki_pages_from_hits_includes_full_content():

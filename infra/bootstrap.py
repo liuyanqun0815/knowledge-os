@@ -3,33 +3,33 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from compiler.service import KnowledgeCompiler
-from domains.base import DomainPort
+from akos.application.ingest.service import KnowledgeCompiler
+from akos.domain.ports.domain import DomainPort
 from domains.registry import load_domain
-from evolution.service import EvolutionService
-from evidence.memory_repo import InMemoryEvidence
-from evidence.ports import EvidencePort
-from graph.memory_repo import InMemoryGraph
-from graph.ports import GraphPort
-from infra.files import LocalFileStore
-from infra.llm import OpenAiCompatibleClient
-from infra.pg_repos import PgKnowledge
+from akos.application.evolution.service import EvolutionService
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.domain.ports.evidence import EvidencePort
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.domain.ports.graph import GraphPort
+from akos.adapters.files.local import LocalFileStore
+from akos.adapters.llm.client import OpenAiCompatibleClient
+from akos.adapters.persistence.pg_knowledge import PgKnowledge
 from infra.settings import Settings
 from knowledge.errors import DomainError
-from knowledge.memory_repo import InMemoryKnowledge
-from knowledge.ports import KnowledgePort
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
+from akos.domain.ports.knowledge import KnowledgePort
 from knowledge_base.models import KnowledgeBase
-from memory.memory_repo import InMemoryMemoryStore
-from memory.ports import MemoryPort
+from akos.adapters.persistence.memory_store import InMemoryMemoryStore
+from akos.domain.ports.memory import MemoryPort
 from ontology.registry import InMemoryOntology
-from orchestrator.service import LangGraphOrchestrator
-from retrieval.hybrid import HybridRetrieval
-from retrieval.chunk_index import ChunkRetrieval
-from retrieval.embedder import create_embedder
-from retrieval.reranker import create_reranker
-from retrieval.wiki_index import WikiPageRetrieval
+from akos.application.ask.service import LangGraphOrchestrator
+from akos.adapters.retrieval.hybrid import HybridRetrieval
+from akos.adapters.retrieval.chunk_index import ChunkRetrieval
+from akos.adapters.retrieval.embedder import create_embedder
+from akos.adapters.retrieval.reranker import create_reranker
+from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
 from verification.service import VerificationService
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.paths import compile_wiki_root
 
 DEFAULT_IN_MEMORY_KB_ID = "default"
 LEGACY_PG_KB_ID = "legacy"
@@ -112,7 +112,7 @@ def _get_kb_repo(settings: Settings):
     if not settings.use_pg:
         return None
     from infra.db import get_engine
-    from knowledge_base.pg_repo import PgKnowledgeBaseRepo
+    from akos.adapters.persistence.kb_pg import PgKnowledgeBaseRepo
 
     return PgKnowledgeBaseRepo(get_engine(settings))
 
@@ -141,7 +141,7 @@ def _resolve_kb(knowledge_base_id: str, settings: Settings) -> KnowledgeBase:
 def _build_graph(settings: Settings, engine, kb_id: str) -> GraphPort:
     backend = settings.graph_backend.lower()
     if backend == "neo4j":
-        from graph.adapters.neo4j import Neo4jGraph
+        from akos.adapters.graph.neo4j import Neo4jGraph
 
         return Neo4jGraph(
             uri=settings.neo4j_uri,
@@ -150,7 +150,7 @@ def _build_graph(settings: Settings, engine, kb_id: str) -> GraphPort:
             knowledge_base_id=kb_id,
         )
     if backend == "postgres" and settings.use_pg and engine is not None:
-        from infra.pg_graph import PgGraph
+        from akos.adapters.persistence.pg_graph import PgGraph
 
         return PgGraph(engine, kb_id)
     return InMemoryGraph()
@@ -161,8 +161,8 @@ def _build_repos(
 ) -> tuple[KnowledgePort, GraphPort, EvidencePort, MemoryPort]:
     if settings.use_pg:
         from infra.db import get_engine
-        from infra.pg_evidence import PgEvidence
-        from infra.pg_memory import PgMemory
+        from akos.adapters.persistence.pg_evidence import PgEvidence
+        from akos.adapters.persistence.pg_memory import PgMemory
 
         engine = get_engine(settings)
         return (
@@ -255,7 +255,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     embedding_store = None
     if settings.use_pg and embedder is not None:
         from infra.db import get_engine
-        from infra.pg_embeddings import PgEmbeddingStore
+        from akos.adapters.persistence.pg_embeddings import PgEmbeddingStore
 
         embedding_store = PgEmbeddingStore(
             get_engine(settings),

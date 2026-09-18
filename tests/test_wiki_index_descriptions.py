@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from wiki.meta import WikiPageMeta, save_pages_meta
-from wiki.source_plan import extract_page_summary, rebuild_wiki_index
+from akos.application.wiki.meta import WikiPageMeta, save_pages_meta
+from akos.application.wiki.source_plan import extract_page_summary, rebuild_wiki_index
 
 
 def test_extract_page_summary_from_blockquote() -> None:

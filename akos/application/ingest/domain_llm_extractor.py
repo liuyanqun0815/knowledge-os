@@ -6,14 +6,14 @@ import re
 from typing import Protocol
 
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
-from compiler.ports import ExtractedClaim
+from akos.domain.ports.compiler import ExtractedClaim
 from akos.application.ingest.subject_bind import (
     bind_enabled,
     bind_generic_subject,
     effective_subject_bind_mode,
     subject_bind_prompt_rules,
 )
-from infra.llm import LlmConfigError
+from akos.adapters.llm.client import LlmConfigError
 from infra.settings import get_settings
 
 logger = logging.getLogger(__name__)

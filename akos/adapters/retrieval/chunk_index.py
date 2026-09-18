@@ -6,11 +6,11 @@ import re
 from typing import TYPE_CHECKING
 
 from knowledge.models import SourceChunk
-from knowledge.ports import KnowledgePort
-from retrieval.ports import Hit
+from akos.domain.ports.knowledge import KnowledgePort
+from akos.domain.ports.retrieval import Hit
 
 if TYPE_CHECKING:
-    from infra.pg_embeddings import PgEmbeddingStore
+    from akos.adapters.persistence.pg_embeddings import PgEmbeddingStore
     from akos.adapters.retrieval.embedder import EmbedderPort
 
 _TOP_K = 8

@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, Request
 
 from akos.interfaces.api.admin_auth import require_admin_token
 from akos.interfaces.api.deps import get_kb_repo
-from knowledge_base.ports import KnowledgeBasePort
+from akos.domain.ports.knowledge_base import KnowledgeBasePort
 
 
 def require_kb_repo(

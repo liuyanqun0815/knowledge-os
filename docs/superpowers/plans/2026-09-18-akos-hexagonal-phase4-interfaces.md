@@ -2,9 +2,9 @@
 
 > **For agentic workers:** Use executing-plans / subagent-driven-development. Checkbox steps.
 
-**Goal:** Move FastAPI (`app` + `admin_api`) and Typer CLI under `akos.interfaces.{api,cli}` with legacy re-export shims; update preferred entrypoints.
+**Goal:** Move FastAPI (`app` + `admin_api`) under `akos.interfaces.api` with legacy re-export shims; update preferred entrypoints. CLI was subsequently **removed** (Web / Admin API only).
 
-**Architecture:** Interfaces layer wires HTTP/CLI to application + bootstrap. Old import paths (`app.*`, `admin_api.*`, `cli.*`) remain module-alias shims until Phase 5.
+**Architecture:** Interfaces layer wires HTTP to application + bootstrap. Old import paths (`app.*`, `admin_api.*`) remain module-alias shims until Phase 5. Typer CLI (`cli/`, `akos.interfaces.cli`) is deleted.
 
 **Tech Stack:** Python 3.11+, FastAPI, Typer, pytest
 

@@ -1,4 +1,4 @@
-from wiki.layout import (
+from akos.application.wiki.layout import (
     BUILTIN_WIKI_FOLDERS,
     classify_folder,
     extract_catalog_items,

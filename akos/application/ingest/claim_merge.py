@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from compiler.ports import ExtractedClaim
+from akos.domain.ports.compiler import ExtractedClaim
 
 # 单槽互斥谓词：不同客体是版本覆盖，禁止合并。
 EXCLUSIVE_PREDICATES = frozenset(

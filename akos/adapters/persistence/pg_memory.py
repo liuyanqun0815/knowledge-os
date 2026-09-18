@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from memory.models import Procedure, Step
-from memory.ports import RecallContext
+from akos.domain.ports.memory import RecallContext
 
 
 class PgMemory:

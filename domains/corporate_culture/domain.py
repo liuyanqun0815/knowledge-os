@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from compiler.extraction_spec import LlmExtractionSpec
-from compiler.llm_extractor import create_corporate_extractor
-from compiler.ports import ExtractorPort
+from akos.application.ingest.extraction_spec import LlmExtractionSpec
+from akos.application.ingest.llm_extractor import create_corporate_extractor
+from akos.domain.ports.compiler import ExtractorPort
 from domains.corporate_culture.formatter import format_corporate_claim
 from domains.corporate_culture.seed import register_corporate_culture
 from knowledge.models import Claim
-from ontology.ports import OntologyPort
+from akos.domain.ports.ontology import OntologyPort
 
 
 class CorporateCultureDomain:

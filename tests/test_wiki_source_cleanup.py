@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from admin_api.source_cleanup import purge_source_side_effects, sole_source_claims
+from akos.interfaces.api.admin_api.source_cleanup import purge_source_side_effects, sole_source_claims
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source
-from wiki.meta import WikiPageMeta, load_pages_meta, save_pages_meta
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.meta import WikiPageMeta, load_pages_meta, save_pages_meta
+from akos.application.wiki.paths import compile_wiki_root
 
 
 def _write_sole_wiki(tmp_path: Path, kb_id: str, source_id: str) -> Path:
@@ -99,7 +99,7 @@ def test_purge_source_side_effects_deletes_sole_source_wiki(tmp_path: Path):
 
 
 def test_purge_wiki_keeps_multi_source_page_and_strips_deleted_id(tmp_path: Path):
-    from wiki.cleanup import purge_wiki_for_deleted_source
+    from akos.application.wiki.cleanup import purge_wiki_for_deleted_source
 
     kb_id = "kb-wiki-multi"
     knowledge = InMemoryKnowledge()

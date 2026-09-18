@@ -2,12 +2,12 @@ from datetime import datetime
 from typing import Annotated, NotRequired, TypedDict
 import operator
 
-from compiler.ports import CompileReport, ChunkIndexReport
-from evolution.ports import ApplyReport
+from akos.domain.ports.compiler import CompileReport, ChunkIndexReport
+from akos.domain.ports.evolution import ApplyReport
 from knowledge.models import Answer
 from memory.models import Procedure
-from retrieval.ports import Hit, RetrievalMode
-from verification.ports import VerificationResult
+from akos.domain.ports.retrieval import Hit, RetrievalMode
+from akos.domain.ports.verification import VerificationResult
 
 
 class IngestState(TypedDict):

@@ -5,13 +5,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from evidence.memory_repo import InMemoryEvidence
-from graph.memory_repo import InMemoryGraph
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Source, SourceChunk, TopicCluster
-from compiler.chunk_enrichment import enrich_chunks
-from wiki.export import export_wiki
+from akos.application.ingest.chunk_enrichment import enrich_chunks
+from akos.application.wiki.export import export_wiki
 
 
 def _chunk_enrich_llm(topics: list[str]):

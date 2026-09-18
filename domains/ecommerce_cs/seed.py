@@ -1,4 +1,4 @@
-from ontology.ports import OntologyPort
+from akos.domain.ports.ontology import OntologyPort
 
 ENTITY_SEEDS = {
     "七天无理由": "RefundRule",

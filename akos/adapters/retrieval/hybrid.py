@@ -7,14 +7,14 @@ import threading
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from graph.ports import GraphPort
+from akos.domain.ports.graph import GraphPort
 from knowledge.models import Claim
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 from akos.adapters.retrieval.embedder import EmbedderPort, claim_embedding_text
-from retrieval.ports import Hit, RetrievalMode
+from akos.domain.ports.retrieval import Hit, RetrievalMode
 
 if TYPE_CHECKING:
-    from infra.pg_embeddings import PgEmbeddingStore
+    from akos.adapters.persistence.pg_embeddings import PgEmbeddingStore
 
 _TOP_K = 8
 _GRAPH_MAX_DEPTH = 2

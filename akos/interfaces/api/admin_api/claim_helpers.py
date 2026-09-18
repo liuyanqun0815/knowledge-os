@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from akos.application.ingest.service import _entity_id
 from knowledge.errors import DomainError
 from knowledge.models import Claim
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 
 def _contains(haystack: str, needle: str) -> bool:

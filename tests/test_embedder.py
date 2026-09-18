@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from retrieval.embedder import HashEmbedder, claim_embedding_text, create_embedder
+from akos.adapters.retrieval.embedder import HashEmbedder, claim_embedding_text, create_embedder
 from infra.settings import Settings
 
 
@@ -25,7 +25,7 @@ def test_claim_embedding_text_joins_triple():
 
 
 def test_resolve_modelscope_skips_download_when_cache_complete(tmp_path, monkeypatch):
-    from retrieval.embedder import find_local_modelscope_snapshot, resolve_modelscope_model_dir
+    from akos.adapters.retrieval.embedder import find_local_modelscope_snapshot, resolve_modelscope_model_dir
 
     model_id = "maidalun/bce-reranker-base_v1"
     snap = tmp_path / "models" / "maidalun--bce-reranker-base_v1" / "snapshots" / "master"
@@ -49,7 +49,7 @@ def test_resolve_modelscope_skips_download_when_cache_complete(tmp_path, monkeyp
 
 
 def test_resolve_modelscope_downloads_when_cache_incomplete(tmp_path, monkeypatch):
-    from retrieval.embedder import resolve_modelscope_model_dir
+    from akos.adapters.retrieval.embedder import resolve_modelscope_model_dir
 
     model_id = "maidalun/bce-reranker-base_v1"
     snap = tmp_path / "models" / "maidalun--bce-reranker-base_v1" / "snapshots" / "master"

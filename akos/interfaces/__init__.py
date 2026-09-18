@@ -1,1 +1,1 @@
-"""AKOS interfaces layer (API / CLI)."""
+"""AKOS interfaces layer (HTTP API)."""

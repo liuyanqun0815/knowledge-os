@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from admin_api.claim_helpers import list_filtered_claims
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.interfaces.api.admin_api.claim_helpers import list_filtered_claims
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim
 
 

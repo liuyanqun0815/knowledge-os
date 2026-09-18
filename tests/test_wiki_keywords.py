@@ -1,4 +1,4 @@
-from retrieval.wiki_keywords import extract_keywords
+from akos.adapters.retrieval.wiki_keywords import extract_keywords
 
 
 def test_extract_keywords_keeps_domain_terms():

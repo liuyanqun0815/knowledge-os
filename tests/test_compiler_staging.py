@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from compiler.rule_extractor import RuleExtractor
-from compiler.service import KnowledgeCompiler
+from akos.application.ingest.rule_extractor import RuleExtractor
+from akos.application.ingest.service import KnowledgeCompiler
 from domains.ecommerce_cs.seed import register_ecommerce_cs
-from evidence.memory_repo import InMemoryEvidence
-from graph.memory_repo import InMemoryGraph
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Event, Source
 from ontology.registry import InMemoryOntology
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from knowledge.models import Claim, SourceChunk
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.wiki.layout import resolve_wiki_layout
 from akos.application.wiki.links import (
     chunk_wikilink,

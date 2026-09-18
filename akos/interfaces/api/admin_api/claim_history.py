@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from knowledge.models import Claim
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 
 def sorted_claim_history(knowledge: KnowledgePort, family_id: str) -> list[Claim]:

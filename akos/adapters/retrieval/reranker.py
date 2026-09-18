@@ -10,7 +10,7 @@ from typing import Any, Protocol
 from infra.settings import Settings
 from akos.adapters.retrieval.embedder import configure_hf_hub, resolve_modelscope_model_dir
 from akos.adapters.retrieval.fusion import normalize_hit_scores
-from retrieval.ports import Hit
+from akos.domain.ports.retrieval import Hit
 
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
 _LOG = logging.getLogger(__name__)

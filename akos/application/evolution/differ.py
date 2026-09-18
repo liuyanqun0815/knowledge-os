@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
-from evolution.ports import KnowledgeDiff
+from akos.domain.ports.evolution import KnowledgeDiff
 
 
 class KnowledgeDiffer:

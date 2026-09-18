@@ -11,7 +11,6 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
-  "typer>=0.12.0",
   "pydantic>=2.8.0",
   "pydantic-settings>=2.4.0",
   "sqlalchemy>=2.0.32",
@@ -36,17 +35,20 @@ docs = [
   "numpy>=1.26.0",
 ]
 
-[project.scripts]
-akos = "akos.interfaces.cli.main:app"
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
   "akos*",
-  "agents*", "app*", "cli*", "compiler*", "domains*", "evidence*", "evolution*", "graph*",
+  "agents*",
+  "domains*",
+  "evidence*",
+  "graph*",
+  "infra*",
+  "knowledge*",
+  "knowledge_base*",
+  "memory*",
+  "ontology*",
   "verification*",
-  "infra*", "knowledge*", "knowledge_base*", "memory*", "ontology*",
-  "orchestrator*", "retrieval*", "wiki*", "admin_api*",
 ]
 
 [tool.pytest.ini_options]

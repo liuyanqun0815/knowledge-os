@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
-from compiler.ports import ExtractedClaim, ExtractorPort
-from infra.llm import OpenAiCompatibleClient
+from akos.domain.ports.compiler import ExtractedClaim, ExtractorPort
+from akos.adapters.llm.client import OpenAiCompatibleClient
 
 
 def _corporate_spec() -> LlmExtractionSpec:

@@ -1,11 +1,11 @@
-from compiler.intersect import (
+from akos.application.ingest.intersect import (
     extract_llm_claims_from_text,
     intersect_extracted,
     select_hybrid_candidates,
     union_extracted,
 )
-from compiler.ports import ExtractedClaim
-from compiler.rule_extractor import RuleExtractor
+from akos.domain.ports.compiler import ExtractedClaim
+from akos.application.ingest.rule_extractor import RuleExtractor
 from domains.ecommerce_cs.seed import register_ecommerce_cs
 from infra.settings import Settings
 from ontology.registry import InMemoryOntology
@@ -96,7 +96,7 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
 
     class MockDomain:
         def llm_extraction_spec(self):
-            from compiler.extraction_spec import LlmExtractionSpec
+            from akos.application.ingest.extraction_spec import LlmExtractionSpec
 
             return LlmExtractionSpec(allowed_predicates=["运费承担方", "排除"], entity_types=["RefundRule"])
 
@@ -128,7 +128,7 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
         def extract(self, chunk: str, *, document_anchor=None):
             return llm_claims
 
-    import compiler.intersect as intersect_module
+    import akos.application.ingest.intersect as intersect_module
 
     original_extractor = intersect_module.DomainLlmExtractor
     intersect_module.DomainLlmExtractor = MockLlmExtractor
@@ -153,7 +153,7 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
 
 
 def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
-    import compiler.intersect as intersect_module
+    import akos.application.ingest.intersect as intersect_module
 
     calls: list[str | None] = []
     resolve_calls: list[str | None] = []
@@ -178,7 +178,7 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
 
     class MockDomain:
         def llm_extraction_spec(self):
-            from compiler.extraction_spec import LlmExtractionSpec
+            from akos.application.ingest.extraction_spec import LlmExtractionSpec
 
             return LlmExtractionSpec(allowed_predicates=["倡导"], entity_types=["Concept"])
 

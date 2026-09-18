@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from retrieval.ports import Hit, RetrievalMode, RetrievalPort
+from akos.domain.ports.retrieval import Hit, RetrievalMode, RetrievalPort
 
 _GRAPH_RELATION_WORDS = ("关系", "关联", "之间", "相关", "影响", "涉及", "对应")
 

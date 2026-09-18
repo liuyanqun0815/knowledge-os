@@ -1,11 +1,11 @@
 from pathlib import Path
 
 from knowledge.errors import DomainError
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 
 
 def test_ingest_path_for_extractable(tmp_path: Path):
-    from admin_api.upload_jobs import ingest_path_for_upload
+    from akos.interfaces.api.admin_api.upload_jobs import ingest_path_for_upload
 
     assert ingest_path_for_upload(tmp_path / "a.pdf") == tmp_path / "a.md"
     assert ingest_path_for_upload(tmp_path / "b.docx") == tmp_path / "b.md"
@@ -13,7 +13,7 @@ def test_ingest_path_for_extractable(tmp_path: Path):
 
 
 def test_source_id_matches_nested_md_stem(tmp_path: Path):
-    from admin_api.upload_jobs import source_id_for_upload
+    from akos.interfaces.api.admin_api.upload_jobs import source_id_for_upload
 
     original = tmp_path / "policies" / "refund.pdf"
     original.parent.mkdir(parents=True)
@@ -22,7 +22,7 @@ def test_source_id_matches_nested_md_stem(tmp_path: Path):
 
 
 def test_register_pending_source(tmp_path: Path):
-    from admin_api.upload_jobs import register_pending_source
+    from akos.interfaces.api.admin_api.upload_jobs import register_pending_source
 
     knowledge = InMemoryKnowledge()
     original = tmp_path / "guide.md"
@@ -39,7 +39,7 @@ def test_register_pending_source(tmp_path: Path):
 
 
 def test_process_marks_failed_when_extract_empty(tmp_path, monkeypatch):
-    from admin_api import upload_jobs
+    from akos.interfaces.api.admin_api import upload_jobs
 
     knowledge = InMemoryKnowledge()
     original = tmp_path / "empty.pdf"
@@ -81,7 +81,7 @@ def test_process_marks_failed_when_extract_empty(tmp_path, monkeypatch):
 
 
 def test_process_md_reaches_succeeded_without_llm(tmp_path):
-    from admin_api import upload_jobs
+    from akos.interfaces.api.admin_api import upload_jobs
 
     knowledge = InMemoryKnowledge()
     original = tmp_path / "note.md"

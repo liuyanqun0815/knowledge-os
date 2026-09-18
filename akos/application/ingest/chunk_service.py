@@ -5,10 +5,10 @@ import uuid
 from datetime import datetime, timezone
 
 from akos.application.ingest.chunker import chunk_document, estimate_token_count
-from compiler.ports import ChunkIndexReport
+from akos.domain.ports.compiler import ChunkIndexReport
 from infra.settings import Settings
 from knowledge.models import SourceChunk
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 
 def _content_hash(text: str) -> str:

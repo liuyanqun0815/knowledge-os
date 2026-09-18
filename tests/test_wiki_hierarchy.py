@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
-from wiki.hierarchy import assign_wiki_hierarchy
+from akos.application.wiki.hierarchy import assign_wiki_hierarchy
 
 
 def test_seeded_snippet_maps_to_forbidden_expressions():

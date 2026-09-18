@@ -1,5 +1,5 @@
-from retrieval.reranker import HashReranker, passage_for_hit, rerank_hits
-from retrieval.ports import Hit
+from akos.adapters.retrieval.reranker import HashReranker, passage_for_hit, rerank_hits
+from akos.domain.ports.retrieval import Hit
 from infra.settings import Settings
 
 
@@ -28,7 +28,7 @@ def test_rerank_hits_reorders_fused_candidates():
 
 
 def test_rerank_content_hits_preserves_claims_first():
-    from retrieval.reranker import rerank_content_hits_preserving_claims
+    from akos.adapters.retrieval.reranker import rerank_content_hits_preserving_claims
 
     settings = Settings(_env_file=None, rerank_enabled=True, rerank_provider="hash", rerank_top_n=5, retrieval_top_k=2)
     reranker = HashReranker()
@@ -56,7 +56,7 @@ def test_rerank_content_hits_preserves_claims_first():
 
 
 def test_to_unit_interval_applies_sigmoid_for_logits():
-    from retrieval.reranker import to_unit_interval
+    from akos.adapters.retrieval.reranker import to_unit_interval
 
     scores = to_unit_interval([2.0, 0.0, -2.0])
     assert all(0.0 < s < 1.0 for s in scores)
@@ -86,7 +86,7 @@ def test_rerank_hits_respects_min_score_threshold():
 def test_passage_for_hit_uses_claim_triple():
     from datetime import datetime, timezone
 
-    from knowledge.memory_repo import InMemoryKnowledge
+    from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
     from knowledge.models import Claim
 
     knowledge = InMemoryKnowledge()
@@ -111,7 +111,7 @@ def test_passage_for_hit_uses_claim_triple():
 
 
 def test_passage_for_hit_prefers_chunk_title_and_summary():
-    from knowledge.memory_repo import InMemoryKnowledge
+    from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
     from knowledge.models import SourceChunk
 
     knowledge = InMemoryKnowledge()

@@ -1,6 +1,6 @@
 import re
 
-from compiler.ports import ExtractedClaim, ExtractorPort
+from akos.domain.ports.compiler import ExtractedClaim, ExtractorPort
 
 _EXTRACTION_RULES = [
     (

@@ -1,5 +1,5 @@
 from knowledge_base.models import KnowledgeBase
-from knowledge_base.pg_repo import PgKnowledgeBaseRepo
+from akos.adapters.persistence.kb_pg import PgKnowledgeBaseRepo
 
 __all__ = ["KnowledgeBase", "KnowledgeBasePort", "PgKnowledgeBaseRepo"]
 
@@ -7,7 +7,7 @@ __all__ = ["KnowledgeBase", "KnowledgeBasePort", "PgKnowledgeBaseRepo"]
 def __getattr__(name: str):
     # Lazy: avoid cycle hub.knowledge_base → models → package __init__ → ports → hub
     if name == "KnowledgeBasePort":
-        from knowledge_base.ports import KnowledgeBasePort
+        from akos.domain.ports.knowledge_base import KnowledgeBasePort
 
         return KnowledgeBasePort
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

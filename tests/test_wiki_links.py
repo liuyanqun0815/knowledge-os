@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wiki.links import topic_page_name, topic_page_path, topic_wikilink, wiki_page_path
+from akos.application.wiki.links import topic_page_name, topic_page_path, topic_wikilink, wiki_page_path
 
 
 def test_wiki_page_path_preserves_nested_folder_segments() -> None:

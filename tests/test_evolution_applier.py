@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 
-from evolution.applier import KnowledgeApplier
-from evolution.differ import KnowledgeDiffer
-from evolution.family import family_key
-from evolution.ports import KnowledgeDiff
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.application.evolution.applier import KnowledgeApplier
+from akos.application.evolution.differ import KnowledgeDiffer
+from akos.application.evolution.family import family_key
+from akos.domain.ports.evolution import KnowledgeDiff
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source
 
 

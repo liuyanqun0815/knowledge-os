@@ -1,11 +1,11 @@
-from compiler.claim_merge import is_exclusive_predicate, merge_complementary_extracted
-from compiler.ports import ExtractedClaim
-from compiler.service import KnowledgeCompiler
-from evidence.memory_repo import InMemoryEvidence
-from graph.memory_repo import InMemoryGraph
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.application.ingest.claim_merge import is_exclusive_predicate, merge_complementary_extracted
+from akos.domain.ports.compiler import ExtractedClaim
+from akos.application.ingest.service import KnowledgeCompiler
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from ontology.registry import InMemoryOntology
-from retrieval.hybrid import HybridRetrieval
+from akos.adapters.retrieval.hybrid import HybridRetrieval
 
 
 def _claim(subject: str, predicate: str, obj: str, quote: str) -> ExtractedClaim:
@@ -97,7 +97,7 @@ def test_apply_extracted_claims_folds_complementary_into_existing_active() -> No
     """Non-exclusive different objects merge into one active claim (no staging twin)."""
     from datetime import datetime, timezone
 
-    from compiler.service import _family_id
+    from akos.application.ingest.service import _family_id
     from knowledge.models import Claim
 
     text = "手机银行申请。银行柜台申请。"
@@ -150,7 +150,7 @@ def test_apply_extracted_claims_folds_complementary_into_existing_active() -> No
 def test_apply_extracted_claims_exclusive_still_stages_on_conflict() -> None:
     from datetime import datetime, timezone
 
-    from compiler.service import _family_id
+    from akos.application.ingest.service import _family_id
     from knowledge.models import Claim
 
     text = "七天无理由的运费承担方是平台。"

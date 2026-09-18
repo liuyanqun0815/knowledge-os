@@ -1,4 +1,4 @@
-from compiler.chunker import (
+from akos.application.ingest.chunker import (
     chunk_document,
     detect_chunk_mode,
     validate_chunk_coverage,

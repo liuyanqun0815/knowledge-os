@@ -27,7 +27,7 @@ def _source(sid: str = "s-pg-1") -> Source:
 
 @pytest.fixture
 def pg_knowledge(pg_engine, pg_kb_repo):
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb = pg_kb_repo.create(name="pg-knowledge-test", domain_type="ecommerce_cs", description="")
     return PgKnowledge(pg_engine, kb.id)

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from infra.llm import OpenAiCompatibleClient
+from akos.adapters.llm.client import OpenAiCompatibleClient
 from infra.settings import Settings
 
 

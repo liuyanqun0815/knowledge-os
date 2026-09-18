@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from knowledge.models import Claim
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 from akos.application.evolution.applier import KnowledgeApplier
 from akos.application.evolution.differ import KnowledgeDiffer
-from evolution.ports import ApplyReport, KnowledgeDiff
+from akos.domain.ports.evolution import ApplyReport, KnowledgeDiff
 
 
 class EvolutionService:

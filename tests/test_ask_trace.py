@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from akos.interfaces.api.main import create_app
 from infra.bootstrap import build_orchestrator_for_kb, DEFAULT_IN_MEMORY_KB_ID
 
 

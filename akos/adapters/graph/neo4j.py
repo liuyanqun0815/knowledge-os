@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from graph.ports import Edge
+from akos.domain.ports.graph import Edge
 
 _RELATIONSHIP_TYPE = "RELATES_TO"
 _SYSTEM_REL_PROPS = frozenset({"predicate", "kb_id"})

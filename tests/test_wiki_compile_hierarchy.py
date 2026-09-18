@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.paths import compile_wiki_root
 
 
 def _now() -> datetime:
@@ -86,7 +86,7 @@ def _cluster(
 
 
 def test_compile_hierarchy_folds_snippets_under_hub(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-1", "cs.md"))
@@ -154,7 +154,7 @@ def test_compile_hierarchy_folds_snippets_under_hub(tmp_path: Path) -> None:
     assert "客服话术" in index_body
     assert "沟通规范" in index_body or "禁用表达" in index_body
 
-    from wiki.meta import load_pages_meta
+    from akos.application.wiki.meta import load_pages_meta
 
     meta = load_pages_meta(wiki_root)
     leaf_meta = meta.get("客服话术/沟通规范") or meta.get("客服话术/沟通规范.md")
@@ -164,7 +164,7 @@ def test_compile_hierarchy_folds_snippets_under_hub(tmp_path: Path) -> None:
 
 
 def test_compile_hierarchy_migrates_flat_topic_files(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-1", "cs.md"))
@@ -206,7 +206,7 @@ def test_compile_hierarchy_migrates_flat_topic_files(tmp_path: Path) -> None:
 
 
 def test_compile_flat_when_hierarchy_disabled(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-1", "a.md"))

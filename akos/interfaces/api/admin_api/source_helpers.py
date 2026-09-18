@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from knowledge.models import Source
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 from infra.upload_utils import directory_from_relative, fuzzy_match, relative_path_from_kb_root
 

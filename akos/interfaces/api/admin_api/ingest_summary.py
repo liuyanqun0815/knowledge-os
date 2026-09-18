@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from akos.interfaces.api.admin_api.schemas import ZipUploadItemResponse
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 
 def snapshot_active_by_subject(knowledge: KnowledgePort) -> dict[str, int]:

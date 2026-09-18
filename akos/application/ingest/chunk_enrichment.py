@@ -69,8 +69,8 @@ def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Sett
     data_root = getattr(settings, "data_root", None) or getattr(deps, "data_root", None)
     if not data_root:
         return
-    from wiki.compile import compile_topics_for_source
-    from wiki.paths import compile_wiki_root
+    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.paths import compile_wiki_root
 
     compile_topics_for_source(
         deps.knowledge,

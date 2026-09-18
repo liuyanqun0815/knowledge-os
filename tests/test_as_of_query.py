@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.bootstrap import build_orchestrator_for_kb
-from orchestrator.nodes import parse_time_node
+from akos.application.ask.nodes import parse_time_node
 
 
 def test_as_of_before_v4_effective_returns_buyer_not_platform(seeded_kb_id):

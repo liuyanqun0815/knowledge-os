@@ -3,8 +3,8 @@ import uuid
 
 import pytest
 
-from graph.memory_repo import InMemoryGraph
-from graph.ports import Edge
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.domain.ports.graph import Edge
 from tests.conftest import pg_enabled
 
 GOLDEN_ENTITIES = (
@@ -35,7 +35,7 @@ def test_inmemory_golden_set():
 
 @pytest.mark.skipif(not pg_enabled(), reason="requires AKOS_USE_PG=true")
 def test_pg_graph_parity_with_inmemory(pg_kb_repo, pg_engine):
-    from infra.pg_graph import PgGraph
+    from akos.adapters.persistence.pg_graph import PgGraph
 
     memory_graph = InMemoryGraph()
     kb = pg_kb_repo.create(name="adapter-parity", domain_type="ecommerce_cs", description="")
@@ -54,7 +54,7 @@ def _neo4j_backend_enabled() -> bool:
 
 @pytest.mark.skipif(not _neo4j_backend_enabled(), reason="requires AKOS_GRAPH_BACKEND=neo4j")
 def test_neo4j_graph_parity_with_inmemory():
-    from graph.adapters.neo4j import Neo4jGraph
+    from akos.adapters.graph.neo4j import Neo4jGraph
     from infra.settings import Settings
 
     memory_graph = InMemoryGraph()

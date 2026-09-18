@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from akos.interfaces.api.main import create_app
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from knowledge_base.models import KnowledgeBase
 
@@ -55,7 +55,7 @@ def test_ask_rejects_archived_kb_even_when_orchestrator_is_cached(tmp_path, monk
     app = create_app(data_root=str(tmp_path))
     cached_orchestrator = object()
     app.state.orchestrator_cache["archived-kb"] = cached_orchestrator
-    monkeypatch.setattr("app.deps.get_kb_repo", lambda _request: ArchivedKnowledgeBaseRepo())
+    monkeypatch.setattr("akos.interfaces.api.deps.get_kb_repo", lambda _request: ArchivedKnowledgeBaseRepo())
     client = TestClient(app)
 
     response = client.post(

@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 
-from graph.memory_repo import InMemoryGraph
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source
-from retrieval.hybrid import HybridRetrieval
-from retrieval.ports import RetrievalMode
+from akos.adapters.retrieval.hybrid import HybridRetrieval
+from akos.domain.ports.retrieval import RetrievalMode
 
 
 def test_claim_and_bm25_search():

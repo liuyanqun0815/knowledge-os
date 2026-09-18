@@ -4,8 +4,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
-from orchestrator.nodes import retrieve_node
-from retrieval.ports import Hit, RetrievalMode
+from akos.application.ask.nodes import retrieve_node
+from akos.domain.ports.retrieval import Hit, RetrievalMode
 
 
 def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
@@ -28,7 +28,7 @@ def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
         assert query_embedding == shared_vec
         return _mark("claim", 0.04, claim_hits)
 
-    monkeypatch.setattr("orchestrator.nodes.retriever_agent.retrieve", fake_retrieve)
+    monkeypatch.setattr("akos.application.ask.nodes.retriever_agent.retrieve", fake_retrieve)
 
     chunk_retrieval = MagicMock()
 
@@ -61,7 +61,7 @@ def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
         retrieval_chunk_weight=0.8,
         rerank_enabled=False,
     )
-    monkeypatch.setattr("orchestrator.nodes.get_settings", lambda: settings)
+    monkeypatch.setattr("akos.application.ask.nodes.get_settings", lambda: settings)
 
     deps = MagicMock()
     deps.retrieval = MagicMock()
@@ -72,7 +72,7 @@ def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
     deps.knowledge = MagicMock()
 
     with ThreadPoolExecutor(max_workers=3) as pool:
-        monkeypatch.setattr("orchestrator.nodes._RETRIEVE_POOL", pool)
+        monkeypatch.setattr("akos.application.ask.nodes._RETRIEVE_POOL", pool)
         out = retrieve_node(
             {"question": "发货多久？", "retrieval_mode": RetrievalMode.HYBRID},
             deps,

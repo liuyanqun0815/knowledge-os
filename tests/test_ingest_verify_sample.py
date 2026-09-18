@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from domains.registry import load_domain
 from knowledge.models import Claim, Source, TextSpan
-from orchestrator.nodes import verify_sample_node
+from akos.application.ask.nodes import verify_sample_node
 
 
 def test_ecommerce_high_risk_predicates():

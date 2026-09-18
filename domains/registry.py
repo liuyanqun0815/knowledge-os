@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from domains.base import DomainPort
+from akos.domain.ports.domain import DomainPort
 from domains.corporate_culture.domain import CorporateCultureDomain
 from domains.ecommerce_cs.domain import EcommerceCsDomain
 from domains.generic.domain import GenericDomain

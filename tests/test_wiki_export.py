@@ -2,15 +2,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 
-from cli.main import app
-from evidence.memory_repo import InMemoryEvidence
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
-from tests.conftest import ROOT
-from wiki.export import _sanitize_filename, export_wiki, resolve_wiki_output_dir
+from akos.application.wiki.export import _sanitize_filename, export_wiki, resolve_wiki_output_dir
 
 
 def _source(source_id: str = "policy-v3", title: str = "refund_policy_v3.md") -> Source:
@@ -235,27 +231,3 @@ def test_resolve_wiki_output_dir_rejects_escape(tmp_path: Path):
 
     with pytest.raises(ValueError, match="data root"):
         resolve_wiki_output_dir(data_root, "legacy", "../outside")
-
-
-def test_wiki_export_cli_after_ingest(tmp_path, monkeypatch):
-    import json
-
-    monkeypatch.setenv("AKOS_DATA_ROOT", str(tmp_path / "data"))
-    monkeypatch.setenv("AKOS_USE_PG", "false")
-    monkeypatch.setenv("AKOS_EXTRACT_LLM", "false")
-    monkeypatch.delenv("AKOS_LLM_API_KEY", raising=False)
-
-    runner = CliRunner()
-    kb_id = DEFAULT_IN_MEMORY_KB_ID
-    sample_md = ROOT / "samples" / "refund_policy_v3.md"
-    ingest_result = runner.invoke(app, ["ingest", str(sample_md), "--kb", kb_id])
-    assert ingest_result.exit_code == 0, ingest_result.stdout
-
-    out_dir = tmp_path / "wiki-cli"
-    export_result = runner.invoke(app, ["wiki-export", "--kb", kb_id, "--out", str(out_dir)])
-    assert export_result.exit_code == 0, export_result.stdout
-
-    payload = json.loads(export_result.stdout)
-    assert payload["kb_id"] == kb_id
-    assert payload["files_written"] >= 1
-    assert (out_dir / "index.md").exists()

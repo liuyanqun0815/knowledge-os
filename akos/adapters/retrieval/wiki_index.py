@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-from retrieval.ports import Hit
+from akos.domain.ports.retrieval import Hit
 from akos.adapters.retrieval.wiki_keywords import extract_keywords
 
 _WIKI_TOP_K_CAP = 5

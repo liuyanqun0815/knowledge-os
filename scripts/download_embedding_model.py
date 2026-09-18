@@ -25,7 +25,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from retrieval.embedder import resolve_modelscope_model_dir, SentenceTransformerEmbedder
+    from akos.adapters.retrieval.embedder import resolve_modelscope_model_dir, SentenceTransformerEmbedder
 
     model_dir = resolve_modelscope_model_dir(args.model, args.cache_dir)
     print(f"ModelScope dir: {model_dir}")

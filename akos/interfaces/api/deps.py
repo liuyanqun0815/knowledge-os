@@ -2,7 +2,7 @@ from fastapi import HTTPException, Request
 
 from infra.bootstrap import _build_repos, build_orchestrator_for_kb
 from infra.settings import Settings
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.ask.service import LangGraphOrchestrator
 
 

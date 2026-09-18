@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 
-from compiler.ports import ExtractedClaim
-from compiler.service import KnowledgeCompiler, _family_id
-from evidence.memory_repo import InMemoryEvidence
-from graph.memory_repo import InMemoryGraph
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.domain.ports.compiler import ExtractedClaim
+from akos.application.ingest.service import KnowledgeCompiler, _family_id
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim
 from ontology.registry import InMemoryOntology
-from retrieval.hybrid import HybridRetrieval
-from retrieval.ports import RetrievalMode
+from akos.adapters.retrieval.hybrid import HybridRetrieval
+from akos.domain.ports.retrieval import RetrievalMode
 
 
 class _UnusedExtractor:

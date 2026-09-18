@@ -1,4 +1,4 @@
-from graph.ports import Edge, GraphPort
+from akos.domain.ports.graph import Edge, GraphPort
 
 
 class InMemoryGraph:

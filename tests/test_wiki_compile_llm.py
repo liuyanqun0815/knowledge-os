@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.paths import compile_wiki_root
 
 
 class FakeLlmClient:
@@ -99,7 +99,7 @@ def _seed_kb(knowledge: InMemoryKnowledge) -> None:
 
 
 def test_topic_merge_prompt_has_structured_sections():
-    from wiki.prompts import build_topic_merge_prompt
+    from akos.application.wiki.prompts import build_topic_merge_prompt
 
     prompt = build_topic_merge_prompt(
         topic_name="退款政策",
@@ -118,7 +118,7 @@ def test_topic_merge_prompt_has_structured_sections():
 
 
 def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_kb(knowledge)
@@ -179,7 +179,7 @@ def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
 
 
 def test_compile_falls_back_to_template_on_llm_parse_failure(tmp_path: Path):
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_kb(knowledge)
@@ -214,7 +214,7 @@ def test_compile_falls_back_to_template_on_llm_parse_failure(tmp_path: Path):
 
 
 def test_compile_skips_llm_when_flag_false(tmp_path: Path):
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_kb(knowledge)

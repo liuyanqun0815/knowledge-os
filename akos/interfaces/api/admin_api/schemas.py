@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from evolution.ports import ApplyReport
+from akos.domain.ports.evolution import ApplyReport
 from knowledge.models import Claim
 from knowledge_base.models import KnowledgeBase
 

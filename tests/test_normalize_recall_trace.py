@@ -3,9 +3,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from infra.settings import Settings
-from memory.ports import RecallContext
-from orchestrator.nodes import normalize_node, recall_node, remember_node
-from orchestrator.question_rewrite import (
+from akos.domain.ports.memory import RecallContext
+from akos.application.ask.nodes import normalize_node, recall_node, remember_node
+from akos.application.ask.question_rewrite import (
     matches_incomplete_pattern,
     question_has_domain_entity,
     try_llm_rewrite,
@@ -45,7 +45,7 @@ def test_rule_rewrite_skips_when_entity_already_present():
 
 def test_llm_rewrite_used_when_rule_misses(monkeypatch):
     monkeypatch.setattr(
-        "orchestrator.nodes.get_settings",
+        "akos.application.ask.nodes.get_settings",
         lambda: Settings(_env_file=None, ask_normalize_llm=True),
     )
     ontology = MagicMock()
@@ -84,7 +84,7 @@ def test_llm_rewrite_used_when_rule_misses(monkeypatch):
 
 def test_normalize_prefers_rule_over_llm(monkeypatch):
     monkeypatch.setattr(
-        "orchestrator.nodes.get_settings",
+        "akos.application.ask.nodes.get_settings",
         lambda: Settings(_env_file=None, ask_normalize_llm=True),
     )
     ontology = MagicMock()
@@ -116,7 +116,7 @@ def test_normalize_prefers_rule_over_llm(monkeypatch):
 
 def test_normalize_node_trace_includes_input_and_output(monkeypatch):
     monkeypatch.setattr(
-        "orchestrator.nodes.get_settings",
+        "akos.application.ask.nodes.get_settings",
         lambda: Settings(_env_file=None, ask_normalize_llm=False),
     )
     ontology = MagicMock()

@@ -1,6 +1,6 @@
 from knowledge.models import TextSpan
 
-from evidence.ports import EvidenceBundle
+from akos.domain.ports.evidence import EvidenceBundle
 
 
 class InMemoryEvidence:

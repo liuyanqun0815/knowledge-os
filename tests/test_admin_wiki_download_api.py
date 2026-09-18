@@ -5,9 +5,9 @@ import zipfile
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from akos.interfaces.api.main import create_app
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
-from wiki.paths import compile_wiki_root
+from akos.application.wiki.paths import compile_wiki_root
 
 
 def test_admin_wiki_download_returns_zip(tmp_path, monkeypatch):

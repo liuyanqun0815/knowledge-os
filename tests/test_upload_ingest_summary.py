@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
-from admin_api.ingest_summary import build_ingest_summary, snapshot_active_by_subject
-from admin_api.schemas import ZipUploadItemResponse
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.interfaces.api.admin_api.ingest_summary import build_ingest_summary, snapshot_active_by_subject
+from akos.interfaces.api.admin_api.schemas import ZipUploadItemResponse
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim
 
 
@@ -68,7 +68,7 @@ def test_build_ingest_summary_reports_new_claims_and_subjects():
 def test_build_ingest_summary_includes_quarantine(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from app.main import create_app
+    from akos.interfaces.api.main import create_app
     from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
     from tests.conftest import ROOT
 

@@ -2,9 +2,9 @@ def test_resume_processes_pending(tmp_path, monkeypatch):
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
 
-    from app.main import create_app
+    from akos.interfaces.api.main import create_app
     from infra.bootstrap import build_orchestrator_for_kb
-    from admin_api.upload_jobs import register_pending_source, resume_incomplete_uploads
+    from akos.interfaces.api.admin_api.upload_jobs import register_pending_source, resume_incomplete_uploads
 
     app = create_app(data_root=str(tmp_path))
     kb_id = "kb1"

@@ -1,4 +1,4 @@
-from memory.memory_repo import InMemoryMemoryStore
+from akos.adapters.persistence.memory_store import InMemoryMemoryStore
 from memory.models import Procedure, Step
 
 

@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from evolution.differ import KnowledgeDiffer
-from evolution.family import family_key
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.application.evolution.differ import KnowledgeDiffer
+from akos.application.evolution.family import family_key
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source
 
 
@@ -47,7 +47,7 @@ def _claim(
 
 
 def test_family_key_matches_compiler():
-    from compiler.service import _family_id
+    from akos.application.ingest.service import _family_id
 
     subject, predicate, object_type = "七天无理由", "运费承担方", "Concept"
     assert family_key(subject, predicate, object_type) == _family_id(subject, predicate, object_type)

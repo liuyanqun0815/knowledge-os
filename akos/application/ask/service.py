@@ -3,8 +3,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 import time
 
-from compiler.ports import CompileReport
-from evolution.ports import ApplyReport
+from akos.domain.ports.compiler import CompileReport
+from akos.domain.ports.evolution import ApplyReport
 from infra.tracing import build_run_config
 from knowledge.errors import DomainError
 from knowledge.models import Answer

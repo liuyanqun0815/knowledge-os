@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from retrieval.ports import Hit
+from akos.domain.ports.retrieval import Hit
 
 _RRF_K = 60
 

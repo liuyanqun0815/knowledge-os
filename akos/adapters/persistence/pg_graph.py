@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from graph.ports import Edge
+from akos.domain.ports.graph import Edge
 
 
 class PgGraph:

@@ -1,4 +1,4 @@
-from orchestrator.synthesis import _build_prompt, sanitize_synthesis_payload, validate_synthesis_result
+from akos.application.ask.synthesis import _build_prompt, sanitize_synthesis_payload, validate_synthesis_result
 
 
 def test_build_prompt_separates_question_and_knowledge():
@@ -121,8 +121,8 @@ def test_build_synthesis_context_uses_rerank_hits_and_truncates_non_claims():
 
     from infra.settings import Settings
     from knowledge.models import Claim, SourceChunk
-    from orchestrator.synthesis import build_synthesis_context
-    from retrieval.ports import Hit
+    from akos.application.ask.synthesis import build_synthesis_context
+    from akos.domain.ports.retrieval import Hit
 
     claim = Claim(
         id="cl1",

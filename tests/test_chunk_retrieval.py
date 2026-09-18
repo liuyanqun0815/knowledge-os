@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Source, SourceChunk
-from retrieval.chunk_index import ChunkRetrieval
+from akos.adapters.retrieval.chunk_index import ChunkRetrieval
 
 
 def test_chunk_retrieval_finds_narrative_text():

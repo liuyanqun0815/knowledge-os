@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from evidence.ports import EvidenceBundle
+from akos.domain.ports.evidence import EvidenceBundle
 from knowledge.models import TextSpan
 
 

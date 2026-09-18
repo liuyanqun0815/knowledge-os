@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
-from compiler.chunk_service import index_source_chunks
+from akos.application.ingest.chunk_service import index_source_chunks
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Source, SourceChunk
 
 

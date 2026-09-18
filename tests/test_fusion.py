@@ -1,5 +1,5 @@
-from retrieval.fusion import fuse_hits, normalize_hit_scores, route_fusion_weights
-from retrieval.ports import Hit
+from akos.adapters.retrieval.fusion import fuse_hits, normalize_hit_scores, route_fusion_weights
+from akos.domain.ports.retrieval import Hit
 
 
 def test_fuse_hits_prefers_both_channels():

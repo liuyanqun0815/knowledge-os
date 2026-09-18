@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from app.routes import get_ask_orchestrator
-from orchestrator.service import AskResult
+from akos.interfaces.api.main import create_app
+from akos.interfaces.api.routes import get_ask_orchestrator
+from akos.application.ask.service import AskResult
 
 
 class FakeOrchestrator:

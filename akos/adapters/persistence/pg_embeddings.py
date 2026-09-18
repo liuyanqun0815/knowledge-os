@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from retrieval.ports import Hit
+from akos.domain.ports.retrieval import Hit
 
 
 def vector_literal(values: list[float]) -> str:

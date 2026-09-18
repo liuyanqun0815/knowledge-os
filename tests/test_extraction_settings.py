@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from compiler.extraction_spec import LlmExtractionSpec
+from akos.application.ingest.extraction_spec import LlmExtractionSpec
 from domains.registry import load_domain
 from infra.settings import Settings
 
@@ -21,7 +21,7 @@ def test_extraction_settings_defaults():
 
 
 def test_apply_open_flag_copies_max_claims_per_chunk():
-    from compiler.spec_utils import apply_open_flag
+    from akos.application.ingest.spec_utils import apply_open_flag
 
     spec = LlmExtractionSpec(allowed_predicates=["适用"], entity_types=["Concept"])
     settings = Settings(_env_file=None, extract_max_claims_per_chunk=8)
@@ -59,7 +59,7 @@ def test_settings_extract_open_predicates_defaults_true(monkeypatch):
 
 
 def test_llm_extraction_spec_open_predicates_default_false():
-    from compiler.extraction_spec import LlmExtractionSpec
+    from akos.application.ingest.extraction_spec import LlmExtractionSpec
 
     spec = LlmExtractionSpec(allowed_predicates=["适用"], entity_types=["Concept"])
     assert spec.open_predicates is False

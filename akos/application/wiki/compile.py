@@ -12,7 +12,7 @@ from typing import Any
 
 from domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
 from knowledge.models import Claim, SourceChunk, TopicCluster
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.wiki.hierarchy import HierarchyAssignment, HierarchyPlan, assign_wiki_hierarchy
 from akos.application.wiki.links import (
     chunk_wikilink,

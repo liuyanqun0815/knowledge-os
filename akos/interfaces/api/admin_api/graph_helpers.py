@@ -4,7 +4,7 @@ from typing import Any
 
 from akos.interfaces.api.admin_api.schemas import GraphEdgeResponse, GraphEntityResponse
 from akos.application.ingest.service import _entity_id
-from graph.ports import Edge, GraphPort
+from akos.domain.ports.graph import Edge, GraphPort
 
 # Topic 结构边：非 Claim，按 Topic.status 判断是否生效
 _STRUCTURAL_PREDICATES = frozenset({"涵盖", "包含段落"})

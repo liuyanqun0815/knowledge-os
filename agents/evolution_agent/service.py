@@ -1,4 +1,4 @@
-from evolution.ports import ApplyReport, EvolutionPort, KnowledgeDiff
+from akos.domain.ports.evolution import ApplyReport, EvolutionPort, KnowledgeDiff
 
 
 def diff_sources(evolution: EvolutionPort, old_source_id: str, new_source_id: str) -> KnowledgeDiff:

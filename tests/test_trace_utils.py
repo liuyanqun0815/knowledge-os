@@ -1,4 +1,4 @@
-from orchestrator.trace_utils import normalize_agent_trace, trace_step
+from akos.application.ask.trace_utils import normalize_agent_trace, trace_step
 
 
 def test_normalize_agent_trace_maps_legacy_retrieve_step():
@@ -26,7 +26,7 @@ def test_trace_step_builds_expandable_detail():
 
 
 def test_serialize_hit_for_trace_includes_chunk_fields():
-    from orchestrator.trace_utils import serialize_hit_for_trace
+    from akos.application.ask.trace_utils import serialize_hit_for_trace
 
     class FakeHit:
         hit_type = "chunk"

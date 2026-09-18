@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from akos.interfaces.api.main import create_app
 from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,7 +49,7 @@ def test_upload_bad_suffix_returns_400(client):
 
 
 def test_upload_extract_failure_returns_202_then_failed(client, monkeypatch):
-    from admin_api import upload_jobs
+    from akos.interfaces.api.admin_api import upload_jobs
     from knowledge.errors import DomainError
 
     def boom(_path):

@@ -1,4 +1,4 @@
-from graph.memory_repo import InMemoryGraph
+from akos.adapters.persistence.graph_memory import InMemoryGraph
 
 
 def test_upsert_and_neighbors():

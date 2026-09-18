@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from graph.memory_repo import InMemoryGraph
+from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source, SourceChunk
 from knowledge.topic_service import rebuild_topic_clusters, sync_graph_topics, topic_entity_id
 

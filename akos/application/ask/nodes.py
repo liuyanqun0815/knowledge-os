@@ -10,7 +10,7 @@ from typing import Any
 from agents.memory_agent import service as memory_agent
 from agents.retriever_agent import service as retriever_agent
 from agents.verification_agent import service as verification_agent
-from compiler.chunk_service import index_source_chunks
+from akos.application.ingest.chunk_service import index_source_chunks
 from infra.settings import get_settings
 from knowledge.models import Answer
 from akos.application.ask.question_rewrite import (
@@ -25,9 +25,9 @@ from akos.application.ask.trace_utils import (
     serialize_hits_for_trace,
     trace_step,
 )
-from retrieval.fusion import fuse_hits, route_fusion_weights
-from retrieval.reranker import rerank_content_hits_preserving_claims
-from retrieval.ports import Hit, RetrievalMode
+from akos.adapters.retrieval.fusion import fuse_hits, route_fusion_weights
+from akos.adapters.retrieval.reranker import rerank_content_hits_preserving_claims
+from akos.domain.ports.retrieval import Hit, RetrievalMode
 
 _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")

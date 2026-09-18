@@ -6,14 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from compiler.enrichment import enrich_source
-from compiler.extraction_spec import LlmExtractionSpec
-from compiler.ports import ExtractedClaim
-from compiler.service import KnowledgeCompiler
-from evidence.memory_repo import InMemoryEvidence
-from graph.memory_repo import InMemoryGraph
+from akos.application.ingest.enrichment import enrich_source
+from akos.application.ingest.extraction_spec import LlmExtractionSpec
+from akos.domain.ports.compiler import ExtractedClaim
+from akos.application.ingest.service import KnowledgeCompiler
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
+from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Source
 from ontology.registry import InMemoryOntology
 
@@ -196,7 +196,7 @@ def test_enrich_source_marks_fatal_errors_failed() -> None:
 def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) -> None:
     from datetime import datetime, timezone
 
-    from compiler import enrichment
+    from akos.application.ingest import enrichment
     from knowledge.models import SourceChunk
 
     calls: list[str | None] = []
@@ -260,7 +260,7 @@ def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) ->
 
 
 def test_enrich_source_passes_document_anchor(monkeypatch) -> None:
-    from compiler import enrichment
+    from akos.application.ingest import enrichment
 
     calls: list[str | None] = []
 

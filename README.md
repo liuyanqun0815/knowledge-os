@@ -1,6 +1,6 @@
 # AKOS — Agent-Native Knowledge Operating System
 
-电商客服知识操作系统（模块化单体架构）。
+电商客服知识操作系统（六边形分层：`akos.interfaces` → `akos.application` → `akos.domain.ports`；适配器在 `akos.adapters`）。
 
 ## 安装
 
@@ -8,38 +8,58 @@
 pip install -e ".[dev]"
 ```
 
+## 包结构（摘要）
+
+```text
+akos/
+  domain/ports/       # Protocols
+  application/        # ingest / ask / wiki / evolution
+  adapters/           # persistence / llm / retrieval / files / graph
+  interfaces/api/     # FastAPI + admin routes
+infra/                # settings、bootstrap、db（组合根仍在此）
+domains/              # DomainPort 插件
+web/                  # 管理台 UI
+```
+
+旧根包路径（`app`、`compiler`、`wiki`、`orchestrator`、`retrieval` 等）已移除，请使用上表 `akos.*` 导入。
+
 ## 测试
 
 ```bash
 pytest
 ```
 
-## CLI
+## 管理台 Web UI（推荐入口）
 
-所有命令必须指定知识库 `--kb`（`knowledge_base_id`）：
+日常 ingest / ask / lint / wiki 导出请使用 Web 管理台或 Admin API，不再提供 Typer CLI。
+
+React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`。覆盖知识库与文档管理、Claim 浏览、隔离审批、AnswerV2 问答（含 `as_of` / 轨迹）及文档演化上传。
+
+**Implementation plan:** [`docs/superpowers/plans/2026-09-08-akos-admin-web.md`](docs/superpowers/plans/2026-09-08-akos-admin-web.md) · F4+ [`2026-09-09-akos-admin-web-f4-plus.md`](docs/superpowers/plans/2026-09-09-akos-admin-web-f4-plus.md)
 
 ```bash
-akos ingest samples/refund_policy_v3.md --kb <knowledge_base_id> --type policy
-akos ask "定制商品能否七天无理由退货？" --kb <knowledge_base_id>
-akos inspect <claim_id> --kb <knowledge_base_id>
-akos lint --kb <knowledge_base_id>
-akos lint --kb <knowledge_base_id> --format json
-akos wiki-export --kb <knowledge_base_id> --out ./wiki-out
+# 终端 A — 后端
+uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+
+# 终端 B — 前端
+cd web && npm install && npm run dev
 ```
 
-启用 PostgreSQL（`AKOS_USE_PG=true`）时，ingest 与 ask 可跨独立 CLI 进程共享持久化数据。
+浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。详细说明与手工 E2E 验收清单见 [`web/README.md`](web/README.md)。
+
+可选鉴权：后端 `.env` 设置 `ADMIN_API_TOKEN`，前端 `web/.env.local` 设置 `VITE_ADMIN_API_TOKEN`（值需一致）。
 
 ## 知识库 Lint / Wiki 导出
 
 借鉴 [LLM Wiki](https://github.com/luotwo/llm-wiki) 的 **Lint（健康检查）** 与 **Wiki 视图层（只读导出）**；PG Claim 仍为唯一权威，导出的 Markdown 不回写入库。
 
-| 能力 | CLI | Admin API |
-|------|-----|-----------|
-| Lint | `akos lint --kb <id>` | `GET /admin/knowledge-bases/{kb_id}/lint` |
-| Wiki 导出 | `akos wiki-export --kb <id> [--out dir]` | `POST /admin/knowledge-bases/{kb_id}/wiki/export` |
-| Wiki 编译层 | （enrich 后自动，需 `AKOS_WIKI_COMPILE`） | `POST /admin/knowledge-bases/{kb_id}/wiki/compile`（可选 `?source_id=`） |
-| 清理 stale chunks | （`save_chunks` 后自动，需 `AKOS_PURGE_STALE_CHUNKS`） | `POST /admin/knowledge-bases/{kb_id}/chunks/purge-stale` |
-| 主题簇重建 | （enrich / wiki 导出前自动） | `POST /admin/knowledge-bases/{kb_id}/topics/rebuild` |
+| 能力 | Admin API / Web |
+|------|-----------------|
+| Lint | `GET /admin/knowledge-bases/{kb_id}/lint` |
+| Wiki 导出 | `POST /admin/knowledge-bases/{kb_id}/wiki/export` |
+| Wiki 编译层 | `POST /admin/knowledge-bases/{kb_id}/wiki/compile`（可选 `?source_id=`；enrich 后亦可自动） |
+| 清理 stale chunks | `POST /admin/knowledge-bases/{kb_id}/chunks/purge-stale` |
+| 主题簇重建 | `POST /admin/knowledge-bases/{kb_id}/topics/rebuild` |
 
 Lint 检查项：`conflict`（同 family 多条 active）、`missing_evidence`、`orphan_source`、`quarantine_backlog`。
 
@@ -74,8 +94,8 @@ pytest -v tests/test_knowledge_lint.py tests/test_wiki_export.py \
 
 | LLM Wiki | AKOS 本计划 |
 |----------|-------------|
-| Lint 口头指令 | `akos lint` + Admin API |
-| wiki/ 目录 | `wiki-export` 从 Claim 生成 |
+| Lint 口头指令 | Admin API / Web |
+| wiki/ 目录 | Wiki 导出从 Claim 生成 |
 | Ingest 更新已有页 | 上传 `ingest_summary`（规则摘要 v1） |
 | Query 回写 | 暂未实现 |
 
@@ -86,25 +106,7 @@ pytest -v tests/test_knowledge_lint.py tests/test_wiki_export.py \
 uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 ```
 
-启动后访问 `http://127.0.0.1:8000/docs` 查看 Swagger 文档。（兼容旧入口 `app.main:create_app`）
-
-## 管理台 Web UI
-
-React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`。覆盖 F0–F4：知识库与文档管理、Claim 浏览、隔离审批、AnswerV2 问答（含 `as_of` / 轨迹）及文档演化上传。
-
-**Implementation plan:** [`docs/superpowers/plans/2026-09-08-akos-admin-web.md`](docs/superpowers/plans/2026-09-08-akos-admin-web.md) · F4+ [`2026-09-09-akos-admin-web-f4-plus.md`](docs/superpowers/plans/2026-09-09-akos-admin-web-f4-plus.md)
-
-```bash
-# 终端 A — 后端
-uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
-
-# 终端 B — 前端
-cd web && npm install && npm run dev
-```
-
-浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。详细说明与手工 E2E 验收清单见 [`web/README.md`](web/README.md)。
-
-可选鉴权：后端 `.env` 设置 `ADMIN_API_TOKEN`，前端 `web/.env.local` 设置 `VITE_ADMIN_API_TOKEN`（值需一致）。
+启动后访问 `http://127.0.0.1:8000/docs` 查看 Swagger 文档。
 
 ## 环境变量
 
@@ -221,7 +223,7 @@ psql postgresql://akos:akos@localhost:5432/akos -f ../infra/migrations/004_proce
 - `docker compose up` 可启动 PG + Neo4j + MinIO + API（`deploy/docker-compose.yml`、`Dockerfile` 就绪）
 - 后台创建知识库 → 上传 → compile → ask（指定 `knowledge_base_id`）全链路
 - Neo4j Browser 可见该库实体/关系（节点/关系带 `kb_id`）
-- `akos ask --kb <id> "仅退款流程怎么走？"` → `procedure_id` + 流程 steps（`test_procedure_ask_returns_steps`）
+- Web / `POST /ask`：「仅退款流程怎么走？」→ `procedure_id` + 流程 steps（`test_procedure_ask_returns_steps`）
 - quarantine 人工 approve 后进入主图（`test_quarantine_approve_creates_active_claim`）
 - `POST /admin/knowledge-bases/{kb_id}/debug/ask` 返回含 `retrieve`、`verify` 的 trace
 
@@ -307,7 +309,7 @@ pytest -v tests/test_kb_isolation.py tests/test_corporate_domain_skeleton.py
 docker run -d --name akos-pg -e POSTGRES_PASSWORD=akos -e POSTGRES_USER=akos -e POSTGRES_DB=akos -p 5432:5432 pgvector/pgvector:pg16
 psql postgresql://akos:akos@localhost:5432/akos -f infra/schema.sql
 psql postgresql://akos:akos@localhost:5432/akos -f infra/migrations/002_knowledge_bases.sql
-AKOS_USE_PG=true pytest -v tests/test_pg_knowledge.py tests/test_cli_kb_persistence.py tests/test_admin_kb_api.py tests/test_e2e_sample.py
+AKOS_USE_PG=true pytest -v tests/test_pg_knowledge.py tests/test_admin_kb_api.py tests/test_e2e_sample.py
 
 # 可选：配置 AKOS_LLM_API_KEY 后运行 LLM 集成测试
 AKOS_LLM_API_KEY=sk-... pytest -v tests/test_corporate_domain_skeleton.py -k llm_integration
@@ -317,8 +319,7 @@ AKOS_LLM_API_KEY=sk-... pytest -v tests/test_corporate_domain_skeleton.py -k llm
 
 - admin 创建 `corporate_culture` 库并上传文档（无 LLM Key 时 claims 可能为 0；有 Key 时 claims > 0）
 - 两个知识库 Claim 互不可见（`test_kb_isolation`）
-- `POST /ask` 带 `knowledge_base_id` 只命中该库
-- `akos ask --kb <id>` 跨 CLI 进程可答（PG）
+- `POST /ask` 带 `knowledge_base_id` 只命中该库；启用 PG 时可跨进程共享
 - 一期 e2e 在 `test-ecommerce` 库 PASS（`tests/test_e2e_sample.py`）
 
 ## PostgreSQL（可选）

@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from graph.memory_repo import InMemoryGraph
+from akos.adapters.persistence.graph_memory import InMemoryGraph
 
 
 def test_inmemory_graph_neighbors():
@@ -22,7 +22,7 @@ def _neo4j_enabled() -> bool:
 
 @pytest.mark.skipif(not _neo4j_enabled(), reason="requires Neo4j (AKOS_NEO4J_URI or AKOS_GRAPH_BACKEND=neo4j)")
 def test_neo4j_graph_upsert_and_neighbors():
-    from graph.adapters.neo4j import Neo4jGraph
+    from akos.adapters.graph.neo4j import Neo4jGraph
     from infra.settings import Settings
 
     settings = Settings()

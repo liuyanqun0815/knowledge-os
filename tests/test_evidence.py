@@ -1,4 +1,4 @@
-from evidence.memory_repo import InMemoryEvidence
+from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from knowledge.models import TextSpan
 
 

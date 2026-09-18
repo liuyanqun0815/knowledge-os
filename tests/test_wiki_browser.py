@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from wiki.meta import WikiPageMeta, save_pages_meta
+from akos.application.wiki.meta import WikiPageMeta, save_pages_meta
 
 
 def _seed(wiki: Path) -> None:
@@ -30,7 +30,7 @@ def _seed(wiki: Path) -> None:
 
 
 def test_resolve_rejects_traversal(tmp_path: Path):
-    from wiki.browser import resolve_wiki_page_path
+    from akos.application.wiki.browser import resolve_wiki_page_path
 
     wiki = tmp_path / "wiki"
     wiki.mkdir()
@@ -42,7 +42,7 @@ def test_resolve_rejects_traversal(tmp_path: Path):
 
 
 def test_build_tree_groups_by_hub(tmp_path: Path):
-    from wiki.browser import build_wiki_tree
+    from akos.application.wiki.browser import build_wiki_tree
 
     wiki = tmp_path / "wiki"
     _seed(wiki)
@@ -52,7 +52,7 @@ def test_build_tree_groups_by_hub(tmp_path: Path):
 
 
 def test_search_matches_body_snippet(tmp_path: Path):
-    from wiki.browser import search_wiki_pages
+    from akos.application.wiki.browser import search_wiki_pages
 
     wiki = tmp_path / "wiki"
     _seed(wiki)
@@ -63,7 +63,7 @@ def test_search_matches_body_snippet(tmp_path: Path):
 
 
 def test_search_empty_query(tmp_path: Path):
-    from wiki.browser import search_wiki_pages
+    from akos.application.wiki.browser import search_wiki_pages
 
     wiki = tmp_path / "wiki"
     _seed(wiki)
@@ -74,7 +74,7 @@ def test_search_empty_query(tmp_path: Path):
 
 
 def test_build_tree_hub_description(tmp_path: Path):
-    from wiki.browser import build_wiki_tree
+    from akos.application.wiki.browser import build_wiki_tree
 
     wiki = tmp_path / "wiki"
     _seed(wiki)
@@ -84,7 +84,7 @@ def test_build_tree_hub_description(tmp_path: Path):
 
 
 def test_search_title_ranks_above_body(tmp_path: Path):
-    from wiki.browser import search_wiki_pages
+    from akos.application.wiki.browser import search_wiki_pages
 
     wiki = tmp_path / "wiki"
     wiki.mkdir()
@@ -118,7 +118,7 @@ def test_search_title_ranks_above_body(tmp_path: Path):
 
 
 def test_search_clamps_limit_to_100(tmp_path: Path):
-    from wiki.browser import search_wiki_pages
+    from akos.application.wiki.browser import search_wiki_pages
 
     wiki = tmp_path / "wiki"
     wiki.mkdir()
@@ -140,7 +140,7 @@ def test_search_clamps_limit_to_100(tmp_path: Path):
 
 
 def test_build_tree_uses_meta_hub_for_flat_page_id(tmp_path: Path):
-    from wiki.browser import build_wiki_tree
+    from akos.application.wiki.browser import build_wiki_tree
 
     wiki = tmp_path / "wiki"
     wiki.mkdir()
@@ -164,7 +164,7 @@ def test_build_tree_uses_meta_hub_for_flat_page_id(tmp_path: Path):
 
 
 def test_build_tree_includes_index_when_present(tmp_path: Path):
-    from wiki.browser import build_wiki_tree, read_wiki_page
+    from akos.application.wiki.browser import build_wiki_tree, read_wiki_page
 
     wiki = tmp_path / "wiki"
     _seed(wiki)
@@ -182,7 +182,7 @@ def test_build_tree_includes_index_when_present(tmp_path: Path):
 
 def test_build_tree_includes_hub_that_only_has_index_page(tmp_path: Path):
     """product_bundle / catalog hubs whose only page is ``_index.md`` must still appear."""
-    from wiki.browser import build_wiki_tree
+    from akos.application.wiki.browser import build_wiki_tree
 
     wiki = tmp_path / "wiki"
     page_dir = wiki / "理财产品" / "青银理财成就系列（低波共享）"
@@ -210,7 +210,7 @@ def test_build_tree_includes_hub_that_only_has_index_page(tmp_path: Path):
 
 
 def test_read_wiki_page_works_with_relative_wiki_root(tmp_path: Path, monkeypatch: object):
-    from wiki.browser import read_wiki_page
+    from akos.application.wiki.browser import read_wiki_page
 
     wiki = tmp_path / "wiki"
     (wiki / "政策").mkdir(parents=True)
@@ -237,7 +237,7 @@ def test_read_wiki_page_works_with_relative_wiki_root(tmp_path: Path, monkeypatc
 
 
 def test_build_tree_and_search_include_hub_index(tmp_path: Path):
-    from wiki.browser import build_wiki_tree, search_wiki_pages
+    from akos.application.wiki.browser import build_wiki_tree, search_wiki_pages
 
     wiki = tmp_path / "wiki"
     wiki.mkdir()
@@ -279,7 +279,7 @@ def test_build_tree_and_search_include_hub_index(tmp_path: Path):
 
 
 def test_read_wiki_page_prefers_h1_when_meta_missing(tmp_path: Path):
-    from wiki.browser import read_wiki_page
+    from akos.application.wiki.browser import read_wiki_page
 
     wiki = tmp_path / "wiki"
     wiki.mkdir()

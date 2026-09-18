@@ -17,7 +17,7 @@ def main() -> int:
     args = parser.parse_args()
 
     from infra.bootstrap import build_orchestrator_for_kb
-    from infra.pg_graph import PgGraph
+    from akos.adapters.persistence.pg_graph import PgGraph
     from infra.settings import Settings
     from knowledge.topic_service import rebuild_topic_clusters
 

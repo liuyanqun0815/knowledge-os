@@ -5,17 +5,17 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from compiler.domain_llm_extractor import DomainLlmExtractor
-from compiler.ports import ExtractedClaim
+from akos.interfaces.api.main import create_app
+from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
+from akos.domain.ports.compiler import ExtractedClaim
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Source
 
 
 def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypatch) -> None:
-    from admin_api.upload_jobs import process_uploaded_source
+    from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
 
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
@@ -57,8 +57,8 @@ def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypat
 
 
 def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> None:
-    from admin_api.upload_jobs import process_uploaded_source
-    from compiler.enrichment import enrich_source
+    from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
+    from akos.application.ingest.enrichment import enrich_source
 
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
@@ -127,8 +127,8 @@ def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> Non
 
 
 def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch) -> None:
-    from admin_api.upload_jobs import process_uploaded_source
-    from compiler.enrichment import enrich_source
+    from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
+    from akos.application.ingest.enrichment import enrich_source
 
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
@@ -209,7 +209,7 @@ def test_lifespan_retries_only_enriching_sources(tmp_path, monkeypatch) -> None:
     def record_resume(*, kb_id: str, source_id: str, deps, settings: Settings) -> None:
         resumed.append((kb_id, source_id))
 
-    monkeypatch.setattr("app.main.enrich_source", record_resume)
+    monkeypatch.setattr("akos.interfaces.api.main.enrich_source", record_resume)
 
     with TestClient(app):
         pass

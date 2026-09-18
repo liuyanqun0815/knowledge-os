@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.settings import Settings
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, Source, SourceChunk
-from wiki.paths import compile_wiki_root
-from wiki.source_plan import infer_source_layout
+from akos.application.wiki.paths import compile_wiki_root
+from akos.application.wiki.source_plan import infer_source_layout
 
 
 def _now() -> datetime:
@@ -126,7 +126,7 @@ def test_infer_source_layout_from_double_underscore() -> None:
 
 
 def test_compile_source_plan_writes_single_aggregated_page(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_size_guide_kb(knowledge)
@@ -205,7 +205,7 @@ def test_compile_source_plan_writes_single_aggregated_page(tmp_path: Path) -> No
 
 
 def test_compile_source_plan_falls_back_to_template(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_size_guide_kb(knowledge)
@@ -241,7 +241,7 @@ def test_compile_source_plan_falls_back_to_template(tmp_path: Path) -> None:
 
 
 def test_compile_bundle_fallback_clusters_by_chunk_topics(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     source_id = "贷款产品合集"
@@ -363,7 +363,7 @@ def test_compile_bundle_fallback_clusters_by_chunk_topics(tmp_path: Path) -> Non
 
 
 def test_compile_bundle_fallback_uses_topics_not_rigid_chapters(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     source_id = "青银理财成就系列"
@@ -457,7 +457,7 @@ def test_compile_bundle_fallback_uses_topics_not_rigid_chapters(tmp_path: Path) 
 
 
 def test_compile_source_plan_purges_old_fragmented_pages(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_size_guide_kb(knowledge)
@@ -507,7 +507,7 @@ def test_compile_source_plan_purges_old_fragmented_pages(tmp_path: Path) -> None
 
 
 def test_compile_source_plan_injects_related_topics(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_size_guide_kb(knowledge)
@@ -548,8 +548,8 @@ def test_compile_source_plan_injects_related_topics(tmp_path: Path) -> None:
 
 
 def test_compile_source_plan_relinks_existing_pages(tmp_path: Path) -> None:
-    from wiki.compile import compile_topics_for_source
-    from wiki.source_plan import relink_wiki_pages
+    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.source_plan import relink_wiki_pages
 
     knowledge = InMemoryKnowledge()
     _seed_size_guide_kb(knowledge)
@@ -581,7 +581,7 @@ def test_compile_source_plan_relinks_existing_pages(tmp_path: Path) -> None:
         "# 尺码选择指南\n\n## 摘要\n\n尺码不合适可七天无理由退货\n\n## Chunks\n- x\n",
         encoding="utf-8",
     )
-    from wiki.meta import save_pages_meta, WikiPageMeta
+    from akos.application.wiki.meta import save_pages_meta, WikiPageMeta
 
     save_pages_meta(
         wiki_root,

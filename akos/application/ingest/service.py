@@ -6,17 +6,17 @@ from datetime import datetime, timezone
 
 from typing import TYPE_CHECKING, Any
 
-from compiler.ports import CompileReport, ExtractedClaim, ExtractorPort
+from akos.domain.ports.compiler import CompileReport, ExtractedClaim, ExtractorPort
 from akos.application.ingest.claim_merge import is_exclusive_predicate, join_claim_objects, merge_complementary_extracted
 from akos.application.ingest.intersect import select_hybrid_candidates
-from evidence.ports import EvidencePort
-from graph.ports import GraphPort
+from akos.domain.ports.evidence import EvidencePort
+from akos.domain.ports.graph import GraphPort
 from knowledge.models import Claim, TextSpan
-from knowledge.ports import KnowledgePort
-from ontology.ports import OntologyPort
+from akos.domain.ports.knowledge import KnowledgePort
+from akos.domain.ports.ontology import OntologyPort
 
 if TYPE_CHECKING:
-    from retrieval.ports import RetrievalPort
+    from akos.domain.ports.retrieval import RetrievalPort
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:

@@ -1,7 +1,7 @@
 # AKOS Hexagonal Package Restructure (方案 C)
 
 **Date:** 2026-09-17  
-**Status:** Approved direction (defaults: `akos.` prefix, phased, start with Port consolidation)  
+**Status:** Complete (Phases 1–5 DONE 2026-09-18); follow-ups in §9 remain optional  
 **Baseline:** `09c062c` on `main`
 
 ## 1. Problem
@@ -41,9 +41,8 @@ akos/
   domains/            # DomainPort plugins (ecommerce_cs, loan_finance, …)
   interfaces/
     api/              # FastAPI app + admin_api
-    cli/
   bootstrap.py        # composition root only
-web/                  # unchanged (repo root)
+web/                  # primary UI (repo root)
 docs/ deploy/ tests/  # stay at root; tests import via public paths
 ```
 
@@ -70,7 +69,7 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | ask graph + synthesis | `akos/application/ask/` |
 | `wiki/*` | `akos/application/wiki/` |
 | `app/`, `admin_api/` | `akos/interfaces/api/` |
-| `cli/` | `akos/interfaces/cli/` |
+| `cli/` | **removed** — use Web / Admin API |
 | `domains/` | `akos/domains/` |
 | `infra/bootstrap.py` | `akos/bootstrap.py` |
 
@@ -81,21 +80,14 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | **1** | Port hub + shims | Move Protocols under `akos.domain.ports`; old `*.ports` re-export | Low | **DONE 2026-09-17** |
 | **2** | Adapters home | Move persistence/LLM/retrieval adapters; update bootstrap | Medium | **DONE 2026-09-18** |
 | **3** | Application extract | Move use-case modules; thin LangGraph nodes | High | **DONE 2026-09-18** |
-| **4** | Interfaces | Move API/CLI; update entrypoints / Docker | Medium | **DONE 2026-09-18** |
-| **5** | Cleanup | Remove shims; fix `pyproject` includes; README | Low | |
+| **4** | Interfaces | Move API; drop CLI (Web/API only); update entrypoints / Docker | Medium | **DONE 2026-09-18** |
+| **5** | Cleanup | Remove shims; fix `pyproject` includes; README | Low | **DONE 2026-09-18** |
 
 **Gate for every phase:** full `pytest` green + smoke ask/ingest on local PG if available.
 
 ## 7. Compatibility policy
 
-During phases 1–4:
-
-```python
-# e.g. knowledge/ports.py
-from akos.domain.ports.knowledge import KnowledgePort  # noqa: F401
-```
-
-External/scripts may keep old imports until Phase 5.
+Phases 1–4 used re-export shims at old paths. **Phase 5 removed those shims** — import `akos.*` (and remaining root packages such as `knowledge.models`, `infra.settings`, `domains.*`).
 
 ## 8. Defaults locked by approval
 

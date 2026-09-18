@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from wiki.archive import build_wiki_zip
+from akos.application.wiki.archive import build_wiki_zip
 
 
 def test_build_wiki_zip_preserves_tree_structure(tmp_path: Path):

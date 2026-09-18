@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from compiler.extraction_spec import LlmExtractionSpec
-from compiler.rule_extractor import RuleExtractor
+from akos.application.ingest.extraction_spec import LlmExtractionSpec
+from akos.application.ingest.rule_extractor import RuleExtractor
 from domains.ecommerce_cs.formatter import format_ecommerce_claim
 from domains.ecommerce_cs.seed import ENTITY_SEEDS, PREDICATES, register_ecommerce_cs
 from knowledge.models import Claim
-from ontology.ports import OntologyPort
+from akos.domain.ports.ontology import OntologyPort
 
 
 class EcommerceCsDomain:

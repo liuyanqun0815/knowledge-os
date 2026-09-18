@@ -1,4 +1,4 @@
-from compiler.subject_bind import bind_generic_subject, effective_subject_bind_mode, subject_bind_mode_override
+from akos.application.ingest.subject_bind import bind_generic_subject, effective_subject_bind_mode, subject_bind_mode_override
 
 
 def test_bind_generic_subject_rewrites_product_deixis():

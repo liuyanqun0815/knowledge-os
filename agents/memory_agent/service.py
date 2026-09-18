@@ -1,4 +1,4 @@
-from memory.ports import MemoryPort, RecallContext
+from akos.domain.ports.memory import MemoryPort, RecallContext
 
 
 def recall(memory: MemoryPort, query: str, session_id: str | None) -> RecallContext:

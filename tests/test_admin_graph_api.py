@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from compiler.service import _entity_id
+from akos.interfaces.api.main import create_app
+from akos.application.ingest.service import _entity_id
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 
 

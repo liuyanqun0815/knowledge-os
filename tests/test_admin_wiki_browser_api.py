@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from wiki.meta import WikiPageMeta, save_pages_meta
-from wiki.paths import compile_wiki_root
+from akos.interfaces.api.main import create_app
+from akos.application.wiki.meta import WikiPageMeta, save_pages_meta
+from akos.application.wiki.paths import compile_wiki_root
 
 
 def test_wiki_tree_and_page_and_search(tmp_path, monkeypatch):

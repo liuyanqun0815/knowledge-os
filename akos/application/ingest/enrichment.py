@@ -8,7 +8,7 @@ from langsmith import traceable
 from akos.application.ingest.document_anchor import resolve_document_anchor
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
 from akos.application.ingest.intersect import resolve_extraction_units
-from compiler.ports import ExtractedClaim
+from akos.domain.ports.compiler import ExtractedClaim
 from akos.application.ingest.spec_utils import apply_open_flag
 from infra.settings import Settings
 

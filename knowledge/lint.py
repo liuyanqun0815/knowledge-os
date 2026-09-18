@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from evidence.ports import EvidencePort
+from akos.domain.ports.evidence import EvidencePort
 from knowledge.lint_models import LintIssue, LintReport
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 
 _SOURCE_CLAIM_STATUSES = frozenset({"active", "staging"})
 

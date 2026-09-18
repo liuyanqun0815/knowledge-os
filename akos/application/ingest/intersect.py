@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from akos.application.ingest.chunker import chunk_document, chunk_text
 from akos.application.ingest.document_anchor import resolve_document_anchor
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
-from compiler.ports import ExtractedClaim
+from akos.domain.ports.compiler import ExtractedClaim
 from akos.application.ingest.spec_utils import apply_open_flag
 from infra.settings import Settings
-from ontology.ports import OntologyPort
+from akos.domain.ports.ontology import OntologyPort
 
 logger = logging.getLogger(__name__)
 

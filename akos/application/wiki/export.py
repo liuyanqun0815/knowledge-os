@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evidence.ports import EvidencePort
+from akos.domain.ports.evidence import EvidencePort
 from knowledge.models import Claim, Source, SourceChunk, TopicCluster
-from knowledge.ports import KnowledgePort
+from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.wiki.hierarchy import HierarchyAssignment, assign_wiki_hierarchy
 from akos.application.wiki.links import (
     entity_page_name,

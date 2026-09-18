@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from akos.interfaces.api.main import create_app
 from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from tests.conftest import ROOT, admin_upload_item
 

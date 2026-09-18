@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import TopicCluster
 from tests.conftest import pg_enabled
 
@@ -50,7 +50,7 @@ def test_memory_topic_cluster_upsert():
 
 @pytest.mark.skipif(not pg_enabled(), reason="AKOS_USE_PG not enabled")
 def test_pg_topic_cluster_roundtrip(pg_engine, pg_kb_repo):
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb = pg_kb_repo.create(name="topic-cluster-pg", domain_type="ecommerce_cs", description="")
     repo = PgKnowledge(pg_engine, kb.id)
@@ -67,7 +67,7 @@ def test_pg_topic_cluster_roundtrip(pg_engine, pg_kb_repo):
 
 @pytest.mark.skipif(not pg_enabled(), reason="AKOS_USE_PG not enabled")
 def test_pg_topic_cluster_kb_isolation(pg_engine, pg_kb_repo):
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb_a = pg_kb_repo.create(name="topic-kb-a", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="topic-kb-b", domain_type="ecommerce_cs", description="")

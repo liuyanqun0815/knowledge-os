@@ -1,4 +1,4 @@
-from compiler.ports import CompileReport, CompilerPort
+from akos.domain.ports.compiler import CompileReport, CompilerPort
 
 
 def ingest(compiler: CompilerPort, source_id: str, staging: bool = False) -> CompileReport:

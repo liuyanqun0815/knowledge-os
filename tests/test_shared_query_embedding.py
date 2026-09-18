@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from knowledge.memory_repo import InMemoryKnowledge
+from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from knowledge.models import Claim, SourceChunk
-from graph.memory_repo import InMemoryGraph
-from retrieval.chunk_index import ChunkRetrieval
-from retrieval.hybrid import HybridRetrieval
-from retrieval.ports import RetrievalMode
+from akos.adapters.persistence.graph_memory import InMemoryGraph
+from akos.adapters.retrieval.chunk_index import ChunkRetrieval
+from akos.adapters.retrieval.hybrid import HybridRetrieval
+from akos.domain.ports.retrieval import RetrievalMode
 
 
 def test_claim_and_chunk_reuse_shared_query_embedding_without_reembed():

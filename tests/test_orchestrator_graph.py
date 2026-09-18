@@ -1,6 +1,6 @@
-from orchestrator.graphs.ask_graph import build_ask_graph
-from orchestrator.graphs.ingest_graph import build_ingest_graph
-from orchestrator.state import AskState
+from akos.application.ask.graphs.ask_graph import build_ask_graph
+from akos.application.ask.graphs.ingest_graph import build_ingest_graph
+from akos.application.ask.state import AskState
 
 
 def test_ingest_graph_is_langgraph_stategraph(build_orchestrator_deps):

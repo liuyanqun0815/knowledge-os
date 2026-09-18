@@ -1,5 +1,5 @@
 from memory.models import Procedure
-from memory.ports import RecallContext
+from akos.domain.ports.memory import RecallContext
 
 
 class InMemoryMemoryStore:

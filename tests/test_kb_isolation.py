@@ -43,7 +43,7 @@ def _sample_source(source_id: str = "s1") -> Source:
 
 
 def test_two_kbs_claims_do_not_leak(pg_kb_repo, pg_engine):
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb_a = pg_kb_repo.create(name="A", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="B", domain_type="ecommerce_cs", description="")
@@ -58,7 +58,7 @@ def test_two_kbs_claims_do_not_leak(pg_kb_repo, pg_engine):
 
 
 def test_two_kbs_sources_do_not_leak(pg_kb_repo, pg_engine):
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb_a = pg_kb_repo.create(name="A-src", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="B-src", domain_type="ecommerce_cs", description="")
@@ -75,7 +75,7 @@ def test_two_kbs_sources_do_not_leak(pg_kb_repo, pg_engine):
 
 
 def test_two_kbs_quarantine_do_not_leak(pg_kb_repo, pg_engine):
-    from infra.pg_repos import PgKnowledge
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
 
     kb_a = pg_kb_repo.create(name="A-q", domain_type="ecommerce_cs", description="")
     kb_b = pg_kb_repo.create(name="B-q", domain_type="ecommerce_cs", description="")
