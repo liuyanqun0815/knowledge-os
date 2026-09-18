@@ -5,7 +5,7 @@ from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.persistence.pg_graph import PgGraph
 from infra.settings import Settings
 from akos.domain.models.knowledge import Claim
-from knowledge.topic_service import rebuild_topic_clusters
+from akos.application.topics.service import rebuild_topic_clusters
 from akos.application.wiki.cleanup import purge_wiki_for_deleted_source
 
 

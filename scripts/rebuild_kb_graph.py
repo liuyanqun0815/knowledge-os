@@ -19,7 +19,7 @@ def main() -> int:
     from akos.bootstrap import build_orchestrator_for_kb
     from akos.adapters.persistence.pg_graph import PgGraph
     from infra.settings import Settings
-    from knowledge.topic_service import rebuild_topic_clusters
+    from akos.application.topics.service import rebuild_topic_clusters
 
     settings = Settings()
     orchestrator = build_orchestrator_for_kb(args.kb_id)

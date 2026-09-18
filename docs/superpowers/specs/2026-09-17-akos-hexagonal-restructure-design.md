@@ -83,12 +83,13 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | **4** | Interfaces | Move API; drop CLI (Web/API only); update entrypoints / Docker | Medium | **DONE 2026-09-18** |
 | **5** | Cleanup | Remove shims; fix `pyproject` includes; README | Low | **DONE 2026-09-18** |
 | **6a** | Domains + models | `akos.domains`, `akos.bootstrap`, `akos.domain.models` | Medium | **DONE 2026-09-18** |
+| **6c** | Collapse roots | Fold agents/verification/ontology/knowledge into `akos.*` | Medium | **DONE 2026-09-18** |
 
 **Gate for every phase:** full `pytest` green + smoke ask/ingest on local PG if available.
 
 ## 7. Compatibility policy
 
-Phases 1–4 used re-export shims; Phase 5 removed them. Phase 6a moved domains/bootstrap/models under `akos.*`. Remaining root packages: `infra` (config/db), `knowledge` (lint/topic), `agents`, `ontology`, `verification`.
+Phases 1–5 + 6a/6c: prefer `akos.*`. Remaining root Python package: `infra` (settings/db/schema/upload/tracing).
 
 ## 8. Defaults locked by approval
 
@@ -98,9 +99,6 @@ Phases 1–4 used re-export shims; Phase 5 removed them. Phase 6a moved domains/
 
 ## 9. Open follow-ups
 
-- Move `knowledge` lint/topic into `akos.application` (or keep as domain services)
-- Collapse `agents/*` + `verification` into `akos.application.ask`
-- Move `ontology/registry` InMemoryOntology into adapters
 - Optionally fold `infra/settings|db|…` into `akos.config` / platform helpers
 - Whether `Hit` moves from `ports.retrieval` into `domain.models`
 - Splitting oversized `akos.application.ask.nodes`

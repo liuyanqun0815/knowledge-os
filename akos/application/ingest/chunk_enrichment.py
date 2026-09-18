@@ -58,7 +58,7 @@ def _rebuild_topic_clusters(deps: Any, kb_id: str, settings: Settings) -> None:
     graph = getattr(deps, "graph", None)
     if graph is None:
         return
-    from knowledge.topic_service import rebuild_topic_clusters
+    from akos.application.topics.service import rebuild_topic_clusters
 
     rebuild_topic_clusters(deps.knowledge, graph, kb_id, settings)
 

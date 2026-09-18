@@ -14,13 +14,12 @@ pip install -e ".[dev]"
 akos/
   domain/ports/       # Protocols
   domain/models/      # Claim, Source, KnowledgeBase, …
-  application/        # ingest / ask / wiki / evolution
-  adapters/           # persistence / llm / retrieval / files / graph
+  application/        # ingest / ask / wiki / evolution / lint / topics
+  adapters/           # persistence / llm / retrieval / files / graph / ontology
   domains/            # DomainPort 插件
   interfaces/api/     # FastAPI + admin routes
   bootstrap.py        # 组合根
 infra/                # settings、db、schema、upload、tracing
-knowledge/            # lint / topic（尚未迁入 application）
 web/                  # 管理台 UI
 ```
 

@@ -5,7 +5,7 @@ import pytest
 from akos.domains.registry import load_domain
 from akos.domain.errors import DomainError
 from akos.domain.models.knowledge import Claim
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 
 
 def _sample_claim(**overrides: object) -> Claim:

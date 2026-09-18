@@ -605,7 +605,7 @@ def test_compile_source_plan_relinks_existing_pages(tmp_path: Path) -> None:
 
 
 def test_topic_cluster_skips_size_code_entity_subjects() -> None:
-    from knowledge.topic_cluster import build_topic_clusters
+    from akos.application.topics.cluster import build_topic_clusters
 
     now = datetime.now(timezone.utc)
     source_id = "商品咨询__尺码选择指南"

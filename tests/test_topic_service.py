@@ -6,7 +6,7 @@ from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Claim, Source, SourceChunk
-from knowledge.topic_service import rebuild_topic_clusters, sync_graph_topics, topic_entity_id
+from akos.application.topics.service import rebuild_topic_clusters, sync_graph_topics, topic_entity_id
 
 
 def _source(source_id: str = "s1") -> Source:

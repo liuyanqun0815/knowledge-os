@@ -57,9 +57,13 @@ def test_adapter_hub_importable():
 
 
 def test_application_hub_importable():
+    from akos.adapters.ontology import InMemoryOntology
     from akos.application.ask.synthesis import build_synthesis_context
+    from akos.application.ask.verification import VerificationService
     from akos.application.evolution.service import EvolutionService
     from akos.application.ingest.service import KnowledgeCompiler
+    from akos.application.lint.service import run_lint
+    from akos.application.topics.service import rebuild_topic_clusters
     from akos.application.wiki.compile import compile_topics_for_source
     from akos.bootstrap import build_orchestrator_for_kb
     from akos.domains.registry import load_domain
@@ -75,5 +79,9 @@ def test_application_hub_importable():
             create_app,
             build_orchestrator_for_kb,
             load_domain,
+            InMemoryOntology,
+            VerificationService,
+            run_lint,
+            rebuild_topic_clusters,
         )
     )

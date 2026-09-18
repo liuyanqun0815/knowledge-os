@@ -10,7 +10,7 @@ from akos.domains.registry import load_domain
 from akos.adapters.llm.client import LlmConfigError, OpenAiCompatibleClient
 from infra.settings import Settings
 from akos.domain.models.knowledge import Claim
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 
 
 def _sample_corporate_claim(**overrides: object) -> Claim:

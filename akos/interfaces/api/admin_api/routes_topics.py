@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request
 from akos.interfaces.api.admin_api.routes_sources import _resolve_active_kb
 from akos.interfaces.api.admin_api.schemas import TopicRebuildResponse
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from knowledge.topic_service import rebuild_topic_clusters, topic_entity_id
+from akos.application.topics.service import rebuild_topic_clusters, topic_entity_id
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-topics"])
 

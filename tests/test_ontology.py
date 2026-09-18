@@ -1,5 +1,5 @@
 from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 
 
 def test_ecommerce_seed_validates_refund_claim():

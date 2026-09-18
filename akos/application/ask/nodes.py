@@ -7,9 +7,9 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
-from agents.memory_agent import service as memory_agent
-from agents.retriever_agent import service as retriever_agent
-from agents.verification_agent import service as verification_agent
+from akos.application.ask import memory_ops as memory_agent
+from akos.application.ask import retrieve as retriever_agent
+from akos.application.ask import verification as verification_agent
 from akos.application.ingest.chunk_service import index_source_chunks
 from infra.settings import get_settings
 from akos.domain.models.knowledge import Answer

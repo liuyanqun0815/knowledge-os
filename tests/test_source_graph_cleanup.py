@@ -9,7 +9,7 @@ from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Source, SourceChunk
-from knowledge.topic_service import rebuild_topic_clusters
+from akos.application.topics.service import rebuild_topic_clusters
 
 
 def test_purge_source_side_effects_clears_topic_graph_snapshot():

@@ -78,3 +78,12 @@ class VerificationService:
         if verified_claim_ids and unverified_claim_ids:
             return "partial"
         return "verified"
+
+
+def verify_claims(
+    service: VerificationService,
+    knowledge: KnowledgePort,
+    evidence: EvidencePort,
+    claim_ids: list[str],
+) -> VerificationResult:
+    return service.verify_claims(knowledge, evidence, claim_ids)

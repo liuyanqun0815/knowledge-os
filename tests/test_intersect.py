@@ -8,7 +8,7 @@ from akos.domain.ports.compiler import ExtractedClaim
 from akos.application.ingest.rule_extractor import RuleExtractor
 from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
 from infra.settings import Settings
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 
 
 def test_intersect_extracted_keeps_only_matching_triples():

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
-from knowledge.lint import run_lint
+from akos.application.lint.service import run_lint
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Claim, Source, TextSpan
 

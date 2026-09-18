@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request
 from akos.interfaces.api.admin_api.routes_sources import _resolve_active_kb
 from akos.interfaces.api.admin_api.schemas import LintIssueResponse, LintReportResponse
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from knowledge.lint import run_lint
+from akos.application.lint.service import run_lint
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-lint"])
 

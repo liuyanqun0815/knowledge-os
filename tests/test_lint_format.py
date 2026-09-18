@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from knowledge.lint import format_lint_report_human
-from knowledge.lint_models import LintIssue, LintReport
+from akos.application.lint.service import format_lint_report_human
+from akos.application.lint.models import LintIssue, LintReport
 
 
 def test_format_lint_report_human_lists_conflict():

@@ -21,14 +21,14 @@ from akos.domain.ports.knowledge import KnowledgePort
 from akos.domain.models.knowledge_base import KnowledgeBase
 from akos.adapters.persistence.memory_store import InMemoryMemoryStore
 from akos.domain.ports.memory import MemoryPort
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 from akos.application.ask.service import LangGraphOrchestrator
 from akos.adapters.retrieval.hybrid import HybridRetrieval
 from akos.adapters.retrieval.chunk_index import ChunkRetrieval
 from akos.adapters.retrieval.embedder import create_embedder
 from akos.adapters.retrieval.reranker import create_reranker
 from akos.adapters.retrieval.wiki_index import WikiPageRetrieval
-from verification.service import VerificationService
+from akos.application.ask.verification import VerificationService
 from akos.application.wiki.paths import compile_wiki_root
 
 DEFAULT_IN_MEMORY_KB_ID = "default"

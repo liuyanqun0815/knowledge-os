@@ -15,7 +15,7 @@ from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Source
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 
 
 class _UnusedExtractor:

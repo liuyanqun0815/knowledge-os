@@ -39,11 +39,7 @@ docs = [
 where = ["."]
 include = [
   "akos*",
-  "agents*",
   "infra*",
-  "knowledge*",
-  "ontology*",
-  "verification*",
 ]
 
 [tool.pytest.ini_options]

@@ -8,7 +8,7 @@ from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Event, Source
-from ontology.registry import InMemoryOntology
+from akos.adapters.ontology.memory import InMemoryOntology
 
 
 def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:

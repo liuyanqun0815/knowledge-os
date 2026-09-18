@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Claim, Source, TextSpan
-from verification.service import VerificationService
+from akos.application.ask.verification import VerificationService
 
 
 def _source(sid: str = "s1") -> Source:

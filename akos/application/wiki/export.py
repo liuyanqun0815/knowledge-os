@@ -287,7 +287,7 @@ def export_wiki(
         and graph is not None
         and not knowledge.list_topic_clusters()
     ):
-        from knowledge.topic_service import rebuild_topic_clusters
+        from akos.application.topics.service import rebuild_topic_clusters
 
         rebuild_topic_clusters(knowledge, graph, kb_id, settings)
 
