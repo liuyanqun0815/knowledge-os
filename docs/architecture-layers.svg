@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" role="img" aria-label="AKOS layered architecture">
+  <defs>
+    <style type="text/css"><![CDATA[
+      .title { font: 600 15px Segoe UI, sans-serif; fill: #1a1a1a; }
+      .sub { font: 12px Segoe UI, sans-serif; fill: #dbeafe; }
+      .sub2 { font: 12px Segoe UI, sans-serif; fill: #ffedd5; }
+      .layer { font: 600 13px Segoe UI, sans-serif; fill: #ffffff; }
+      .chip { font: 11px Segoe UI, sans-serif; fill: #1a1a1a; }
+      .note { font: 11px Segoe UI, sans-serif; fill: #666666; }
+    ]]></style>
+  </defs>
+
+  <rect width="720" height="420" fill="#fafafa"/>
+  <text x="36" y="36" class="title">AKOS Layered Architecture</text>
+  <text x="36" y="56" class="note">Upper layers depend on ports; adapters implement ports. Bootstrap wires composition.</text>
+
+  <rect x="36" y="76" width="648" height="64" rx="10" fill="#2563eb"/>
+  <text x="56" y="104" class="layer">interfaces</text>
+  <text x="56" y="124" class="sub">Web admin + FastAPI (akos.interfaces.api)</text>
+
+  <rect x="36" y="152" width="648" height="72" rx="10" fill="#0d9488"/>
+  <text x="56" y="180" class="layer">application</text>
+  <rect x="56" y="192" width="72" height="22" rx="6" fill="#ccfbf1"/><text x="66" y="207" class="chip">ingest</text>
+  <rect x="140" y="192" width="56" height="22" rx="6" fill="#ccfbf1"/><text x="152" y="207" class="chip">ask</text>
+  <rect x="208" y="192" width="56" height="22" rx="6" fill="#ccfbf1"/><text x="220" y="207" class="chip">wiki</text>
+  <rect x="276" y="192" width="48" height="22" rx="6" fill="#ccfbf1"/><text x="286" y="207" class="chip">lint</text>
+  <rect x="336" y="192" width="64" height="22" rx="6" fill="#ccfbf1"/><text x="346" y="207" class="chip">topics</text>
+
+  <rect x="36" y="236" width="420" height="72" rx="10" fill="#7c3aed"/>
+  <text x="56" y="264" class="layer">domain</text>
+  <rect x="56" y="276" width="72" height="22" rx="6" fill="#ede9fe"/><text x="68" y="291" class="chip">models</text>
+  <rect x="140" y="276" width="64" height="22" rx="6" fill="#ede9fe"/><text x="154" y="291" class="chip">ports</text>
+
+  <rect x="472" y="236" width="212" height="72" rx="10" fill="#c2410c"/>
+  <text x="492" y="264" class="layer">domains</text>
+  <text x="492" y="288" class="sub2">DomainPort plugins</text>
+
+  <rect x="36" y="320" width="648" height="72" rx="10" fill="#334155"/>
+  <text x="56" y="348" class="layer">adapters</text>
+  <rect x="56" y="360" width="48" height="22" rx="6" fill="#e2e8f0"/><text x="70" y="375" class="chip">PG</text>
+  <rect x="116" y="360" width="80" height="22" rx="6" fill="#e2e8f0"/><text x="128" y="375" class="chip">retrieval</text>
+  <rect x="208" y="360" width="48" height="22" rx="6" fill="#e2e8f0"/><text x="218" y="375" class="chip">LLM</text>
+  <rect x="268" y="360" width="56" height="22" rx="6" fill="#e2e8f0"/><text x="280" y="375" class="chip">graph</text>
+  <rect x="336" y="360" width="48" height="22" rx="6" fill="#e2e8f0"/><text x="348" y="375" class="chip">files</text>
+</svg>

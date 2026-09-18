@@ -6,7 +6,7 @@ from akos.interfaces.api.main import create_app
 from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from tests.conftest import ROOT, admin_upload_item
 
-SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"
+SAMPLE_MD = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
 
 
 def test_admin_wiki_export_writes_default_path(tmp_path, monkeypatch):

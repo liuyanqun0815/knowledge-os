@@ -79,7 +79,7 @@ def test_build_ingest_summary_includes_quarantine(tmp_path, monkeypatch):
 
     client = TestClient(create_app(data_root=str(tmp_path)))
     kb_id = DEFAULT_IN_MEMORY_KB_ID
-    sample_md = ROOT / "samples" / "refund_policy_v3.md"
+    sample_md = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
 
     with sample_md.open("rb") as handle:
         response = client.post(

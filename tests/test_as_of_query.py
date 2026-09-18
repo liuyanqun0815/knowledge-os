@@ -7,8 +7,8 @@ from akos.application.ask.nodes import parse_time_node
 
 def test_as_of_before_v4_effective_returns_buyer_not_platform(seeded_kb_id):
     orch = build_orchestrator_for_kb(seeded_kb_id)
-    v3_path = str(Path("samples/refund_policy_v3.md"))
-    v4_path = str(Path("samples/refund_policy_v4.md"))
+    v3_path = str(Path("tests/fixtures/refund_policy_v3.md"))
+    v4_path = str(Path("tests/fixtures/refund_policy_v4.md"))
 
     orch.ingest(v3_path, "policy")
     active_v3 = orch.deps.knowledge.get_active_claims("七天无理由", "运费承担方")

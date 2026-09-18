@@ -13,7 +13,7 @@ from akos.domain.models.knowledge import Claim, Source
 from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"
+SAMPLE_MD = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
 
 
 @pytest.fixture

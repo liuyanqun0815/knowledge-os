@@ -34,7 +34,7 @@ def test_ask_endpoint_after_ingest(tmp_path):
     kb_id = DEFAULT_IN_MEMORY_KB_ID
     r = client.post(
         "/sources",
-        json={"knowledge_base_id": kb_id, "path": "samples/refund_policy_v3.md", "type": "policy"},
+        json={"knowledge_base_id": kb_id, "path": "tests/fixtures/refund_policy_v3.md", "type": "policy"},
     )
     assert r.status_code == 200
     source_id = r.json()["source_id"]

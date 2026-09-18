@@ -14,7 +14,7 @@ from akos.domain.ports.retrieval import RetrievalMode
 
 
 def test_rule_extractor_finds_claims():
-    text = Path("samples/refund_policy_v3.md").read_text(encoding="utf-8")
+    text = Path("tests/fixtures/refund_policy_v3.md").read_text(encoding="utf-8")
     extracted = RuleExtractor().extract(text)
     preds = {e.predicate for e in extracted}
     assert "适用类目" in preds
@@ -31,13 +31,13 @@ def test_compiler_ingest_writes_claim_graph_evidence():
         id="s1",
         title="退换货政策v3",
         type="policy",
-        uri="samples/refund_policy_v3.md",
+        uri="tests/fixtures/refund_policy_v3.md",
         version="3",
         created_at=datetime.now(timezone.utc),
         status="ready",
     )
     knowledge.save_source(src)
-    knowledge.save_source_text(src.id, Path("samples/refund_policy_v3.md").read_text(encoding="utf-8"))
+    knowledge.save_source_text(src.id, Path("tests/fixtures/refund_policy_v3.md").read_text(encoding="utf-8"))
     compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor())
     report = compiler.ingest("s1")
     assert report.claims_created >= 1
@@ -57,13 +57,13 @@ def test_compiler_indexes_claims_in_retrieval():
         id="s1",
         title="退换货政策v3",
         type="policy",
-        uri="samples/refund_policy_v3.md",
+        uri="tests/fixtures/refund_policy_v3.md",
         version="3",
         created_at=datetime.now(timezone.utc),
         status="ready",
     )
     knowledge.save_source(src)
-    knowledge.save_source_text(src.id, Path("samples/refund_policy_v3.md").read_text(encoding="utf-8"))
+    knowledge.save_source_text(src.id, Path("tests/fixtures/refund_policy_v3.md").read_text(encoding="utf-8"))
     compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor(), retrieval)
     report = compiler.ingest("s1")
     assert report.claims_created >= 1

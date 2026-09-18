@@ -11,8 +11,8 @@ from akos.application.evolution.family import family_key
 from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 from tests.conftest import admin_upload_item
 
-V3_PATH = Path("samples/refund_policy_v3.md")
-V4_PATH = Path("samples/refund_policy_v4.md")
+V3_PATH = Path("tests/fixtures/refund_policy_v3.md")
+V4_PATH = Path("tests/fixtures/refund_policy_v4.md")
 V3_SOURCE_ID = "refund_policy_v3"
 FREIGHT_FAMILY_ID = family_key("七天无理由", "运费承担方", "Concept")
 

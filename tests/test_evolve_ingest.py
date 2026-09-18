@@ -5,8 +5,8 @@ from akos.bootstrap import build_orchestrator_for_kb
 
 def test_evolve_ingest_supersedes_freight_claim(seeded_kb_id):
     orch = build_orchestrator_for_kb(seeded_kb_id)
-    v3_path = str(Path("samples/refund_policy_v3.md"))
-    v4_path = str(Path("samples/refund_policy_v4.md"))
+    v3_path = str(Path("tests/fixtures/refund_policy_v3.md"))
+    v4_path = str(Path("tests/fixtures/refund_policy_v4.md"))
     v3_source_id = "refund_policy_v3"
 
     report_v3 = orch.ingest(v3_path, "policy")

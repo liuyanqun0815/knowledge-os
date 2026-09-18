@@ -9,7 +9,7 @@ from akos.interfaces.api.main import create_app
 from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from tests.conftest import ROOT, admin_upload_item, pg_enabled
 
-SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"
+SAMPLE_MD = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
 
 
 @pytest.fixture

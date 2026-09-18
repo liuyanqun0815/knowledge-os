@@ -12,7 +12,7 @@ from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 from akos.domain.models.knowledge import Claim, Source, TextSpan
 from akos.application.ask.nodes import verify_sample_node
 
-V3_PATH = "samples/refund_policy_v3.md"
+V3_PATH = "tests/fixtures/refund_policy_v3.md"
 V3_SOURCE_ID = "refund_policy_v3"
 FREIGHT_FAMILY_ID = family_key("七天无理由", "运费承担方", "Concept")
 BAD_QUOTE = "完全不存在的引用"

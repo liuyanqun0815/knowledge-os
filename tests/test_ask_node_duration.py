@@ -5,7 +5,7 @@ from akos.bootstrap import build_orchestrator_for_kb
 
 def test_ask_trace_steps_include_non_negative_duration_ms(seeded_kb_id):
     orchestrator = build_orchestrator_for_kb(seeded_kb_id)
-    report = orchestrator.ingest(str(Path("samples/refund_policy_v3.md")), "policy")
+    report = orchestrator.ingest(str(Path("tests/fixtures/refund_policy_v3.md")), "policy")
     assert report.claims_created >= 1
 
     result = orchestrator.ask("定制商品能否七天无理由退货？", include_trace=True)
@@ -28,7 +28,7 @@ def test_ask_trace_steps_include_non_negative_duration_ms(seeded_kb_id):
 
 def test_ask_answer_includes_wall_clock_duration_ms(seeded_kb_id):
     orchestrator = build_orchestrator_for_kb(seeded_kb_id)
-    report = orchestrator.ingest(str(Path("samples/refund_policy_v3.md")), "policy")
+    report = orchestrator.ingest(str(Path("tests/fixtures/refund_policy_v3.md")), "policy")
     assert report.claims_created >= 1
 
     answer = orchestrator.ask("定制商品能否七天无理由退货？", include_trace=False)

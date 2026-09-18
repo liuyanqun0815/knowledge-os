@@ -9,7 +9,7 @@ from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 from akos.domain.models.knowledge import Claim
 from tests.conftest import ROOT, admin_upload_item
 
-SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"
+SAMPLE_MD = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
 
 
 def test_admin_lint_returns_report_after_upload(tmp_path, monkeypatch):

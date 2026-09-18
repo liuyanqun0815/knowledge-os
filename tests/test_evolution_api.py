@@ -10,8 +10,8 @@ from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]
-V3 = ROOT / "samples" / "refund_policy_v3.md"
-V4 = ROOT / "samples" / "refund_policy_v4.md"
+V3 = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
+V4 = ROOT / "tests" / "fixtures" / "refund_policy_v4.md"
 
 FREIGHT_FAMILY_ID = family_key("七天无理由", "运费承担方", "Concept")
 
@@ -21,7 +21,7 @@ def _ingest_v3(client: TestClient, kb_id: str) -> str:
         "/sources",
         json={
             "knowledge_base_id": kb_id,
-            "path": "samples/refund_policy_v3.md",
+            "path": "tests/fixtures/refund_policy_v3.md",
             "type": "policy",
         },
     )
@@ -80,7 +80,7 @@ def test_register_compile_evolve_and_public_history(tmp_path):
         "/sources",
         json={
             "knowledge_base_id": kb_id,
-            "path": "samples/refund_policy_v4.md",
+            "path": "tests/fixtures/refund_policy_v4.md",
             "type": "policy",
             "replaces_source_id": v3_source_id,
         },

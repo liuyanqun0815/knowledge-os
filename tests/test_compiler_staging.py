@@ -21,7 +21,7 @@ def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:
         id="refund_policy_v3",
         title="退换货政策v3",
         type="policy",
-        uri="samples/refund_policy_v3.md",
+        uri="tests/fixtures/refund_policy_v3.md",
         version="3",
         created_at=datetime.now(timezone.utc),
         status="ready",
@@ -30,7 +30,7 @@ def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:
         id="refund_policy_v4",
         title="退换货政策v4",
         type="policy",
-        uri="samples/refund_policy_v4.md",
+        uri="tests/fixtures/refund_policy_v4.md",
         version="4",
         created_at=datetime.now(timezone.utc),
         status="ready",
@@ -38,8 +38,8 @@ def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:
     )
     knowledge.save_source(src_v3)
     knowledge.save_source(src_v4)
-    knowledge.save_source_text(src_v3.id, Path("samples/refund_policy_v3.md").read_text(encoding="utf-8"))
-    knowledge.save_source_text(src_v4.id, Path("samples/refund_policy_v4.md").read_text(encoding="utf-8"))
+    knowledge.save_source_text(src_v3.id, Path("tests/fixtures/refund_policy_v3.md").read_text(encoding="utf-8"))
+    knowledge.save_source_text(src_v4.id, Path("tests/fixtures/refund_policy_v4.md").read_text(encoding="utf-8"))
     compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor())
     compiler.ingest(src_v3.id)
     compiler.ingest(src_v4.id, staging=staging)
@@ -53,12 +53,12 @@ def test_staging_compile_skips_exact_spo_already_active():
     knowledge = InMemoryKnowledge()
     graph = InMemoryGraph()
     evidence = InMemoryEvidence()
-    text = Path("samples/refund_policy_v3.md").read_text(encoding="utf-8")
+    text = Path("tests/fixtures/refund_policy_v3.md").read_text(encoding="utf-8")
     src_old = Source(
         id="refund_policy_old",
         title="退换货政策old",
         type="policy",
-        uri="samples/refund_policy_v3.md",
+        uri="tests/fixtures/refund_policy_v3.md",
         version="3",
         created_at=datetime.now(timezone.utc),
         status="ready",
@@ -67,7 +67,7 @@ def test_staging_compile_skips_exact_spo_already_active():
         id="refund_policy_new",
         title="退换货政策new",
         type="policy",
-        uri="samples/refund_policy_v3.md",
+        uri="tests/fixtures/refund_policy_v3.md",
         version="3b",
         created_at=datetime.now(timezone.utc),
         status="ready",

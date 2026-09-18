@@ -6,7 +6,7 @@ from akos.bootstrap import build_orchestrator_for_kb, DEFAULT_IN_MEMORY_KB_ID
 
 def test_ask_with_include_trace_returns_node_names(seeded_kb_id):
     orch = build_orchestrator_for_kb(seeded_kb_id)
-    report = orch.ingest("samples/refund_policy_v3.md", "policy")
+    report = orch.ingest("tests/fixtures/refund_policy_v3.md", "policy")
     assert report.claims_created > 0
 
     result = orch.ask("定制商品能否七天无理由退货？", include_trace=True)
@@ -27,7 +27,7 @@ def test_ask_api_includes_verification_status_and_trace(tmp_path):
 
     source_response = client.post(
         "/sources",
-        json={"knowledge_base_id": kb_id, "path": "samples/refund_policy_v3.md", "type": "policy"},
+        json={"knowledge_base_id": kb_id, "path": "tests/fixtures/refund_policy_v3.md", "type": "policy"},
     )
     assert source_response.status_code == 200
     source_id = source_response.json()["source_id"]
@@ -64,7 +64,7 @@ def test_ask_api_include_trace_query_param(tmp_path):
 
     source_response = client.post(
         "/sources",
-        json={"knowledge_base_id": kb_id, "path": "samples/refund_policy_v3.md", "type": "policy"},
+        json={"knowledge_base_id": kb_id, "path": "tests/fixtures/refund_policy_v3.md", "type": "policy"},
     )
     source_id = source_response.json()["source_id"]
     client.post(f"/sources/{source_id}/compile", json={"knowledge_base_id": kb_id})
