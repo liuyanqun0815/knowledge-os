@@ -1,8 +1,6 @@
-from __future__ import annotations
+"""Backward-compatible shim — prefer akos.application.wiki.paths."""
 
-from pathlib import Path
+from importlib import import_module
+import sys
 
-
-def compile_wiki_root(data_root: str | Path, kb_id: str) -> Path:
-    """Return the compiled wiki root: ``{data_root}/kb/{kb_id}/wiki``."""
-    return Path(data_root) / "kb" / kb_id / "wiki"
+sys.modules[__name__] = import_module('akos.application.wiki.paths')

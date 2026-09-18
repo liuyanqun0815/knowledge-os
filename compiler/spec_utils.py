@@ -1,10 +1,6 @@
-from __future__ import annotations
+"""Backward-compatible shim — prefer akos.application.ingest.spec_utils."""
 
-from dataclasses import replace
+from importlib import import_module
+import sys
 
-from compiler.extraction_spec import LlmExtractionSpec
-from infra.settings import Settings
-
-
-def apply_open_flag(spec: LlmExtractionSpec, settings: Settings) -> LlmExtractionSpec:
-    return replace(spec, open_predicates=settings.extract_open_predicates)
+sys.modules[__name__] = import_module('akos.application.ingest.spec_utils')

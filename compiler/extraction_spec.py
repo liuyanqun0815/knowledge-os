@@ -1,12 +1,6 @@
-from __future__ import annotations
+"""Backward-compatible shim — prefer akos.application.ingest.extraction_spec."""
 
-from dataclasses import dataclass
+from importlib import import_module
+import sys
 
-
-@dataclass
-class LlmExtractionSpec:
-    allowed_predicates: list[str]
-    entity_types: list[str]
-    prompt_locale: str = "zh"
-    few_shot_hints: list[str] | None = None
-    open_predicates: bool = False
+sys.modules[__name__] = import_module('akos.application.ingest.extraction_spec')

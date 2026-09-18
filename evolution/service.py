@@ -1,28 +1,6 @@
-from __future__ import annotations
+"""Backward-compatible shim — prefer akos.application.evolution.service."""
 
-from datetime import datetime
+from importlib import import_module
+import sys
 
-from knowledge.models import Claim
-from knowledge.ports import KnowledgePort
-
-from evolution.applier import KnowledgeApplier
-from evolution.differ import KnowledgeDiffer
-from evolution.ports import ApplyReport, KnowledgeDiff
-
-
-class EvolutionService:
-    """Facade implementing :class:`EvolutionPort` over differ + applier + knowledge."""
-
-    def __init__(self, knowledge: KnowledgePort) -> None:
-        self._knowledge = knowledge
-        self._differ = KnowledgeDiffer(knowledge)
-        self._applier = KnowledgeApplier(knowledge)
-
-    def diff_sources(self, old_source_id: str, new_source_id: str) -> KnowledgeDiff:
-        return self._differ.diff_sources(old_source_id, new_source_id)
-
-    def apply_diff(self, diff: KnowledgeDiff) -> ApplyReport:
-        return self._applier.apply_diff(diff)
-
-    def as_of(self, query_time: datetime, claim_family_id: str) -> Claim | None:
-        return self._knowledge.as_of(query_time, claim_family_id)
+sys.modules[__name__] = import_module('akos.application.evolution.service')
