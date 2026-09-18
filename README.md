@@ -89,23 +89,27 @@ flowchart TB
 
 ## 快速开始
 
+Python 3.11+。依赖用 [uv](https://docs.astral.sh/uv/) 装进项目内 `.venv`（不要用系统 Python 或 conda 混装）。
+
 ```bash
-pip install -e ".[dev]"
+uv sync --extra dev
 cp .env.example .env   # 按需改 LLM / PG 等，详见文件内注释
 
 # 后端
-uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+uv run uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 
 # 前端（另开终端）
 cd web && npm install && npm run dev
 ```
+
+文档解析、向量、Neo4j 按需加上对应 extra：`uv sync --extra dev --extra docs --extra embedding --extra neo4j`。
 
 - 管理台：[http://127.0.0.1:5173](http://127.0.0.1:5173)
 - API 文档：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - 可选鉴权：`.env` / `web/.env.local` 中 `ADMIN_API_TOKEN` 与 `VITE_ADMIN_API_TOKEN` 一致
 
 ```bash
-pytest --ignore=web
+uv run pytest --ignore=web
 ```
 
 生产栈见 `deploy/`。
