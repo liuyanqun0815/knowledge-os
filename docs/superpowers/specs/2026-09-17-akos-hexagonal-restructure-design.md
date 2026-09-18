@@ -79,7 +79,7 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | Phase | Name | Deliverable | Risk | Status |
 |-------|------|-------------|------|--------|
 | **1** | Port hub + shims | Move Protocols under `akos.domain.ports`; old `*.ports` re-export | Low | **DONE 2026-09-17** |
-| **2** | Adapters home | Move persistence/LLM/retrieval adapters; update bootstrap | Medium | |
+| **2** | Adapters home | Move persistence/LLM/retrieval adapters; update bootstrap | Medium | **DONE 2026-09-18** |
 | **3** | Application extract | Move use-case modules; thin LangGraph nodes | High | |
 | **4** | Interfaces | Move API/CLI; update entrypoints / Docker | Medium | |
 | **5** | Cleanup | Remove shims; fix `pyproject` includes; README | Low | |

@@ -135,7 +135,7 @@ def test_passage_for_hit_prefers_chunk_title_and_summary():
 
 
 def test_create_reranker_soft_fails_when_bce_load_breaks(monkeypatch):
-    from retrieval import reranker as reranker_mod
+    from akos.adapters.retrieval import reranker as reranker_mod
 
     settings = Settings(
         _env_file=None,
@@ -156,7 +156,7 @@ def test_bce_reranker_falls_back_to_transformers(monkeypatch, tmp_path):
     import sys
     from types import SimpleNamespace
 
-    from retrieval import reranker as reranker_mod
+    from akos.adapters.retrieval import reranker as reranker_mod
 
     model_dir = tmp_path / "rerank"
     model_dir.mkdir()

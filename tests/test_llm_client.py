@@ -16,7 +16,7 @@ def test_chat_completions_disables_deepseek_thinking_by_default():
         "choices": [{"message": {"content": '{"answer":"ok","citations":[]}'}}]
     }
 
-    with patch("infra.llm.httpx.Client") as mock_client_cls:
+    with patch("akos.adapters.llm.client.httpx.Client") as mock_client_cls:
         mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_response
         client.chat_completions([{"role": "user", "content": "hi"}])
 
@@ -31,7 +31,7 @@ def test_chat_completions_omits_thinking_flag_when_enabled():
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
 
-    with patch("infra.llm.httpx.Client") as mock_client_cls:
+    with patch("akos.adapters.llm.client.httpx.Client") as mock_client_cls:
         mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_response
         client.chat_completions([{"role": "user", "content": "hi"}])
 
@@ -47,8 +47,8 @@ def test_chat_completions_retries_transient_connect_error():
     mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
 
     with (
-        patch("infra.llm.httpx.Client") as mock_client_cls,
-        patch("infra.llm.time.sleep") as sleep,
+        patch("akos.adapters.llm.client.httpx.Client") as mock_client_cls,
+        patch("akos.adapters.llm.client.time.sleep") as sleep,
     ):
         post = mock_client_cls.return_value.__enter__.return_value.post
         post.side_effect = [
@@ -68,8 +68,8 @@ def test_chat_completions_raises_after_retries_exhausted():
     client = OpenAiCompatibleClient(settings)
 
     with (
-        patch("infra.llm.httpx.Client") as mock_client_cls,
-        patch("infra.llm.time.sleep"),
+        patch("akos.adapters.llm.client.httpx.Client") as mock_client_cls,
+        patch("akos.adapters.llm.client.time.sleep"),
     ):
         post = mock_client_cls.return_value.__enter__.return_value.post
         post.side_effect = httpx.ConnectError("SSL EOF")
