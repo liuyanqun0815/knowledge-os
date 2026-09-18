@@ -216,7 +216,6 @@ export function SourcesPage() {
       <div className="page-header">
         <div>
           <h1>文档来源</h1>
-          <p>支持单文件、文件夹或 ZIP 上传（.md / .txt / .pdf / .docx / .doc）；文件夹与 ZIP 会保留目录结构。</p>
         </div>
       </div>
 
