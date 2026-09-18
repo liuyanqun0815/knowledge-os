@@ -82,25 +82,25 @@ class Neo4jGraph:
             params["predicates"] = predicates
         cypher += " RETURN src.id AS src, r.predicate AS predicate, dst.id AS dst, properties(r) AS rprops"
 
+        edges: list[Edge] = []
         with self._get_driver().session() as session:
             rows = session.run(cypher, **params)
-
-        edges: list[Edge] = []
-        for record in rows:
-            rel_props = dict(record["rprops"])
-            for key in _SYSTEM_REL_PROPS:
-                rel_props.pop(key, None)
-            edges.append(
-                Edge(
-                    src=record["src"],
-                    predicate=record["predicate"],
-                    dst=record["dst"],
-                    props=rel_props,
+            for record in rows:
+                rel_props = dict(record["rprops"])
+                for key in _SYSTEM_REL_PROPS:
+                    rel_props.pop(key, None)
+                edges.append(
+                    Edge(
+                        src=record["src"],
+                        predicate=record["predicate"],
+                        dst=record["dst"],
+                        props=rel_props,
+                    )
                 )
-            )
         return edges
 
     def list_entities(self) -> list[tuple[str, dict]]:
+        entities: list[tuple[str, dict]] = []
         with self._get_driver().session() as session:
             rows = session.run(
                 """
@@ -109,13 +109,11 @@ class Neo4jGraph:
                 """,
                 kb_id=self._knowledge_base_id,
             )
-
-        entities: list[tuple[str, dict]] = []
-        for record in rows:
-            props = dict(record["props"])
-            for key in ("id", "kb_id", "type"):
-                props.pop(key, None)
-            entities.append((record["id"], {"type": record["type"], **props}))
+            for record in rows:
+                props = dict(record["props"])
+                for key in ("id", "kb_id", "type"):
+                    props.pop(key, None)
+                entities.append((record["id"], {"type": record["type"], **props}))
         return entities
 
     def get_entity(self, entity_id: str) -> dict | None:
@@ -128,11 +126,11 @@ class Neo4jGraph:
                 entity_id=entity_id,
                 kb_id=self._knowledge_base_id,
             ).single()
+            if record is None:
+                return None
+            props = dict(record["props"])
+            entity_type = record["type"]
 
-        if record is None:
-            return None
-
-        props = dict(record["props"])
         for key in ("id", "kb_id", "type"):
             props.pop(key, None)
-        return {"type": record["type"], **props}
+        return {"type": entity_type, **props}
