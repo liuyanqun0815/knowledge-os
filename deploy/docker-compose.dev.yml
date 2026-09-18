@@ -22,6 +22,6 @@ services:
   akos-api:
     volumes:
       - ..:/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "akos.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     environment:
       AKOS_NEO4J_URI: bolt://neo4j:7687

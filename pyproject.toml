@@ -37,7 +37,7 @@ docs = [
 ]
 
 [project.scripts]
-akos = "cli.main:app"
+akos = "akos.interfaces.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["."]

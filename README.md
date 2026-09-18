@@ -83,10 +83,10 @@ pytest -v tests/test_knowledge_lint.py tests/test_wiki_export.py \
 
 ```bash
 # 推荐 factory 模式：reload 时重建 app，避免旧代码残留（如 ZIP 上传不生效）
-uvicorn app.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 ```
 
-启动后访问 `http://127.0.0.1:8000/docs` 查看 Swagger 文档。
+启动后访问 `http://127.0.0.1:8000/docs` 查看 Swagger 文档。（兼容旧入口 `app.main:create_app`）
 
 ## 管理台 Web UI
 
@@ -96,7 +96,7 @@ React 管理台位于 `web/`，经 Vite 代理调用 `/admin/*` 与 `POST /ask`�
 
 ```bash
 # 终端 A — 后端
-uvicorn app.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+uvicorn akos.interfaces.api.main:create_app --factory --reload --host 127.0.0.1 --port 8000
 
 # 终端 B — 前端
 cd web && npm install && npm run dev

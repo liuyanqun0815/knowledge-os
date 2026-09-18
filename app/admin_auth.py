@@ -1,11 +1,6 @@
-import os
+"""Backward-compatible shim — prefer akos.interfaces.api.admin_auth."""
 
-from fastapi import Header, HTTPException
+from importlib import import_module
+import sys
 
-
-def require_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
-    expected = os.getenv("ADMIN_API_TOKEN", "").strip()
-    if not expected:
-        return
-    if x_admin_token != expected:
-        raise HTTPException(status_code=401, detail="invalid admin token")
+sys.modules[__name__] = import_module("akos.interfaces.api.admin_auth")

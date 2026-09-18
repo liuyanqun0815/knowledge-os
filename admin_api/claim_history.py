@@ -1,10 +1,6 @@
-from __future__ import annotations
+"""Backward-compatible shim — prefer akos.interfaces.api.admin_api.claim_history."""
 
-from knowledge.models import Claim
-from knowledge.ports import KnowledgePort
+from importlib import import_module
+import sys
 
-
-def sorted_claim_history(knowledge: KnowledgePort, family_id: str) -> list[Claim]:
-    claims = knowledge.get_claim_history(family_id)
-    visible = [claim for claim in claims if claim.status != "staging"]
-    return sorted(visible, key=lambda claim: claim.version)
+sys.modules[__name__] = import_module("akos.interfaces.api.admin_api.claim_history")

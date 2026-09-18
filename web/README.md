@@ -19,7 +19,7 @@ AKOS 管理台前端（React + Vite + TypeScript），实现 Phase 2.1–2.4 前
 
 ```bash
 # 项目根目录
-uvicorn app.main:app --reload --port 8000
+uvicorn akos.interfaces.api.main:app --reload --port 8000
 ```
 
 **终端 B — 前端：**
