@@ -27,7 +27,7 @@ Thumbs.db
 
 # Runtime / local data
 data/
-models/
+/models/
 uploads/
 *.db
 .coverage
