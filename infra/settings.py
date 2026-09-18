@@ -1,7 +1,6 @@
 """AKOS 运行时配置。
 
-从环境变量加载，前缀 ``AKOS_``，可选读取项目根 ``.env``。
-字段说明与分组见 ``.env.example`` 与 README「环境变量」。
+默认值写在本文件。``.env`` 只覆盖环境相关项（库、LLM、鉴权等），前缀 ``AKOS_``。
 """
 
 from functools import lru_cache
