@@ -27,6 +27,8 @@
 
 Claim 是可审计的真相单元；Chunk 保真原文；Wiki 做人读与主题召回；图谱补关系。不是四选一，而是同一条知识链上的不同投影。
 
+![Wiki 浏览](docs/images/ui-wiki.png)
+
 ## 核心能力
 
 | 能力 | 说明 |
@@ -51,6 +53,8 @@ flowchart LR
   E -.-> F[后台 LLM 补抽合并]
   F -.-> G[Wiki 编译层更新]
 ```
+
+![文档来源](docs/images/ui-sources.png)
 
 ### 问答
 
