@@ -6,8 +6,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from knowledge.errors import DomainError
-from knowledge.models import Claim, Event, Source, SourceChunk, TopicCluster
+from akos.domain.errors import DomainError
+from akos.domain.models.knowledge import Claim, Event, Source, SourceChunk, TopicCluster
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:

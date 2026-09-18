@@ -3,11 +3,11 @@ from pathlib import Path
 
 from akos.application.ingest.rule_extractor import RuleExtractor
 from akos.application.ingest.service import KnowledgeCompiler
-from domains.ecommerce_cs.seed import register_ecommerce_cs
+from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source
+from akos.domain.models.knowledge import Source
 from ontology.registry import InMemoryOntology
 from akos.adapters.retrieval.hybrid import HybridRetrieval
 from akos.domain.ports.retrieval import RetrievalMode

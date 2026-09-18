@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from knowledge.models import Claim, Source, SourceChunk
+from akos.domain.models.knowledge import Claim, Source, SourceChunk
 
 
 class WikiLlmSummarizer:

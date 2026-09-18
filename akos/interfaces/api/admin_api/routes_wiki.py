@@ -14,7 +14,7 @@ from akos.interfaces.api.admin_api.schemas import (
     WikiTreeResponse,
 )
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from infra.bootstrap import build_wiki_compile_deps
+from akos.bootstrap import build_wiki_compile_deps
 from akos.application.wiki.archive import build_wiki_zip
 from akos.application.wiki.browser import build_wiki_tree, read_wiki_page, search_wiki_pages
 from akos.application.wiki.compile import CompileReport, compile_topics_for_source

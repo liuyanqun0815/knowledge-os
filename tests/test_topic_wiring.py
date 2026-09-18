@@ -9,7 +9,7 @@ from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Source, SourceChunk, TopicCluster
 from akos.application.ingest.chunk_enrichment import enrich_chunks
 from akos.application.wiki.export import export_wiki
 

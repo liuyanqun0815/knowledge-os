@@ -11,7 +11,7 @@ from akos.application.ingest.claim_merge import is_exclusive_predicate, join_cla
 from akos.application.ingest.intersect import select_hybrid_candidates
 from akos.domain.ports.evidence import EvidencePort
 from akos.domain.ports.graph import GraphPort
-from knowledge.models import Claim, TextSpan
+from akos.domain.models.knowledge import Claim, TextSpan
 from akos.domain.ports.knowledge import KnowledgePort
 from akos.domain.ports.ontology import OntologyPort
 

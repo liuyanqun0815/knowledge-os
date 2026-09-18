@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from infra.db import get_engine
-from knowledge_base.models import KnowledgeBase
+from akos.domain.models.knowledge_base import KnowledgeBase
 
 
 def _row_to_kb(row: Any) -> KnowledgeBase:

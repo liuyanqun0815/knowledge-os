@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 
 _LOG = logging.getLogger(__name__)
 

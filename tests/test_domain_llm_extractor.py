@@ -8,8 +8,8 @@ import pytest
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
 from akos.application.ingest.llm_extractor import LlmExtractor, create_corporate_extractor
-from domains.corporate_culture.domain import CorporateCultureDomain
-from domains.loan_finance.domain import LoanFinanceDomain
+from akos.domains.corporate_culture.domain import CorporateCultureDomain
+from akos.domains.loan_finance.domain import LoanFinanceDomain
 
 
 class FakeLlmClient:

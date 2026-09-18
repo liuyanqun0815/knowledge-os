@@ -87,7 +87,7 @@ def test_passage_for_hit_uses_claim_triple():
     from datetime import datetime, timezone
 
     from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-    from knowledge.models import Claim
+    from akos.domain.models.knowledge import Claim
 
     knowledge = InMemoryKnowledge()
     claim = Claim(
@@ -112,7 +112,7 @@ def test_passage_for_hit_uses_claim_triple():
 
 def test_passage_for_hit_prefers_chunk_title_and_summary():
     from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-    from knowledge.models import SourceChunk
+    from akos.domain.models.knowledge import SourceChunk
 
     knowledge = InMemoryKnowledge()
     chunk = SourceChunk(

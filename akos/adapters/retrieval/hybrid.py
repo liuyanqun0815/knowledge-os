@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from akos.domain.ports.graph import GraphPort
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.knowledge import KnowledgePort
 from akos.adapters.retrieval.embedder import EmbedderPort, claim_embedding_text
 from akos.domain.ports.retrieval import Hit, RetrievalMode

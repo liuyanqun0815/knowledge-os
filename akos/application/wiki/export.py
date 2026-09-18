@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from akos.domain.ports.evidence import EvidencePort
-from knowledge.models import Claim, Source, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Claim, Source, SourceChunk, TopicCluster
 from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.wiki.hierarchy import HierarchyAssignment, assign_wiki_hierarchy
 from akos.application.wiki.links import (
@@ -332,7 +332,7 @@ def export_wiki(
     hierarchy_enabled = bool(settings is not None and getattr(settings, "wiki_hierarchy", False))
     assignments: dict[str, HierarchyAssignment] = {}
     if hierarchy_enabled and clusters:
-        from domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
+        from akos.domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
 
         plan = assign_wiki_hierarchy([c.name for c in clusters], seeds=get_ecommerce_wiki_seeds())
         assignments = plan.assignments

@@ -40,13 +40,8 @@ where = ["."]
 include = [
   "akos*",
   "agents*",
-  "domains*",
-  "evidence*",
-  "graph*",
   "infra*",
   "knowledge*",
-  "knowledge_base*",
-  "memory*",
   "ontology*",
   "verification*",
 ]

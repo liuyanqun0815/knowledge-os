@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 from akos.interfaces.api.main import create_app
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
 from akos.domain.ports.compiler import ExtractedClaim
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source
+from akos.domain.models.knowledge import Source
 
 
 def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypatch) -> None:

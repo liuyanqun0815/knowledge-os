@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source, SourceChunk
+from akos.domain.models.knowledge import Claim, Source, SourceChunk
 from knowledge.topic_service import rebuild_topic_clusters, sync_graph_topics, topic_entity_id
 
 
@@ -175,7 +175,7 @@ def test_rebuild_marks_previous_clusters_stale():
 
 
 def test_sync_graph_topics_links_existing_named_entities():
-    from knowledge.models import TopicCluster
+    from akos.domain.models.knowledge import TopicCluster
 
     graph = InMemoryGraph()
     graph.upsert_entity("e_existing", "RefundRule", {"name": "尺码选择"})

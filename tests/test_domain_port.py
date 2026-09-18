@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from domains.registry import load_domain
-from knowledge.errors import DomainError
-from knowledge.models import Claim
+from akos.domains.registry import load_domain
+from akos.domain.errors import DomainError
+from akos.domain.models.knowledge import Claim
 from ontology.registry import InMemoryOntology
 
 

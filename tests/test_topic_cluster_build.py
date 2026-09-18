@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from knowledge.models import Claim, SourceChunk
+from akos.domain.models.knowledge import Claim, SourceChunk
 from knowledge.topic_cluster import build_topic_clusters, normalize_topic_name
 
 

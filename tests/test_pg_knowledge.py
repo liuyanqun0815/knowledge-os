@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from knowledge.models import Claim, Source, SourceChunk
+from akos.domain.models.knowledge import Claim, Source, SourceChunk
 from tests.conftest import pg_enabled
 
 pytestmark = pytest.mark.skipif(

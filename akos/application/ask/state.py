@@ -4,8 +4,8 @@ import operator
 
 from akos.domain.ports.compiler import CompileReport, ChunkIndexReport
 from akos.domain.ports.evolution import ApplyReport
-from knowledge.models import Answer
-from memory.models import Procedure
+from akos.domain.models.knowledge import Answer
+from akos.domain.models.memory import Procedure
 from akos.domain.ports.retrieval import Hit, RetrievalMode
 from akos.domain.ports.verification import VerificationResult
 

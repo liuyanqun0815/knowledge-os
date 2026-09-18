@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.upload_utils import relative_path_from_kb_root, source_id_from_relative_path
-from knowledge.errors import DomainError
-from knowledge.models import Source
+from akos.domain.errors import DomainError
+from akos.domain.models.knowledge import Source
 
 
 @dataclass

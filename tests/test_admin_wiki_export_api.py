@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from tests.conftest import ROOT, admin_upload_item
 
 SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"

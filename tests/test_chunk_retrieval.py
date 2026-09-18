@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source, SourceChunk
+from akos.domain.models.knowledge import Source, SourceChunk
 from akos.adapters.retrieval.chunk_index import ChunkRetrieval
 
 

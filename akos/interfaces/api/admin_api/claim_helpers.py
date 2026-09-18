@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime, timezone
 
 from akos.application.ingest.service import _entity_id
-from knowledge.errors import DomainError
-from knowledge.models import Claim
+from akos.domain.errors import DomainError
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.knowledge import KnowledgePort
 
 

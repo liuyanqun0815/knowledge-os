@@ -8,7 +8,7 @@ from akos.interfaces.api.admin_api.source_cleanup import purge_source_side_effec
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source, SourceChunk
+from akos.domain.models.knowledge import Source, SourceChunk
 from knowledge.topic_service import rebuild_topic_clusters
 
 

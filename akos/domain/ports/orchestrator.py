@@ -1,7 +1,7 @@
 from typing import Protocol
 
 from akos.domain.ports.compiler import CompileReport
-from knowledge.models import Answer
+from akos.domain.models.knowledge import Answer
 
 
 class OrchestratorPort(Protocol):

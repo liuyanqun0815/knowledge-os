@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.knowledge import KnowledgePort
 
 from akos.domain.ports.evolution import ApplyReport, KnowledgeDiff

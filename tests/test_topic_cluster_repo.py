@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import TopicCluster
+from akos.domain.models.knowledge import TopicCluster
 from tests.conftest import pg_enabled
 
 

@@ -5,7 +5,7 @@ import pytest
 
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Claim, Source, SourceChunk, TopicCluster
 from akos.application.wiki.export import _sanitize_filename, export_wiki, resolve_wiki_output_dir
 
 

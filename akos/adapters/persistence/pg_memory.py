@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from memory.models import Procedure, Step
+from akos.domain.models.memory import Procedure, Step
 from akos.domain.ports.memory import RecallContext
 
 

@@ -20,7 +20,7 @@ def test_topic_cluster_settings_defaults(monkeypatch):
 
 
 def test_topic_cluster_dataclass():
-    from knowledge.models import TopicCluster
+    from akos.domain.models.knowledge import TopicCluster
 
     cluster = TopicCluster(
         id="t1",

@@ -2,6 +2,8 @@
 
 
 def test_domain_ports_importable():
+    from akos.domain.errors import DomainError
+    from akos.domain.models import Claim, KnowledgeBase, Procedure
     from akos.domain.ports.compiler import CompileReport, ExtractorPort
     from akos.domain.ports.domain import DomainPort
     from akos.domain.ports.evidence import EvidencePort
@@ -18,6 +20,10 @@ def test_domain_ports_importable():
     assert all(
         x is not None
         for x in (
+            Claim,
+            KnowledgeBase,
+            Procedure,
+            DomainError,
             KnowledgePort,
             EvidencePort,
             GraphPort,
@@ -55,9 +61,19 @@ def test_application_hub_importable():
     from akos.application.evolution.service import EvolutionService
     from akos.application.ingest.service import KnowledgeCompiler
     from akos.application.wiki.compile import compile_topics_for_source
+    from akos.bootstrap import build_orchestrator_for_kb
+    from akos.domains.registry import load_domain
     from akos.interfaces.api.main import create_app
 
     assert all(
         x is not None
-        for x in (compile_topics_for_source, KnowledgeCompiler, EvolutionService, build_synthesis_context, create_app)
+        for x in (
+            compile_topics_for_source,
+            KnowledgeCompiler,
+            EvolutionService,
+            build_synthesis_context,
+            create_app,
+            build_orchestrator_for_kb,
+            load_domain,
+        )
     )

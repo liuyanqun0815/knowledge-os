@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from akos.application.ingest.chunk_service import index_source_chunks
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source, SourceChunk
+from akos.domain.models.knowledge import Source, SourceChunk
 
 
 def _source(sid: str = "s1") -> Source:

@@ -5,7 +5,7 @@ from akos.application.evolution.differ import KnowledgeDiffer
 from akos.application.evolution.family import family_key
 from akos.domain.ports.evolution import KnowledgeDiff
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source
+from akos.domain.models.knowledge import Claim, Source
 
 
 def _source(sid: str, version: str = "3") -> Source:

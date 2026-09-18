@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, SourceChunk
+from akos.domain.models.knowledge import Claim, SourceChunk
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.retrieval.chunk_index import ChunkRetrieval
 from akos.adapters.retrieval.hybrid import HybridRetrieval

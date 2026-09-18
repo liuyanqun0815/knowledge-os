@@ -1,4 +1,4 @@
-from infra.bootstrap import build_orchestrator_for_kb
+from akos.bootstrap import build_orchestrator_for_kb
 
 
 def test_mvp_success_criterion(seeded_kb_id):

@@ -1,4 +1,4 @@
-from domains.ecommerce_cs.seed import register_ecommerce_cs
+from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
 from ontology.registry import InMemoryOntology
 
 

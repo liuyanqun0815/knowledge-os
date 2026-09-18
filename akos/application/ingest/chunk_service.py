@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from akos.application.ingest.chunker import chunk_document, estimate_token_count
 from akos.domain.ports.compiler import ChunkIndexReport
 from infra.settings import Settings
-from knowledge.models import SourceChunk
+from akos.domain.models.knowledge import SourceChunk
 from akos.domain.ports.knowledge import KnowledgePort
 
 

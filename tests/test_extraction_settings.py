@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
-from domains.registry import load_domain
+from akos.domains.registry import load_domain
 from infra.settings import Settings
 
 

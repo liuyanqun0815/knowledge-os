@@ -1,5 +1,5 @@
 from akos.adapters.persistence.memory_store import InMemoryMemoryStore
-from memory.models import Procedure, Step
+from akos.domain.models.memory import Procedure, Step
 
 
 def test_remember_and_get_procedure_exact_name():
@@ -42,7 +42,7 @@ def test_get_procedure_matches_question_keywords():
 
 
 def test_ask_returns_procedure_steps(seeded_kb_id):
-    from infra.bootstrap import build_orchestrator_for_kb
+    from akos.bootstrap import build_orchestrator_for_kb
 
     orch = build_orchestrator_for_kb(seeded_kb_id)
     answer = orch.ask("仅退款流程怎么走？")

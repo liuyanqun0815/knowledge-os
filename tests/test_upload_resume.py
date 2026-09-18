@@ -3,7 +3,7 @@ def test_resume_processes_pending(tmp_path, monkeypatch):
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
 
     from akos.interfaces.api.main import create_app
-    from infra.bootstrap import build_orchestrator_for_kb
+    from akos.bootstrap import build_orchestrator_for_kb
     from akos.interfaces.api.admin_api.upload_jobs import register_pending_source, resume_incomplete_uploads
 
     app = create_app(data_root=str(tmp_path))

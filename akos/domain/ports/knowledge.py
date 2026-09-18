@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Protocol
 
-from knowledge.models import Claim, Event, Source, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Claim, Event, Source, SourceChunk, TopicCluster
 
 
 class KnowledgePort(Protocol):

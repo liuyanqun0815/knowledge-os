@@ -46,7 +46,7 @@ def seeded_kb_id(request):
 
 @pytest.fixture
 def build_orchestrator_deps(seeded_kb_id):
-    from infra.bootstrap import build_orchestrator_for_kb
+    from akos.bootstrap import build_orchestrator_for_kb
 
     def _build():
         return build_orchestrator_for_kb(seeded_kb_id).deps

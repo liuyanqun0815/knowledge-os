@@ -7,7 +7,7 @@ from typing import Any
 from langsmith import traceable
 
 from infra.settings import Settings
-from knowledge.models import SourceChunk
+from akos.domain.models.knowledge import SourceChunk
 
 
 def build_synthesis_context(

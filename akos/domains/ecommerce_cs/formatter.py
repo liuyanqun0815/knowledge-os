@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 def format_ecommerce_claim(claim: Claim) -> str:

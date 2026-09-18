@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
 from akos.application.ingest.service import _entity_id
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
-from knowledge.models import Claim, Source
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from akos.domain.models.knowledge import Claim, Source
 from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]

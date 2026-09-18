@@ -13,15 +13,18 @@ pip install -e ".[dev]"
 ```text
 akos/
   domain/ports/       # Protocols
+  domain/models/      # Claim, Source, KnowledgeBase, …
   application/        # ingest / ask / wiki / evolution
   adapters/           # persistence / llm / retrieval / files / graph
+  domains/            # DomainPort 插件
   interfaces/api/     # FastAPI + admin routes
-infra/                # settings、bootstrap、db（组合根仍在此）
-domains/              # DomainPort 插件
+  bootstrap.py        # 组合根
+infra/                # settings、db、schema、upload、tracing
+knowledge/            # lint / topic（尚未迁入 application）
 web/                  # 管理台 UI
 ```
 
-旧根包路径（`app`、`compiler`、`wiki`、`orchestrator`、`retrieval` 等）已移除，请使用上表 `akos.*` 导入。
+导入请使用 `akos.*`（例如 `akos.domain.models`、`akos.bootstrap`、`akos.domains`）。
 
 ## 测试
 

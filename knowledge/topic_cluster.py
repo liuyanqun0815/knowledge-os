@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import re
 
-from knowledge.models import Claim, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Claim, SourceChunk, TopicCluster
 
 DEFAULT_TOPIC_ALIASES: dict[str, str] = {
     "尺码表": "尺码选择",

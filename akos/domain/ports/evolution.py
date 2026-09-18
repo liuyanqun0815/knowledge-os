@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 @dataclass

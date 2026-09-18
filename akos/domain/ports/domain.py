@@ -5,7 +5,7 @@ from typing import Protocol, runtime_checkable
 from akos.domain.ports.compiler import ExtractorPort
 from akos.domain.ports.ontology import OntologyPort
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 @runtime_checkable

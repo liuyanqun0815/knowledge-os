@@ -8,7 +8,7 @@ from akos.interfaces.api.admin_api.schemas import (
     KnowledgeBaseResponse,
     PatchKnowledgeBaseRequest,
 )
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 from akos.domain.ports.knowledge_base import KnowledgeBasePort
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-knowledge-bases"])

@@ -5,7 +5,7 @@ import hashlib
 from akos.application.ingest.service import _entity_id
 from akos.domain.ports.graph import GraphPort
 from infra.settings import Settings
-from knowledge.models import Claim, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Claim, SourceChunk, TopicCluster
 from akos.domain.ports.knowledge import KnowledgePort
 from knowledge.topic_cluster import build_topic_clusters
 

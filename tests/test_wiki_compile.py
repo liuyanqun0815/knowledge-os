@@ -5,7 +5,7 @@ from pathlib import Path
 
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source, SourceChunk, TopicCluster
+from akos.domain.models.knowledge import Claim, Source, SourceChunk, TopicCluster
 from akos.application.wiki.paths import compile_wiki_root
 
 

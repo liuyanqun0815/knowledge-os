@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from domains.corporate_culture.domain import CorporateCultureDomain
-from domains.ecommerce_cs.domain import EcommerceCsDomain
-from domains.ecommerce_cs.seed import ENTITY_SEEDS, PREDICATES as EC_PREDICATES
-from domains.generic.domain import GenericDomain
-from domains.loan_finance.domain import LoanFinanceDomain
-from domains.registry import load_domain
+from akos.domains.corporate_culture.domain import CorporateCultureDomain
+from akos.domains.ecommerce_cs.domain import EcommerceCsDomain
+from akos.domains.ecommerce_cs.seed import ENTITY_SEEDS, PREDICATES as EC_PREDICATES
+from akos.domains.generic.domain import GenericDomain
+from akos.domains.loan_finance.domain import LoanFinanceDomain
+from akos.domains.registry import load_domain
 
 EC_SEED_PREDICATES = sorted({predicate for _, predicate, _ in EC_PREDICATES})
 EC_SEED_ENTITY_TYPES = sorted(

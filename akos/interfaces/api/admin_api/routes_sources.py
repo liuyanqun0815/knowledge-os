@@ -34,8 +34,8 @@ from akos.interfaces.api.admin_api.upload_jobs import pending_item_response, pro
 from akos.interfaces.api.admin_auth import require_admin_token
 from akos.interfaces.api.deps import build_orchestrator_for_request, get_kb_repo, get_knowledge_for_request
 from infra.upload_utils import ALLOWED_UPLOAD_SUFFIXES, extract_zip_documents, safe_target_under_kb
-from knowledge.errors import DomainError
-from knowledge.models import Source
+from akos.domain.errors import DomainError
+from akos.domain.models.knowledge import Source
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-sources"])
 

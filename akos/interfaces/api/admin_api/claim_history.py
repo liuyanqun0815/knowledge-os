@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.knowledge import KnowledgePort
 
 

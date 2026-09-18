@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from knowledge.models import Claim, Source, TextSpan
+from akos.domain.models.knowledge import Claim, Source, TextSpan
 from tests.conftest import pg_enabled
 
 pytestmark = pytest.mark.skipif(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
+from akos.domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds
 from akos.application.wiki.hierarchy import assign_wiki_hierarchy
 
 

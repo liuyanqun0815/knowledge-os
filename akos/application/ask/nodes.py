@@ -12,7 +12,7 @@ from agents.retriever_agent import service as retriever_agent
 from agents.verification_agent import service as verification_agent
 from akos.application.ingest.chunk_service import index_source_chunks
 from infra.settings import get_settings
-from knowledge.models import Answer
+from akos.domain.models.knowledge import Answer
 from akos.application.ask.question_rewrite import (
     collect_domain_terms,
     try_llm_rewrite,

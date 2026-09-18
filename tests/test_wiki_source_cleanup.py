@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from akos.interfaces.api.admin_api.source_cleanup import purge_source_side_effects, sole_source_claims
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source
+from akos.domain.models.knowledge import Claim, Source
 from akos.application.wiki.meta import WikiPageMeta, load_pages_meta, save_pages_meta
 from akos.application.wiki.paths import compile_wiki_root
 

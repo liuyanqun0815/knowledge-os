@@ -7,8 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
-from knowledge.models import Claim, Source, SourceChunk
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from akos.domain.models.knowledge import Claim, Source, SourceChunk
 from akos.application.wiki.paths import compile_wiki_root
 
 

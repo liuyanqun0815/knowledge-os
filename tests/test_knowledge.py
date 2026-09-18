@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source
+from akos.domain.models.knowledge import Claim, Source
 
 
 def _source(sid: str = "s1") -> Source:

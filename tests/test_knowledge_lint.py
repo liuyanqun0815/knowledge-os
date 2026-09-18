@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from knowledge.lint import run_lint
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source, TextSpan
+from akos.domain.models.knowledge import Claim, Source, TextSpan
 
 
 def _source(source_id: str = "policy-v3", title: str = "refund_policy_v3.md") -> Source:

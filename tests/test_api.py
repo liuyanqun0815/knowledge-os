@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
-from knowledge_base.models import KnowledgeBase
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+from akos.domain.models.knowledge_base import KnowledgeBase
 
 
 class ArchivedKnowledgeBaseRepo:

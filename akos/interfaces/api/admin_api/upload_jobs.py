@@ -7,7 +7,7 @@ from pathlib import Path
 from akos.interfaces.api.admin_api.schemas import ZipUploadItemResponse
 from infra.doc_extract import EXTRACTABLE_UPLOAD_SUFFIXES, materialize_markdown_for_ingest
 from infra.upload_utils import relative_path_from_kb_root, source_id_from_relative_path
-from knowledge.models import Source
+from akos.domain.models.knowledge import Source
 
 _LOG = logging.getLogger(__name__)
 

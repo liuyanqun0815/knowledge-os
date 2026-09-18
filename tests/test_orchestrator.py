@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from infra.bootstrap import build_orchestrator_for_kb
+from akos.bootstrap import build_orchestrator_for_kb
 
 
 def test_ingest_then_ask_with_evidence(seeded_kb_id):

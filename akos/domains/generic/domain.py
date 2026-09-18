@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
 from akos.application.ingest.rule_extractor import RuleExtractor
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.ontology import OntologyPort
 
 _GENERIC_PREDICATES = [

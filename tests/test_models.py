@@ -1,8 +1,8 @@
 # tests/test_models.py
 from datetime import datetime, timezone
 
-from knowledge.errors import QuarantineError
-from knowledge.models import Answer, Claim, Source, TextSpan
+from akos.domain.errors import QuarantineError
+from akos.domain.models.knowledge import Answer, Claim, Source, TextSpan
 
 
 def test_claim_is_versioned_not_overwritten_shape():

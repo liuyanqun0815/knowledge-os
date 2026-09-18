@@ -14,7 +14,7 @@ from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Source
+from akos.domain.models.knowledge import Source
 from ontology.registry import InMemoryOntology
 
 
@@ -197,7 +197,7 @@ def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) ->
     from datetime import datetime, timezone
 
     from akos.application.ingest import enrichment
-    from knowledge.models import SourceChunk
+    from akos.domain.models.knowledge import SourceChunk
 
     calls: list[str | None] = []
 

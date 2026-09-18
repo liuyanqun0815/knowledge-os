@@ -120,7 +120,7 @@ def test_build_synthesis_context_uses_rerank_hits_and_truncates_non_claims():
     from types import SimpleNamespace
 
     from infra.settings import Settings
-    from knowledge.models import Claim, SourceChunk
+    from akos.domain.models.knowledge import Claim, SourceChunk
     from akos.application.ask.synthesis import build_synthesis_context
     from akos.domain.ports.retrieval import Hit
 

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from knowledge.models import Claim, SourceChunk
+from akos.domain.models.knowledge import Claim, SourceChunk
 from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.wiki.layout import resolve_wiki_layout
 from akos.application.wiki.links import (

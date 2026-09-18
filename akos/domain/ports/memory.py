@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from memory.models import Procedure
+from akos.domain.models.memory import Procedure
 
 
 @dataclass

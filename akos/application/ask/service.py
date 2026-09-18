@@ -6,8 +6,8 @@ import time
 from akos.domain.ports.compiler import CompileReport
 from akos.domain.ports.evolution import ApplyReport
 from infra.tracing import build_run_config
-from knowledge.errors import DomainError
-from knowledge.models import Answer
+from akos.domain.errors import DomainError
+from akos.domain.models.knowledge import Answer
 from akos.application.ask.graphs.ask_graph import build_ask_graph
 from akos.application.ask.graphs.ingest_graph import build_ingest_graph
 from akos.application.ask.trace_utils import normalize_agent_trace

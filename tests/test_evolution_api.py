@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
 from akos.application.evolution.family import family_key
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
 from tests.conftest import admin_upload_item
 
 ROOT = Path(__file__).resolve().parents[1]

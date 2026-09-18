@@ -1,4 +1,4 @@
-from knowledge.models import TextSpan
+from akos.domain.models.knowledge import TextSpan
 
 from akos.domain.ports.evidence import EvidenceBundle
 

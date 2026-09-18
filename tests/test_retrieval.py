@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source
+from akos.domain.models.knowledge import Claim, Source
 from akos.adapters.retrieval.hybrid import HybridRetrieval
 from akos.domain.ports.retrieval import RetrievalMode
 

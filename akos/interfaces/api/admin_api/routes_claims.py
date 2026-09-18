@@ -6,7 +6,7 @@ from akos.interfaces.api.admin_api.claim_helpers import approve_staging_claim, l
 from akos.interfaces.api.admin_api.routes_sources import _resolve_active_kb
 from akos.interfaces.api.admin_api.schemas import ClaimListItemResponse, RejectStagingClaimResponse
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-claims"])
 

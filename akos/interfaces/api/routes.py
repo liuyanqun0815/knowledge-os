@@ -8,7 +8,7 @@ from akos.interfaces.api.admin_api.claim_history import sorted_claim_history
 from akos.interfaces.api.admin_api.schemas import ClaimHistoryItemResponse
 from akos.interfaces.api.admin_auth import require_admin_token
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 from akos.application.ask.service import AskResult, LangGraphOrchestrator
 
 router = APIRouter()

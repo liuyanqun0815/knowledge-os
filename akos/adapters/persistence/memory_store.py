@@ -1,4 +1,4 @@
-from memory.models import Procedure
+from akos.domain.models.memory import Procedure
 from akos.domain.ports.memory import RecallContext
 
 

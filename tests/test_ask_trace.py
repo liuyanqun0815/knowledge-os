@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
-from infra.bootstrap import build_orchestrator_for_kb, DEFAULT_IN_MEMORY_KB_ID
+from akos.bootstrap import build_orchestrator_for_kb, DEFAULT_IN_MEMORY_KB_ID
 
 
 def test_ask_with_include_trace_returns_node_names(seeded_kb_id):

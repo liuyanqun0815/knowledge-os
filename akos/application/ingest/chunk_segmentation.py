@@ -10,7 +10,7 @@ from typing import Any
 
 from akos.application.ingest.chunker import DocumentChunkDraft, estimate_token_count, validate_chunk_coverage
 from infra.settings import Settings
-from knowledge.models import SourceChunk
+from akos.domain.models.knowledge import SourceChunk
 
 logger = logging.getLogger(__name__)
 

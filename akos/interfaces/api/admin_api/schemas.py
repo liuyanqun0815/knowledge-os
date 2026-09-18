@@ -5,8 +5,8 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from akos.domain.ports.evolution import ApplyReport
-from knowledge.models import Claim
-from knowledge_base.models import KnowledgeBase
+from akos.domain.models.knowledge import Claim
+from akos.domain.models.knowledge_base import KnowledgeBase
 
 
 class CreateKnowledgeBaseRequest(BaseModel):

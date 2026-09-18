@@ -1,4 +1,4 @@
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 def format_corporate_claim(claim: Claim) -> str:

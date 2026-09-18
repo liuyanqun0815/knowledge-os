@@ -1,4 +1,4 @@
-from memory.models import Procedure, Step
+from akos.domain.models.memory import Procedure, Step
 from akos.domain.ports.memory import MemoryPort
 
 REFUND_ONLY_PROCEDURE = Procedure(

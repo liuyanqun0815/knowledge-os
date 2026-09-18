@@ -5,11 +5,11 @@ import os
 import pytest
 
 from akos.application.ingest.llm_extractor import LlmExtractor
-from domains.corporate_culture.formatter import format_corporate_claim
-from domains.registry import load_domain
+from akos.domains.corporate_culture.formatter import format_corporate_claim
+from akos.domains.registry import load_domain
 from akos.adapters.llm.client import LlmConfigError, OpenAiCompatibleClient
 from infra.settings import Settings
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from ontology.registry import InMemoryOntology
 
 

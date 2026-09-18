@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from akos.interfaces.api.admin_api.claim_helpers import approve_staging_claim, reject_staging_claim
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 def _claim(

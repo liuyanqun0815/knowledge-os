@@ -12,7 +12,7 @@ from akos.interfaces.api.admin_api.schemas import (
     QuarantineItemResponse,
 )
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-quarantine"])
 

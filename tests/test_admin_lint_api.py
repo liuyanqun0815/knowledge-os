@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
-from knowledge.models import Claim
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from akos.domain.models.knowledge import Claim
 from tests.conftest import ROOT, admin_upload_item
 
 SAMPLE_MD = ROOT / "samples" / "refund_policy_v3.md"

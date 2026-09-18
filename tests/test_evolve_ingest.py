@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from infra.bootstrap import build_orchestrator_for_kb
+from akos.bootstrap import build_orchestrator_for_kb
 
 
 def test_evolve_ingest_supersedes_freight_claim(seeded_kb_id):

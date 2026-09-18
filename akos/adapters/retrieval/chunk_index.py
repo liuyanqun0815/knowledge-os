@@ -5,7 +5,7 @@ import math
 import re
 from typing import TYPE_CHECKING
 
-from knowledge.models import SourceChunk
+from akos.domain.models.knowledge import SourceChunk
 from akos.domain.ports.knowledge import KnowledgePort
 from akos.domain.ports.retrieval import Hit
 

@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from akos.domain.ports.evidence import EvidenceBundle
-from knowledge.models import TextSpan
+from akos.domain.models.knowledge import TextSpan
 
 
 class PgEvidence:

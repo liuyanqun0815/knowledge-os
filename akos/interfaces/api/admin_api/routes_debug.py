@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from akos.interfaces.api.admin_api.routes_sources import _resolve_active_kb
 from akos.interfaces.api.admin_api.schemas import DebugAskRequest, DebugAskResponse, GraphNeighborResponse
 from akos.interfaces.api.deps import build_orchestrator_for_request
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 from akos.application.ask.service import AskResult
 
 router = APIRouter(prefix="/knowledge-bases", tags=["admin-debug"])

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from domains.registry import load_domain
-from knowledge.models import Claim, Source, TextSpan
+from akos.domains.registry import load_domain
+from akos.domain.models.knowledge import Claim, Source, TextSpan
 from akos.application.ask.nodes import verify_sample_node
 
 

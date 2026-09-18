@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from infra import bootstrap as bootstrap_mod
-from infra.bootstrap import reset_shared_model_cache
+from akos.bootstrap import reset_shared_model_cache
 from infra.settings import Settings
 
 

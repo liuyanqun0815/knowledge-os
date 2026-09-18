@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
 from akos.application.ingest.rule_extractor import RuleExtractor
-from domains.ecommerce_cs.formatter import format_ecommerce_claim
-from domains.ecommerce_cs.seed import ENTITY_SEEDS, PREDICATES, register_ecommerce_cs
-from knowledge.models import Claim
+from akos.domains.ecommerce_cs.formatter import format_ecommerce_claim
+from akos.domains.ecommerce_cs.seed import ENTITY_SEEDS, PREDICATES, register_ecommerce_cs
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.ontology import OntologyPort
 
 

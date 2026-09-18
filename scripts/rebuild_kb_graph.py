@@ -16,7 +16,7 @@ def main() -> int:
     parser.add_argument("kb_id", help="Knowledge base id")
     args = parser.parse_args()
 
-    from infra.bootstrap import build_orchestrator_for_kb
+    from akos.bootstrap import build_orchestrator_for_kb
     from akos.adapters.persistence.pg_graph import PgGraph
     from infra.settings import Settings
     from knowledge.topic_service import rebuild_topic_clusters

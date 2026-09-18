@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from infra.bootstrap import build_wiki_compile_deps
+from akos.bootstrap import build_wiki_compile_deps
 from infra.settings import Settings
 
 

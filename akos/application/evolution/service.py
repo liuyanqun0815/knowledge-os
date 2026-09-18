@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.knowledge import KnowledgePort
 
 from akos.application.evolution.applier import KnowledgeApplier

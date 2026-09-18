@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request
 
-from infra.bootstrap import _build_repos, build_orchestrator_for_kb
+from akos.bootstrap import _build_repos, build_orchestrator_for_kb
 from infra.settings import Settings
 from akos.domain.ports.knowledge import KnowledgePort
 from akos.application.ask.service import LangGraphOrchestrator
@@ -49,6 +49,6 @@ def get_knowledge_for_request(knowledge_base_id: str, request: Request) -> Knowl
 
 def get_kb_repo(request: Request):
     settings = getattr(request.app.state, "settings", None) or Settings()
-    from infra.bootstrap import _get_kb_repo
+    from akos.bootstrap import _get_kb_repo
 
     return _get_kb_repo(settings)

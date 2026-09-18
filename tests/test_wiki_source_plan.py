@@ -8,7 +8,7 @@ from pathlib import Path
 
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim, Source, SourceChunk
+from akos.domain.models.knowledge import Claim, Source, SourceChunk
 from akos.application.wiki.paths import compile_wiki_root
 from akos.application.wiki.source_plan import infer_source_layout
 

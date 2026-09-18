@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
 from akos.application.evolution.family import family_key
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
-from knowledge.models import Claim, Source, TextSpan
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from akos.domain.models.knowledge import Claim, Source, TextSpan
 from akos.application.ask.nodes import verify_sample_node
 
 V3_PATH = "samples/refund_policy_v3.md"

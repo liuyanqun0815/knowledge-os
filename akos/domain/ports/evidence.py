@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from knowledge.models import TextSpan
+from akos.domain.models.knowledge import TextSpan
 
 
 @dataclass

@@ -1,5 +1,5 @@
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
-from knowledge.models import TextSpan
+from akos.domain.models.knowledge import TextSpan
 
 
 def test_bind_and_explain():

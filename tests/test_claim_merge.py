@@ -98,7 +98,7 @@ def test_apply_extracted_claims_folds_complementary_into_existing_active() -> No
     from datetime import datetime, timezone
 
     from akos.application.ingest.service import _family_id
-    from knowledge.models import Claim
+    from akos.domain.models.knowledge import Claim
 
     text = "手机银行申请。银行柜台申请。"
     ontology = InMemoryOntology()
@@ -151,7 +151,7 @@ def test_apply_extracted_claims_exclusive_still_stages_on_conflict() -> None:
     from datetime import datetime, timezone
 
     from akos.application.ingest.service import _family_id
-    from knowledge.models import Claim
+    from akos.domain.models.knowledge import Claim
 
     text = "七天无理由的运费承担方是平台。"
     ontology = InMemoryOntology()

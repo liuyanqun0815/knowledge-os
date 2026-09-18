@@ -6,7 +6,7 @@ import pytest
 
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.persistence.pg_embeddings import PgEmbeddingStore
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 from akos.adapters.retrieval.embedder import HashEmbedder, claim_embedding_text
 from akos.adapters.retrieval.hybrid import HybridRetrieval
 from akos.domain.ports.retrieval import RetrievalMode

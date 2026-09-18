@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from knowledge_base.models import KnowledgeBase
+from akos.domain.models.knowledge_base import KnowledgeBase
 
 
 class KnowledgeBasePort(Protocol):

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from infra.bootstrap import build_orchestrator_for_kb
+from akos.bootstrap import build_orchestrator_for_kb
 
 
 def test_ask_trace_steps_include_non_negative_duration_ms(seeded_kb_id):

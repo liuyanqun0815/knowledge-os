@@ -50,7 +50,7 @@ def test_upload_bad_suffix_returns_400(client):
 
 def test_upload_extract_failure_returns_202_then_failed(client, monkeypatch):
     from akos.interfaces.api.admin_api import upload_jobs
-    from knowledge.errors import DomainError
+    from akos.domain.errors import DomainError
 
     def boom(_path):
         raise DomainError("no extractable text")

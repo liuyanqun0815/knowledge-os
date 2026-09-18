@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from akos.interfaces.api.admin_api.ingest_summary import build_ingest_summary, snapshot_active_by_subject
 from akos.interfaces.api.admin_api.schemas import ZipUploadItemResponse
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 def test_build_ingest_summary_reports_new_claims_and_subjects():
@@ -69,7 +69,7 @@ def test_build_ingest_summary_includes_quarantine(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     from akos.interfaces.api.main import create_app
-    from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID
+    from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
     from tests.conftest import ROOT
 
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)

@@ -18,7 +18,7 @@ from akos.interfaces.api.admin_auth import require_admin_token
 from akos.interfaces.api.routes import router
 from akos.interfaces.api.admin_api.upload_jobs import resume_incomplete_uploads
 from akos.application.ingest.enrichment import enrich_source
-from infra.bootstrap import _get_kb_repo, build_orchestrator_for_kb
+from akos.bootstrap import _get_kb_repo, build_orchestrator_for_kb
 from infra.schema_bootstrap import ensure_pg_schema
 from infra.settings import Settings
 from infra.tracing import configure_langsmith

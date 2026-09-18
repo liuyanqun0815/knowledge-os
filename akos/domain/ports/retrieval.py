@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from knowledge.models import Claim
+from akos.domain.models.knowledge import Claim
 
 
 class RetrievalMode(str, Enum):

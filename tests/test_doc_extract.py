@@ -10,7 +10,7 @@ from infra.doc_extract import (
     extract_document,
     materialize_markdown_for_ingest,
 )
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 
 pytest.importorskip("docx")
 pytest.importorskip("fitz")

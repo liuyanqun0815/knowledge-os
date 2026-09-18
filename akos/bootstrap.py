@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from akos.application.ingest.service import KnowledgeCompiler
 from akos.domain.ports.domain import DomainPort
-from domains.registry import load_domain
+from akos.domains.registry import load_domain
 from akos.application.evolution.service import EvolutionService
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.domain.ports.evidence import EvidencePort
@@ -15,10 +15,10 @@ from akos.adapters.files.local import LocalFileStore
 from akos.adapters.llm.client import OpenAiCompatibleClient
 from akos.adapters.persistence.pg_knowledge import PgKnowledge
 from infra.settings import Settings
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.ports.knowledge import KnowledgePort
-from knowledge_base.models import KnowledgeBase
+from akos.domain.models.knowledge_base import KnowledgeBase
 from akos.adapters.persistence.memory_store import InMemoryMemoryStore
 from akos.domain.ports.memory import MemoryPort
 from ontology.registry import InMemoryOntology
@@ -288,7 +288,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     verification = VerificationService()
     files = LocalFileStore(settings.data_root)
     if kb.domain_type == "ecommerce_cs":
-        from domains.ecommerce_cs.procedures import seed_ecommerce_procedures
+        from akos.domains.ecommerce_cs.procedures import seed_ecommerce_procedures
 
         seed_ecommerce_procedures(memory)
     return OrchestratorDeps(

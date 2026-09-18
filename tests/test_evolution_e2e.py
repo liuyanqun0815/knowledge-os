@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
 from akos.application.evolution.family import family_key
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 from tests.conftest import admin_upload_item
 
 V3_PATH = Path("samples/refund_policy_v3.md")

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
 from akos.application.ingest.service import _entity_id
-from infra.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
+from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def _cached_orchestrator(client: TestClient, kb_id: str):
 def _seed_graph(client: TestClient, kb_id: str = DEFAULT_IN_MEMORY_KB_ID) -> tuple[str, str]:
     from datetime import datetime, timezone
 
-    from knowledge.models import Claim
+    from akos.domain.models.knowledge import Claim
 
     orch = _cached_orchestrator(client, kb_id)
     graph = orch.deps.graph
@@ -58,7 +58,7 @@ def _seed_graph(client: TestClient, kb_id: str = DEFAULT_IN_MEMORY_KB_ID) -> tup
 def test_graph_snapshot_hides_non_active_claim_edges(admin_client):
     from datetime import datetime, timezone
 
-    from knowledge.models import Claim
+    from akos.domain.models.knowledge import Claim
 
     kb_id = DEFAULT_IN_MEMORY_KB_ID
     orch = _cached_orchestrator(admin_client, kb_id)

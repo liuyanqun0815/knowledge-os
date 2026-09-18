@@ -61,7 +61,7 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | Current | Target (eventual) |
 |---------|-------------------|
 | `knowledge/ports.py`, `evidence/ports.py`, … | `akos/domain/ports/*.py` |
-| `knowledge/models.py`, `retrieval/ports.Hit`, … | `akos/domain/models/` (later phase) |
+| `knowledge/models.py`, `knowledge_base/models.py`, `memory/models.py` | `akos/domain/models/` (**DONE Phase 6a**) |
 | `knowledge/memory_repo.py`, `infra/pg_repos.py`, … | `akos/adapters/persistence/` |
 | `infra/llm.py` | `akos/adapters/llm/` |
 | `retrieval/*` | `akos/adapters/retrieval/` |
@@ -70,8 +70,8 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | `wiki/*` | `akos/application/wiki/` |
 | `app/`, `admin_api/` | `akos/interfaces/api/` |
 | `cli/` | **removed** — use Web / Admin API |
-| `domains/` | `akos/domains/` |
-| `infra/bootstrap.py` | `akos/bootstrap.py` |
+| `domains/` | `akos/domains/` (**DONE Phase 6a**) |
+| `infra/bootstrap.py` | `akos/bootstrap.py` (**DONE Phase 6a**) |
 
 ## 6. Phases
 
@@ -82,12 +82,13 @@ docs/ deploy/ tests/  # stay at root; tests import via public paths
 | **3** | Application extract | Move use-case modules; thin LangGraph nodes | High | **DONE 2026-09-18** |
 | **4** | Interfaces | Move API; drop CLI (Web/API only); update entrypoints / Docker | Medium | **DONE 2026-09-18** |
 | **5** | Cleanup | Remove shims; fix `pyproject` includes; README | Low | **DONE 2026-09-18** |
+| **6a** | Domains + models | `akos.domains`, `akos.bootstrap`, `akos.domain.models` | Medium | **DONE 2026-09-18** |
 
 **Gate for every phase:** full `pytest` green + smoke ask/ingest on local PG if available.
 
 ## 7. Compatibility policy
 
-Phases 1–4 used re-export shims at old paths. **Phase 5 removed those shims** — import `akos.*` (and remaining root packages such as `knowledge.models`, `infra.settings`, `domains.*`).
+Phases 1–4 used re-export shims; Phase 5 removed them. Phase 6a moved domains/bootstrap/models under `akos.*`. Remaining root packages: `infra` (config/db), `knowledge` (lint/topic), `agents`, `ontology`, `verification`.
 
 ## 8. Defaults locked by approval
 
@@ -95,8 +96,11 @@ Phases 1–4 used re-export shims at old paths. **Phase 5 removed those shims** 
 - Pace: **phased**; implement **Phase 1 first**
 - Feature freeze: **preferred** during each phase PR; not a hard lock unless requested
 
-## 9. Open follow-ups (not Phase 1)
+## 9. Open follow-ups
 
-- Whether `Hit` stays in retrieval or moves to `domain.models`
-- Whether `DomainPort` lives under `akos.domain.ports` or `akos.domains`
-- Splitting oversized `orchestrator/nodes.py` while extracting ask use cases
+- Move `knowledge` lint/topic into `akos.application` (or keep as domain services)
+- Collapse `agents/*` + `verification` into `akos.application.ask`
+- Move `ontology/registry` InMemoryOntology into adapters
+- Optionally fold `infra/settings|db|…` into `akos.config` / platform helpers
+- Whether `Hit` moves from `ports.retrieval` into `domain.models`
+- Splitting oversized `akos.application.ask.nodes`

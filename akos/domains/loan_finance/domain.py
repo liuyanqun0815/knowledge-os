@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from akos.application.ingest.extraction_spec import LlmExtractionSpec
 from akos.application.ingest.rule_extractor import RuleExtractor
-from domains.generic.domain import register_generic_ontology
-from knowledge.models import Claim
+from akos.domains.generic.domain import register_generic_ontology
+from akos.domain.models.knowledge import Claim
 from akos.domain.ports.ontology import OntologyPort
 
 

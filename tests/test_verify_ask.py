@@ -1,4 +1,4 @@
-from infra.bootstrap import build_orchestrator_for_kb
+from akos.bootstrap import build_orchestrator_for_kb
 
 
 def test_ask_returns_verified_after_normal_ingest(seeded_kb_id):

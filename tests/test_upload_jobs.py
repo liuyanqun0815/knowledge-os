@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from knowledge.errors import DomainError
+from akos.domain.errors import DomainError
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 
 
