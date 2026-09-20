@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Agent-Native Knowledge Operating System"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "liuyanqun" }]
 dependencies = [
   "fastapi>=0.115.0",
   "python-multipart>=0.0.9",

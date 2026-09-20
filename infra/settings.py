@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     chunk_llm_enrich: bool = True
     chunk_embedding: bool = False
     retrieval_top_k: int = 8
+    # 图谱检索：动态预算 = min(top_k上限, 种子数 × 每种子条数)
+    retrieval_graph_top_k: int = 20
+    retrieval_graph_max_seeds: int = 7
+    retrieval_graph_per_seed: int = 4
     # save_chunks 后硬删 stale 行（默认开）
     purge_stale_chunks: bool = True
 

@@ -6,7 +6,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SourceFileBrowser } from "../components/SourceFileBrowser";
 
-const ACCEPTED_EXTENSIONS = [".md", ".txt", ".pdf", ".docx", ".doc", ".zip"];
+const ACCEPTED_EXTENSIONS = [".md", ".txt", ".pdf", ".docx", ".zip"];
 
 function isAcceptedUploadFile(file: File): boolean {
   const lowerName = file.name.toLowerCase();
@@ -113,7 +113,7 @@ export function SourcesPage() {
       return;
     }
     if (!isAcceptedUploadFile(file)) {
-      setError("仅支持 .md、.txt、.pdf、.docx、.doc 或 .zip 文件。");
+      setError("仅支持 .md、.txt、.pdf、.docx 或 .zip 文件。");
       return;
     }
     setSelectedFile(file);
@@ -130,11 +130,11 @@ export function SourcesPage() {
   function handleFolderChange(event: ChangeEvent<HTMLInputElement>) {
     const entries = [...(event.target.files ?? [])]
       .filter((file) =>
-        [".md", ".txt", ".pdf", ".docx", ".doc"].some((suffix) => file.name.toLowerCase().endsWith(suffix)),
+        [".md", ".txt", ".pdf", ".docx"].some((suffix) => file.name.toLowerCase().endsWith(suffix)),
       )
       .map((file) => ({ file, relativePath: file.webkitRelativePath || file.name }));
     if (entries.length === 0) {
-      setError("所选文件夹中没有可上传的 .md / .txt / .pdf / .docx / .doc 文件。");
+      setError("所选文件夹中没有可上传的 .md / .txt / .pdf / .docx 文件。");
       return;
     }
     setSelectedFile(null);
@@ -234,7 +234,7 @@ export function SourcesPage() {
           onDrop={handleDrop}
         >
           <p className="upload-drop-title">选择文档</p>
-          <p>拖拽文件到此处，或选择 .md / .txt / .pdf / .docx / .doc / .zip；选择文件夹可保留目录结构。</p>
+          <p>拖拽文件到此处，或选择 .md / .txt / .pdf / .docx / .zip；选择文件夹可保留目录结构。</p>
           <div className="upload-picker-actions">
             <label className="button button-secondary" htmlFor="source-file">
               选择文件
@@ -247,7 +247,7 @@ export function SourcesPage() {
             id="source-file"
             className="visually-hidden"
             type="file"
-            accept=".md,.txt,.pdf,.docx,.doc,.zip,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip"
+            accept=".md,.txt,.pdf,.docx,.zip,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip"
             aria-label="选择文档"
             onChange={handleFileChange}
             disabled={isUploading}
@@ -256,7 +256,7 @@ export function SourcesPage() {
             id="source-folder"
             className="visually-hidden"
             type="file"
-            accept=".md,.txt,.pdf,.docx,.doc,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".md,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             multiple
             aria-label="选择文件夹"
             {...{ webkitdirectory: "", directory: "" }}

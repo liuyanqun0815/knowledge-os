@@ -147,7 +147,13 @@ def graph_retrieve(
     graph = orchestrator.deps.graph
     retrieval = orchestrator.deps.retrieval
     retrieval.warm_index()
-    detail = retrieval.search_graph_detail(body.query.strip(), top_k=body.top_k)
+    settings = getattr(request.app.state, "settings", None)
+    detail = retrieval.search_graph_detail(
+        body.query.strip(),
+        top_k=body.top_k,
+        max_seeds=getattr(settings, "retrieval_graph_max_seeds", None),
+        per_seed=getattr(settings, "retrieval_graph_per_seed", None),
+    )
     entities_map = dict(graph.list_entities())
 
     hits = [

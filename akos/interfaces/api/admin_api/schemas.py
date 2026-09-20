@@ -391,6 +391,7 @@ class GraphNeighborsResponse(BaseModel):
 
 class GraphRetrieveRequest(BaseModel):
     query: str = Field(min_length=1)
+    # 上限；实际条数 = min(top_k, 种子数 × per_seed)，默认见 Settings
     top_k: int = Field(default=20, ge=1, le=100)
 
 

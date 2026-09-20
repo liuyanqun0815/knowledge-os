@@ -36,7 +36,8 @@ def _write_text_pdf(path: Path, text: str) -> None:
 
 
 def test_allowed_suffixes_include_office_and_pdf():
-    assert {".md", ".txt", ".pdf", ".docx", ".doc"} <= ALLOWED_UPLOAD_SUFFIXES
+    assert {".md", ".txt", ".pdf", ".docx"} <= ALLOWED_UPLOAD_SUFFIXES
+    assert ".doc" not in ALLOWED_UPLOAD_SUFFIXES
 
 
 def test_extract_docx_paragraphs(tmp_path: Path):
@@ -77,12 +78,13 @@ def test_materialize_writes_sibling_md(tmp_path: Path):
     assert path.exists()
 
 
-def test_doc_without_soffice_raises_clear_error(tmp_path: Path):
+def test_legacy_doc_is_unsupported(tmp_path: Path):
     path = tmp_path / "legacy.doc"
     path.write_bytes(b"not-a-real-doc")
-    with patch("infra.doc_extract.shutil.which", return_value=None):
-        with pytest.raises(DomainError, match="LibreOffice|docx"):
-            extract_document(path)
+    with pytest.raises(DomainError, match="unsupported"):
+        extract_document(path)
+    with pytest.raises(DomainError, match="unsupported"):
+        materialize_markdown_for_ingest(path)
 
 
 def test_unsupported_suffix_raises(tmp_path: Path):

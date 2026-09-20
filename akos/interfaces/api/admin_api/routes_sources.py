@@ -2,7 +2,7 @@
 
 核心入口 ``POST /{kb_id}/sources/upload``：
 - ``.md`` / ``.txt``：单文件接收后后台 ingest
-- ``.pdf`` / ``.docx`` / ``.doc``：接收后后台抽文本并 ingest
+- ``.pdf`` / ``.docx``：接收后后台抽文本并 ingest
 - ``.zip``：解压后批量后台 ingest（保留目录）
 - 统一响应 ``SourceUploadResponse``（``upload_mode``: ``single`` | ``zip`` | ``tree``）
 - 成功接收返回 HTTP 202，``accepted_async=true``；编译在 BackgroundTasks 中执行
@@ -197,7 +197,7 @@ async def upload_source(
     kb_dir.mkdir(parents=True, exist_ok=True)
     content = await file.read()
 
-    # ZIP 单独处理（白名单含 md/txt/pdf/docx/doc）
+    # ZIP 单独处理（白名单含 md/txt/pdf/docx）
     if filename.lower().endswith(".zip"):
         if replaces_source_id or relative_path:
             raise HTTPException(

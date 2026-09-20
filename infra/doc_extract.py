@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 
 from akos.domain.errors import DomainError
 
-_LOG = logging.getLogger(__name__)
-
 TEXT_UPLOAD_SUFFIXES = {".md", ".txt"}
-EXTRACTABLE_UPLOAD_SUFFIXES = {".pdf", ".docx", ".doc"}
+EXTRACTABLE_UPLOAD_SUFFIXES = {".pdf", ".docx"}
 ALLOWED_UPLOAD_SUFFIXES = TEXT_UPLOAD_SUFFIXES | EXTRACTABLE_UPLOAD_SUFFIXES
 
 _OCR_ENGINE = None
@@ -24,7 +18,7 @@ def _require_docs_extra(package: str) -> None:
 
 
 def extract_document(path: Path | str) -> str:
-    """Return UTF-8 plain text extracted from path (pdf/docx/doc)."""
+    """Return UTF-8 plain text extracted from path (pdf/docx)."""
     file_path = Path(path)
     if not file_path.is_file():
         raise DomainError(f"file not found: {file_path}")
@@ -33,8 +27,6 @@ def extract_document(path: Path | str) -> str:
         text = _extract_pdf(file_path)
     elif suffix == ".docx":
         text = _extract_docx(file_path)
-    elif suffix == ".doc":
-        text = _extract_doc_best_effort(file_path)
     else:
         raise DomainError(f"unsupported extract type: {suffix}")
     normalized = _normalize_text(text)
@@ -135,38 +127,3 @@ def _get_ocr_engine():
         _require_docs_extra("rapidocr-onnxruntime")
     _OCR_ENGINE = RapidOCR()
     return _OCR_ENGINE
-
-
-def _extract_doc_best_effort(path: Path) -> str:
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
-    if soffice is None:
-        raise DomainError("旧版 .doc 解析需要本机 LibreOffice（soffice），或请另存为 .docx 后再上传")
-    with tempfile.TemporaryDirectory(prefix="akos-doc-") as tmp:
-        out_dir = Path(tmp)
-        try:
-            completed = subprocess.run(
-                [
-                    soffice,
-                    "--headless",
-                    "--nologo",
-                    "--nolockcheck",
-                    "--convert-to",
-                    "txt:Text",
-                    "--outdir",
-                    str(out_dir),
-                    str(path.resolve()),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise DomainError(f".doc 转换超时: {path.name}") from exc
-        if completed.returncode != 0:
-            _LOG.warning("soffice convert failed: %s", completed.stderr)
-            raise DomainError(f".doc 转换失败，请另存为 .docx 后再上传（{path.name}）")
-        candidates = list(out_dir.glob("*.txt"))
-        if not candidates:
-            raise DomainError(f".doc 转换未产生文本: {path.name}")
-        return candidates[0].read_text(encoding="utf-8", errors="ignore")

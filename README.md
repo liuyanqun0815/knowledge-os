@@ -127,3 +127,9 @@ akos/
 infra/             # settings、db、schema
 web/               # 管理台
 ```
+
+## 许可证
+
+Copyright 2026 liuyanqun
+
+本项目以 [Apache License 2.0](LICENSE) 开源发布。完整条款见仓库根目录 `LICENSE`，版权与归属声明见 `NOTICE`。

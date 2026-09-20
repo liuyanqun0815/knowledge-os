@@ -24,6 +24,9 @@ def retrieve(
     *,
     query_embedding: list[float] | None = None,
     top_k: int | None = None,
+    graph_top_k: int | None = None,
+    graph_max_seeds: int | None = None,
+    graph_per_seed: int | None = None,
 ) -> list[Hit]:
     filters: dict[str, Any] = {}
     if as_of is not None:
@@ -34,4 +37,10 @@ def retrieve(
         filters["query_embedding"] = query_embedding
     if top_k is not None:
         filters["top_k"] = top_k
+    if graph_top_k is not None:
+        filters["graph_top_k"] = graph_top_k
+    if graph_max_seeds is not None:
+        filters["graph_max_seeds"] = graph_max_seeds
+    if graph_per_seed is not None:
+        filters["graph_per_seed"] = graph_per_seed
     return retrieval.search(question, mode, filters)

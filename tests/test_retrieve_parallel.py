@@ -24,7 +24,18 @@ def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
     wiki_hits = [Hit(score=0.8, snippet="w", hit_type="wiki", ref_id="p/a", path="p/a.md")]
     shared_vec = [0.1, 0.2, 0.3]
 
-    def fake_retrieve(retrieval, question, mode, as_of=None, *, query_embedding=None, top_k=None):
+    def fake_retrieve(
+        retrieval,
+        question,
+        mode,
+        as_of=None,
+        *,
+        query_embedding=None,
+        top_k=None,
+        graph_top_k=None,
+        graph_max_seeds=None,
+        graph_per_seed=None,
+    ):
         assert query_embedding == shared_vec
         return _mark("claim", 0.04, claim_hits)
 
@@ -55,6 +66,9 @@ def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
         chunk_index=True,
         wiki_compile=True,
         retrieval_top_k=5,
+        retrieval_graph_top_k=20,
+        retrieval_graph_max_seeds=7,
+        retrieval_graph_per_seed=4,
         chunk_min_score=0.0,
         retrieval_claim_weight=0.5,
         retrieval_wiki_weight=0.9,

@@ -18,4 +18,8 @@ def test_wiki_compile_and_purge_settings_defaults(monkeypatch):
     assert s.retrieval_claim_weight == 1.0
     assert s.retrieval_wiki_weight == 0.9
     assert s.retrieval_chunk_weight == 0.8
+    assert s.retrieval_top_k == 8
+    assert s.retrieval_graph_top_k == 20
+    assert s.retrieval_graph_max_seeds == 7
+    assert s.retrieval_graph_per_seed == 4
     assert s.wiki_link_expand is False

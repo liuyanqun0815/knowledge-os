@@ -351,6 +351,9 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
             as_of,
             query_embedding=query_embedding,
             top_k=settings.retrieval_top_k,
+            graph_top_k=settings.retrieval_graph_top_k,
+            graph_max_seeds=settings.retrieval_graph_max_seeds,
+            graph_per_seed=settings.retrieval_graph_per_seed,
         )
         return hits, _node_duration_ms(t0)
 

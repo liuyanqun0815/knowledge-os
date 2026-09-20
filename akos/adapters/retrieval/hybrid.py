@@ -18,6 +18,10 @@ if TYPE_CHECKING:
     from akos.adapters.persistence.pg_embeddings import PgEmbeddingStore
 
 _TOP_K = 8
+_GRAPH_TOP_K = 20
+_GRAPH_MAX_SEEDS = 7
+_GRAPH_PER_SEED = 4
+_GRAPH_MIN_SEED_NAME_LEN = 3  # drop seeds with len(name) <= 2
 _GRAPH_MAX_DEPTH = 2
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
 _LEGACY_HASH_DIMS = 64
@@ -68,6 +72,37 @@ def _char_hash_vector(text: str, dims: int = _LEGACY_HASH_DIMS) -> list[float]:
 
 def _cosine(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
+
+
+def _normalize_hit_snippet(snippet: str | None) -> str:
+    if not snippet:
+        return ""
+    return re.sub(r"\s+", " ", snippet.strip())
+
+
+def _prefer_merged_hit(left: Hit, right: Hit) -> Hit:
+    """Keep the stronger hit and fill missing identity fields from the other."""
+    if right.score > left.score:
+        primary, secondary = right, left
+    elif left.score > right.score:
+        primary, secondary = left, right
+    elif bool(right.claim_id) != bool(left.claim_id):
+        primary, secondary = (right, left) if right.claim_id else (left, right)
+    else:
+        primary, secondary = left, right
+    return Hit(
+        score=primary.score,
+        snippet=primary.snippet or secondary.snippet,
+        hit_type=primary.hit_type or secondary.hit_type,
+        claim_id=primary.claim_id or secondary.claim_id,
+        chunk_id=primary.chunk_id or secondary.chunk_id,
+        source_id=primary.source_id or secondary.source_id,
+        entity_id=primary.entity_id or secondary.entity_id,
+        ref_id=primary.ref_id or secondary.ref_id,
+        title=primary.title or secondary.title,
+        path=primary.path or secondary.path,
+        content=primary.content or secondary.content,
+    )
 
 
 class HybridRetrieval:
@@ -138,6 +173,11 @@ class HybridRetrieval:
 
     def _search_unlocked(self, query: str, mode: RetrievalMode, filters: dict) -> list[Hit]:
         top_k = int(filters.get("top_k", _TOP_K))
+        graph_top_k = int(filters.get("graph_top_k", _GRAPH_TOP_K))
+        graph_max_seeds = filters.get("graph_max_seeds")
+        graph_per_seed = filters.get("graph_per_seed")
+        max_seeds = int(graph_max_seeds) if graph_max_seeds is not None else None
+        per_seed = int(graph_per_seed) if graph_per_seed is not None else None
         as_of = filters.get("as_of")
         query_embedding = filters.get("query_embedding")
         if mode == RetrievalMode.CLAIM:
@@ -145,7 +185,15 @@ class HybridRetrieval:
         elif mode == RetrievalMode.BM25:
             hits = self._search_bm25(query, as_of)
         elif mode == RetrievalMode.GRAPH:
-            hits = self._search_graph(query, as_of)
+            hits = self._search_graph(
+                query,
+                as_of,
+                top_k=graph_top_k,
+                max_seeds=max_seeds,
+                per_seed=per_seed,
+            )
+            hits.sort(key=lambda h: h.score, reverse=True)
+            return hits[:graph_top_k]
         elif mode == RetrievalMode.VECTOR:
             hits = self._search_vector(query, as_of, top_k=top_k, query_embedding=query_embedding)
         else:
@@ -153,10 +201,19 @@ class HybridRetrieval:
                 [
                     self._search_claim(query, as_of),
                     self._search_bm25(query, as_of),
-                    self._search_graph(query, as_of),
+                    self._search_graph(
+                        query,
+                        as_of,
+                        top_k=graph_top_k,
+                        max_seeds=max_seeds,
+                        per_seed=per_seed,
+                    ),
                     self._search_vector(query, as_of, top_k=top_k, query_embedding=query_embedding),
                 ]
             )
+            # Hybrid output is the full deduped union; do not truncate by retrieval_top_k.
+            hits.sort(key=lambda h: h.score, reverse=True)
+            return hits
         hits.sort(key=lambda h: h.score, reverse=True)
         return hits[:top_k]
 
@@ -192,8 +249,22 @@ class HybridRetrieval:
             hits.append(Hit(claim_id=claim_id, score=score, snippet=snippet))
         return hits
 
-    def _search_graph(self, query: str, as_of: datetime | None = None) -> list[Hit]:
-        detail = self.search_graph_detail(query, as_of=as_of)
+    def _search_graph(
+        self,
+        query: str,
+        as_of: datetime | None = None,
+        *,
+        top_k: int | None = None,
+        max_seeds: int | None = None,
+        per_seed: int | None = None,
+    ) -> list[Hit]:
+        detail = self.search_graph_detail(
+            query,
+            as_of=as_of,
+            top_k=top_k,
+            max_seeds=max_seeds,
+            per_seed=per_seed,
+        )
         return [
             Hit(
                 claim_id=item.claim_id,
@@ -210,22 +281,45 @@ class HybridRetrieval:
         *,
         as_of: datetime | None = None,
         top_k: int | None = None,
+        max_seeds: int | None = None,
+        per_seed: int | None = None,
     ) -> list[GraphEdgeHit]:
-        """Walk seeded graph neighborhood and return scored edge hits with endpoints."""
-        limit = top_k if top_k is not None else 10_000
-        hits: list[GraphEdgeHit] = []
-        seed_entities: list[tuple[str, str]] = []
+        """Walk seeded graph neighborhood and return scored edge hits with endpoints.
+
+        Seeds are entity names that appear as substrings of the query. Names with
+        length <= 2 are ignored. At most ``max_seeds`` longest names are kept.
+        Budget is dynamic: ``min(top_k_cap, seed_count * per_seed)``, with each
+        seed contributing at most ``per_seed`` edges via round-robin.
+        """
+        top_k_cap = max(1, int(top_k)) if top_k is not None else _GRAPH_TOP_K
+        seed_cap = max(1, int(max_seeds)) if max_seeds is not None else _GRAPH_MAX_SEEDS
+        per_seed_cap = max(1, int(per_seed)) if per_seed is not None else _GRAPH_PER_SEED
+        seeds_by_name: dict[str, tuple[str, str, str]] = {}
         for entity_id, entity in self._graph.list_entities():
             name = entity.get("name", "")
-            if not name or name not in query:
+            if not name or len(name) < _GRAPH_MIN_SEED_NAME_LEN or name not in query:
                 continue
-            seed_entities.append((entity_id, name))
+            etype = str(entity.get("type") or "Concept")
+            previous = seeds_by_name.get(name)
+            if previous is None or (previous[2] == "Topic" and etype != "Topic"):
+                seeds_by_name[name] = (entity_id, name, etype)
+
+        seed_entities = sorted(
+            seeds_by_name.values(),
+            key=lambda item: (-len(item[1]), item[1]),
+        )[:seed_cap]
+        if not seed_entities:
+            return []
+
+        limit = min(top_k_cap, len(seed_entities) * per_seed_cap)
 
         visited_edges: set[tuple[str, str, str]] = set()
-        for entity_id, name in seed_entities:
+        per_seed_hits: list[list[GraphEdgeHit]] = []
+        for entity_id, name, _etype in seed_entities:
+            seed_hits: list[GraphEdgeHit] = []
             frontier: list[tuple[str, int]] = [(entity_id, 0)]
             seen_nodes: set[str] = {entity_id}
-            while frontier:
+            while frontier and len(seed_hits) < per_seed_cap:
                 current_id, hop = frontier.pop(0)
                 if hop >= _GRAPH_MAX_DEPTH:
                     continue
@@ -239,7 +333,7 @@ class HybridRetrieval:
                     dst_name = self._entity_name(edge.dst) or ""
                     snippet = f"{src_name} {edge.predicate} {dst_name}".strip()
                     score = 1.0 / (hop + 1)
-                    hits.append(
+                    seed_hits.append(
                         GraphEdgeHit(
                             score=score,
                             snippet=snippet,
@@ -249,11 +343,27 @@ class HybridRetrieval:
                             predicate=edge.predicate,
                         )
                     )
-                    if len(hits) >= limit:
-                        return hits
                     if edge.dst not in seen_nodes and hop + 1 < _GRAPH_MAX_DEPTH:
                         seen_nodes.add(edge.dst)
                         frontier.append((edge.dst, hop + 1))
+                    if len(seed_hits) >= per_seed_cap:
+                        break
+            if seed_hits:
+                per_seed_hits.append(seed_hits)
+
+        hits: list[GraphEdgeHit] = []
+        cursors = [0] * len(per_seed_hits)
+        while len(hits) < limit and any(
+            cursor < len(bucket) for cursor, bucket in zip(cursors, per_seed_hits, strict=True)
+        ):
+            for index, bucket in enumerate(per_seed_hits):
+                if len(hits) >= limit:
+                    break
+                cursor = cursors[index]
+                if cursor >= len(bucket):
+                    continue
+                hits.append(bucket[cursor])
+                cursors[index] = cursor + 1
         return hits
 
     def _search_vector(
@@ -282,16 +392,82 @@ class HybridRetrieval:
         return hits
 
     def _merge_hits(self, hit_groups: list[list[Hit]]) -> list[Hit]:
-        merged: dict[str, Hit] = {}
+        """Deduplicate across claim / BM25 / graph / vector.
+
+        Prefer ``claim_id`` identity; also collapse equal normalized snippets so a
+        Claim hit and a Graph hit describing the same SPO do not both survive.
+        """
+        by_claim: dict[str, Hit] = {}
+        no_claim: list[Hit] = []
         for group in hit_groups:
             for hit in group:
-                key = hit.claim_id or hit.snippet or str(id(hit))
-                existing = merged.get(key)
-                if existing is None or hit.score > existing.score:
-                    merged[key] = hit
-                elif hit.score == existing.score and hit.snippet and not existing.snippet:
-                    merged[key] = hit
-        return list(merged.values())
+                if hit.claim_id:
+                    previous = by_claim.get(hit.claim_id)
+                    by_claim[hit.claim_id] = (
+                        hit if previous is None else _prefer_merged_hit(previous, hit)
+                    )
+                else:
+                    no_claim.append(hit)
+
+        by_snippet: dict[str, Hit] = {}
+        for hit in by_claim.values():
+            snippet_key = _normalize_hit_snippet(hit.snippet)
+            if snippet_key:
+                previous = by_snippet.get(snippet_key)
+                by_snippet[snippet_key] = (
+                    hit if previous is None else _prefer_merged_hit(previous, hit)
+                )
+
+        extras: list[Hit] = []
+        for hit in no_claim:
+            snippet_key = _normalize_hit_snippet(hit.snippet)
+            if snippet_key and snippet_key in by_snippet:
+                winner = _prefer_merged_hit(by_snippet[snippet_key], hit)
+                by_snippet[snippet_key] = winner
+                if winner.claim_id:
+                    by_claim[winner.claim_id] = winner
+                continue
+            if snippet_key:
+                previous = by_snippet.get(snippet_key)
+                if previous is None:
+                    by_snippet[snippet_key] = hit
+                    extras.append(hit)
+                else:
+                    winner = _prefer_merged_hit(previous, hit)
+                    by_snippet[snippet_key] = winner
+                    if previous in extras:
+                        extras[extras.index(previous)] = winner
+                    elif winner is hit:
+                        extras.append(hit)
+                continue
+            extras.append(hit)
+
+        # Claim-backed rows first (unique by claim_id), then snippet-only extras
+        # that were not absorbed into a claim.
+        claim_hits = list(by_claim.values())
+        claim_snippets = {
+            _normalize_hit_snippet(hit.snippet)
+            for hit in claim_hits
+            if _normalize_hit_snippet(hit.snippet)
+        }
+        extra_hits = [
+            hit
+            for hit in extras
+            if not (
+                (key := _normalize_hit_snippet(hit.snippet))
+                and key in claim_snippets
+            )
+        ]
+        # De-dupe extras that share snippet (keep map canonical).
+        seen_extra: set[str] = set()
+        unique_extras: list[Hit] = []
+        for hit in extra_hits:
+            key = _normalize_hit_snippet(hit.snippet) or f"anon:{id(hit)}"
+            if key in seen_extra:
+                continue
+            seen_extra.add(key)
+            unique_extras.append(by_snippet.get(key, hit) if key in by_snippet else hit)
+        return claim_hits + unique_extras
 
     def _iter_source_texts(self) -> list[tuple[str, str]]:
         texts: list[tuple[str, str]] = []
