@@ -17,6 +17,7 @@ export function KnowledgeBaseNewPage() {
   const [name, setName] = useState("");
   const [domainType, setDomainType] = useState<(typeof domain_types)[number]["value"]>("generic");
   const [description, setDescription] = useState("");
+  const [graphEnabled, setGraphEnabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +31,7 @@ export function KnowledgeBaseNewPage() {
         name: name.trim(),
         domain_type: domainType,
         description: description.trim(),
+        graph_enabled: graphEnabled,
       });
       setKbId(created.id);
       window.dispatchEvent(new CustomEvent("akos:kb-list-changed"));
@@ -81,6 +83,21 @@ export function KnowledgeBaseNewPage() {
           onChange={(event) => setDescription(event.target.value)}
           rows={5}
         />
+
+        <label className="form-checkbox-row" htmlFor="knowledge-base-graph">
+          <input
+            id="knowledge-base-graph"
+            type="checkbox"
+            checked={graphEnabled}
+            onChange={(event) => setGraphEnabled(event.target.checked)}
+          />
+          <span>
+            开启知识图谱
+            <small className="form-hint">
+              关闭后上传不再维护实体/关系，问答也不走图谱召回；适合图谱价值不大的知识库。
+            </small>
+          </span>
+        </label>
 
         <div className="form-actions">
           <Link className="button button-secondary" to="/knowledge-bases">

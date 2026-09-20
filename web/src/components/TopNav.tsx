@@ -1,19 +1,21 @@
 import { FormEvent, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { setAdminToken } from "../api/http";
+import { useKb } from "../app/KbContext";
 import { KbSwitcher } from "./KbSwitcher";
 
 const navItems = [
-  { to: "/knowledge-bases", label: "知识库" },
-  { to: "/sources", label: "文档" },
-  { to: "/ask", label: "问答" },
-  { to: "/wiki", label: "Wiki" },
-  { to: "/claims", label: "Claim" },
-  { to: "/graph", label: "图谱" },
-  { to: "/quarantine", label: "隔离" },
-];
+  { to: "/knowledge-bases", label: "知识库", requiresGraph: false },
+  { to: "/sources", label: "文档", requiresGraph: false },
+  { to: "/ask", label: "问答", requiresGraph: false },
+  { to: "/wiki", label: "Wiki", requiresGraph: false },
+  { to: "/claims", label: "Claim", requiresGraph: false },
+  { to: "/graph", label: "图谱", requiresGraph: true },
+  { to: "/quarantine", label: "隔离", requiresGraph: false },
+] as const;
 
 export function TopNav() {
+  const { graphEnabled } = useKb();
   const [token, setToken] = useState("");
   const [tokenSaved, setTokenSaved] = useState(false);
 
@@ -24,13 +26,15 @@ export function TopNav() {
     setTokenSaved(true);
   }
 
+  const visibleNav = navItems.filter((item) => !item.requiresGraph || graphEnabled !== false);
+
   return (
     <header className="top-nav">
       <NavLink className="brand" to="/knowledge-bases">
         AKOS 管理后台
       </NavLink>
       <nav aria-label="主导航">
-        {navItems.map((item) => (
+        {visibleNav.map((item) => (
           <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : undefined)}>
             {item.label}
           </NavLink>

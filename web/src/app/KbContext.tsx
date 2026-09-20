@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { getKnowledgeBase } from "../api/knowledgeBases";
 
 const CURRENT_KB_KEY = "akos_current_kb";
 
 type KbContextValue = {
   kbId: string | null;
+  graphEnabled: boolean | null;
   setKbId: (id: string) => void;
   clearKb: () => void;
 };
@@ -21,6 +23,7 @@ export function KbProvider({ children }: { children: React.ReactNode }) {
     }
     return localStorage.getItem(CURRENT_KB_KEY);
   });
+  const [graphEnabled, setGraphEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (urlKbId && urlKbId !== kbId) {
@@ -28,6 +31,41 @@ export function KbProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(CURRENT_KB_KEY, urlKbId);
     }
   }, [kbId, urlKbId]);
+
+  useEffect(() => {
+    if (!kbId) {
+      setGraphEnabled(null);
+      return;
+    }
+    let active = true;
+    getKnowledgeBase(kbId)
+      .then((item) => {
+        if (active) {
+          setGraphEnabled(item.graph_enabled !== false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setGraphEnabled(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [kbId]);
+
+  useEffect(() => {
+    function refreshGraphFlag() {
+      if (!kbId) {
+        return;
+      }
+      getKnowledgeBase(kbId)
+        .then((item) => setGraphEnabled(item.graph_enabled !== false))
+        .catch(() => undefined);
+    }
+    window.addEventListener("akos:kb-list-changed", refreshGraphFlag);
+    return () => window.removeEventListener("akos:kb-list-changed", refreshGraphFlag);
+  }, [kbId]);
 
   const setKbId = useCallback(
     (id: string) => {
@@ -45,6 +83,7 @@ export function KbProvider({ children }: { children: React.ReactNode }) {
   const clearKb = useCallback(() => {
     localStorage.removeItem(CURRENT_KB_KEY);
     setCurrentKbId(null);
+    setGraphEnabled(null);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete("kb");
@@ -52,7 +91,10 @@ export function KbProvider({ children }: { children: React.ReactNode }) {
     });
   }, [setSearchParams]);
 
-  const value = useMemo(() => ({ kbId, setKbId, clearKb }), [clearKb, kbId, setKbId]);
+  const value = useMemo(
+    () => ({ kbId, graphEnabled, setKbId, clearKb }),
+    [clearKb, graphEnabled, kbId, setKbId],
+  );
 
   return <KbContext.Provider value={value}>{children}</KbContext.Provider>;
 }

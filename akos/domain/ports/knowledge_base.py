@@ -6,7 +6,14 @@ from akos.domain.models.knowledge_base import KnowledgeBase
 
 
 class KnowledgeBasePort(Protocol):
-    def create(self, name: str, domain_type: str, description: str = "") -> KnowledgeBase: ...
+    def create(
+        self,
+        name: str,
+        domain_type: str,
+        description: str = "",
+        *,
+        graph_enabled: bool = False,
+    ) -> KnowledgeBase: ...
 
     def get(self, id: str) -> KnowledgeBase | None: ...
 
@@ -19,6 +26,7 @@ class KnowledgeBasePort(Protocol):
         name: str | None = None,
         domain_type: str | None = None,
         description: str | None = None,
+        graph_enabled: bool | None = None,
     ) -> KnowledgeBase | None: ...
 
     def archive(self, id: str) -> KnowledgeBase | None: ...

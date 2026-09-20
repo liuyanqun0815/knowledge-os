@@ -4,6 +4,7 @@ export type KnowledgeBase = {
   domain_type: string;
   description: string;
   status: "active" | "archived";
+  graph_enabled: boolean;
   created_at: string;
   updated_at: string;
 };

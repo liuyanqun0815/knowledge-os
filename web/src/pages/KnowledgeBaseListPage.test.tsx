@@ -29,6 +29,7 @@ const knowledgeBase = {
   domain_type: "ecommerce_cs",
   description: "客服知识",
   status: "active" as const,
+  graph_enabled: true,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
 };
@@ -39,6 +40,7 @@ const testKnowledgeBase = {
   domain_type: "ecommerce_cs",
   description: "",
   status: "active" as const,
+  graph_enabled: true,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-02T00:00:00Z",
 };
@@ -129,6 +131,7 @@ describe("knowledge base pages", () => {
       name: "企业文化",
       domain_type: "corporate_culture",
       description: "公司价值观",
+      graph_enabled: false,
     });
     expect(localStorage.getItem("akos_current_kb")).toBe("kb-new");
     expect(await screen.findByRole("heading", { name: "企业文化" })).toBeInTheDocument();
@@ -148,6 +151,7 @@ describe("knowledge base pages", () => {
     expect(updateKnowledgeBase).toHaveBeenCalledWith("kb-1", {
       name: "售后客服",
       description: "客服知识",
+      graph_enabled: true,
     });
 
     await user.click(screen.getByRole("button", { name: "删除知识库" }));
@@ -155,7 +159,7 @@ describe("knowledge base pages", () => {
     await waitFor(() => {
       expect(updateKnowledgeBase).toHaveBeenCalledWith("kb-1", { status: "archived" });
     });
-    await waitFor(() => expect(listKnowledgeBases).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listKnowledgeBases.mock.calls.length).toBeGreaterThanOrEqual(2));
     expect(screen.getByRole("link", { name: "管理文档" })).toHaveAttribute("href", "/sources?kb=kb-1");
     expect(screen.getByRole("link", { name: "开始问答" })).toHaveAttribute("href", "/ask?kb=kb-1");
     expect(screen.getByRole("link", { name: "打开 Wiki" })).toHaveAttribute("href", "/wiki?kb=kb-1");

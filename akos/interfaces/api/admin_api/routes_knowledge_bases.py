@@ -20,7 +20,12 @@ def create_knowledge_base(
     kb_repo: KnowledgeBasePort = Depends(require_kb_repo),
 ) -> KnowledgeBaseResponse:
     try:
-        kb = kb_repo.create(name=body.name, domain_type=body.domain_type, description=body.description)
+        kb = kb_repo.create(
+            name=body.name,
+            domain_type=body.domain_type,
+            description=body.description,
+            graph_enabled=body.graph_enabled,
+        )
     except DomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return KnowledgeBaseResponse.from_model(kb)
@@ -72,7 +77,10 @@ def patch_knowledge_base(
         name=body.name,
         domain_type=body.domain_type,
         description=body.description,
+        graph_enabled=body.graph_enabled,
     )
     if updated is None:
         raise HTTPException(status_code=404, detail=f"knowledge_base_not_found: {kb_id}")
+    # Rebuild orchestrator so NoOpGraph ↔ real graph switches take effect.
+    request.app.state.orchestrator_cache.pop(kb_id, None)
     return KnowledgeBaseResponse.from_model(updated)

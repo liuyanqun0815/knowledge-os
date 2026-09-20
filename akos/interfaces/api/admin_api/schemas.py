@@ -13,13 +13,12 @@ class CreateKnowledgeBaseRequest(BaseModel):
     name: str
     domain_type: str
     description: str = ""
-
-
-class PatchKnowledgeBaseRequest(BaseModel):
+    graph_enabled: bool = False
     name: str | None = None
     domain_type: str | None = None
     description: str | None = None
     status: str | None = None
+    graph_enabled: bool | None = None
 
 
 class KnowledgeBaseResponse(BaseModel):
@@ -28,6 +27,7 @@ class KnowledgeBaseResponse(BaseModel):
     domain_type: str
     description: str
     status: str
+    graph_enabled: bool = True
     created_at: datetime
     updated_at: datetime
 
@@ -39,6 +39,7 @@ class KnowledgeBaseResponse(BaseModel):
             domain_type=kb.domain_type,
             description=kb.description,
             status=kb.status,
+            graph_enabled=bool(getattr(kb, "graph_enabled", True)),
             created_at=kb.created_at,
             updated_at=kb.updated_at,
         )

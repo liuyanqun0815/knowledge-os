@@ -58,11 +58,12 @@ def ensure_pg_schema(settings: Settings | None = None) -> None:
         "006_topic_clusters.sql",
         "007_embeddings_1024.sql",
         "008_source_chunks_stale_unique.sql",
+        "009_sources_kb_scoped_pk.sql",
+        "010_kb_graph_enabled.sql",
     ):
         migration_path = migrations_dir / name
         if migration_path.exists():
+            if name == "009_sources_kb_scoped_pk.sql" and _sources_pk_is_kb_scoped(engine):
+                continue
             run_sql_script(engine, migration_path)
-    migration_009 = migrations_dir / "009_sources_kb_scoped_pk.sql"
-    if migration_009.exists() and not _sources_pk_is_kb_scoped(engine):
-        run_sql_script(engine, migration_009)
     _schema_ready.add(cache_key)

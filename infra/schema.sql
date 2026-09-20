@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS knowledge_bases (
     domain_type TEXT NOT NULL,
     description TEXT DEFAULT '',
     status TEXT DEFAULT 'active',
+    graph_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );

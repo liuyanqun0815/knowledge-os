@@ -20,6 +20,7 @@ def _row_to_kb(row: Any) -> KnowledgeBase:
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        graph_enabled=bool(getattr(row, "graph_enabled", True)),
     )
 
 
@@ -27,16 +28,23 @@ class PgKnowledgeBaseRepo:
     def __init__(self, engine: Engine | None = None) -> None:
         self._engine = engine or get_engine()
 
-    def create(self, name: str, domain_type: str, description: str = "") -> KnowledgeBase:
+    def create(
+        self,
+        name: str,
+        domain_type: str,
+        description: str = "",
+        *,
+        graph_enabled: bool = False,
+    ) -> KnowledgeBase:
         kb_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         with self._engine.begin() as conn:
             conn.execute(
                 text("""
                     INSERT INTO knowledge_bases (
-                        id, name, domain_type, description, status, created_at, updated_at
+                        id, name, domain_type, description, status, graph_enabled, created_at, updated_at
                     ) VALUES (
-                        :id, :name, :domain_type, :description, 'active', :created_at, :updated_at
+                        :id, :name, :domain_type, :description, 'active', :graph_enabled, :created_at, :updated_at
                     )
                     """),
                 {
@@ -44,6 +52,7 @@ class PgKnowledgeBaseRepo:
                     "name": name,
                     "domain_type": domain_type,
                     "description": description,
+                    "graph_enabled": graph_enabled,
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -56,13 +65,14 @@ class PgKnowledgeBaseRepo:
             status="active",
             created_at=now,
             updated_at=now,
+            graph_enabled=graph_enabled,
         )
 
     def get(self, id: str) -> KnowledgeBase | None:
         with self._engine.connect() as conn:
             row = conn.execute(
                 text("""
-                    SELECT id, name, domain_type, description, status, created_at, updated_at
+                    SELECT id, name, domain_type, description, status, graph_enabled, created_at, updated_at
                     FROM knowledge_bases
                     WHERE id = :id
                     """),
@@ -74,7 +84,7 @@ class PgKnowledgeBaseRepo:
 
     def list(self, include_archived: bool = False) -> list[KnowledgeBase]:
         sql = """
-            SELECT id, name, domain_type, description, status, created_at, updated_at
+            SELECT id, name, domain_type, description, status, graph_enabled, created_at, updated_at
             FROM knowledge_bases
         """
         if not include_archived:
@@ -91,6 +101,7 @@ class PgKnowledgeBaseRepo:
         name: str | None = None,
         domain_type: str | None = None,
         description: str | None = None,
+        graph_enabled: bool | None = None,
     ) -> KnowledgeBase | None:
         existing = self.get(id)
         if existing is None:
@@ -98,6 +109,7 @@ class PgKnowledgeBaseRepo:
         new_name = name if name is not None else existing.name
         new_domain_type = domain_type if domain_type is not None else existing.domain_type
         new_description = description if description is not None else existing.description
+        new_graph_enabled = existing.graph_enabled if graph_enabled is None else bool(graph_enabled)
         now = datetime.now(timezone.utc)
         with self._engine.begin() as conn:
             conn.execute(
@@ -106,6 +118,7 @@ class PgKnowledgeBaseRepo:
                     SET name = :name,
                         domain_type = :domain_type,
                         description = :description,
+                        graph_enabled = :graph_enabled,
                         updated_at = :updated_at
                     WHERE id = :id
                     """),
@@ -114,6 +127,7 @@ class PgKnowledgeBaseRepo:
                     "name": new_name,
                     "domain_type": new_domain_type,
                     "description": new_description,
+                    "graph_enabled": new_graph_enabled,
                     "updated_at": now,
                 },
             )
@@ -125,6 +139,7 @@ class PgKnowledgeBaseRepo:
             status=existing.status,
             created_at=existing.created_at,
             updated_at=now,
+            graph_enabled=new_graph_enabled,
         )
 
     def archive(self, id: str) -> KnowledgeBase | None:
@@ -149,4 +164,5 @@ class PgKnowledgeBaseRepo:
             status="archived",
             created_at=existing.created_at,
             updated_at=now,
+            graph_enabled=existing.graph_enabled,
         )

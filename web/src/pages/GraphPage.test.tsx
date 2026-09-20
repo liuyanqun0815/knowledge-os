@@ -53,7 +53,12 @@ describe("GraphPage", () => {
   });
 
   beforeEach(() => {
-    useKb.mockReturnValue({ kbId: "kb-1" });
+    useKb.mockReturnValue({ kbId: "kb-1", graphEnabled: true });
+    fetchGraphSnapshot.mockClear();
+    listGraphEntities.mockClear();
+    listGraphPredicates.mockClear();
+    fetchGraphNeighbors.mockClear();
+    retrieveGraph.mockClear();
     fetchGraphSnapshot.mockResolvedValue({ entities, edges, truncated: false, entity_total: 2 });
     listGraphEntities.mockResolvedValue([entities[0]]);
     listGraphPredicates.mockResolvedValue(["运费承担方"]);
@@ -80,7 +85,6 @@ describe("GraphPage", () => {
       edges: edges,
     });
   });
-
   it("does not show entity list before search", async () => {
     render(
       <MemoryRouter>
@@ -174,5 +178,17 @@ describe("GraphPage", () => {
       expect(fetchGraphNeighbors).toHaveBeenCalled();
     });
     expect(await screen.findByText("已展开 1 条关系。")).toBeInTheDocument();
+  });
+
+  it("shows empty state when graph is disabled for the knowledge base", () => {
+    useKb.mockReturnValue({ kbId: "kb-1", graphEnabled: false });
+    render(
+      <MemoryRouter>
+        <GraphPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("当前知识库未开启图谱")).toBeInTheDocument();
+    expect(fetchGraphSnapshot).not.toHaveBeenCalled();
   });
 });

@@ -95,6 +95,7 @@ def pg_engine():
     migration_009 = ROOT / "infra" / "migrations" / "009_sources_kb_scoped_pk.sql"
     if not _sources_pk_is_kb_scoped(engine):
         run_sql_script(engine, migration_009)
+    run_sql_script(engine, ROOT / "infra" / "migrations" / "010_kb_graph_enabled.sql")
     yield engine
     reset_engine()
 

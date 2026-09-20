@@ -11,6 +11,7 @@ export function KnowledgeBaseDetailPage() {
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [graphEnabled, setGraphEnabled] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export function KnowledgeBaseDetailPage() {
           setKnowledgeBase(item);
           setName(item.name);
           setDescription(item.description);
+          setGraphEnabled(item.graph_enabled !== false);
         }
       })
       .catch(() => {
@@ -88,10 +90,13 @@ export function KnowledgeBaseDetailPage() {
       const updated = await updateKnowledgeBase(id, {
         name: name.trim(),
         description: description.trim(),
+        graph_enabled: graphEnabled,
       });
       setKnowledgeBase(updated);
       setName(updated.name);
       setDescription(updated.description);
+      setGraphEnabled(updated.graph_enabled !== false);
+      window.dispatchEvent(new CustomEvent("akos:kb-list-changed"));
       setNotice("修改已保存。");
     } catch {
       setError("知识库保存失败，请稍后重试。");
@@ -173,6 +178,18 @@ export function KnowledgeBaseDetailPage() {
               placeholder="可选，简要说明知识库用途"
             />
           </div>
+          <label className="form-checkbox-row" htmlFor="knowledge-base-graph">
+            <input
+              id="knowledge-base-graph"
+              type="checkbox"
+              checked={graphEnabled}
+              onChange={(event) => setGraphEnabled(event.target.checked)}
+            />
+            <span>
+              开启知识图谱
+              <small className="form-hint">关闭后不再写入实体/关系，也不参与问答图谱召回；已有图数据保留。</small>
+            </span>
+          </label>
         </div>
 
         <div className="form-actions form-actions-between">

@@ -13,3 +13,4 @@ class KnowledgeBase:
     status: str
     created_at: datetime
     updated_at: datetime
+    graph_enabled: bool = False

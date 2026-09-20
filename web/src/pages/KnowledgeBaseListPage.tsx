@@ -94,7 +94,6 @@ export function KnowledgeBaseListPage() {
               <tr>
                 <th>名称</th>
                 <th>领域类型</th>
-                <th>状态</th>
                 <th>更新时间</th>
                 <th>
                   <span className="sr-only">操作</span>
@@ -110,7 +109,6 @@ export function KnowledgeBaseListPage() {
                 >
                   <td>{knowledgeBase.name}</td>
                   <td>{knowledgeBase.domain_type}</td>
-                  <td>{knowledgeBase.status === "active" ? "启用" : "已归档"}</td>
                   <td>{new Date(knowledgeBase.updated_at).toLocaleString()}</td>
                   <td>
                     <div className="table-row-actions">

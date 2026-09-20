@@ -5,6 +5,7 @@ export type CreateKnowledgeBaseBody = {
   name: string;
   domain_type: string;
   description?: string;
+  graph_enabled?: boolean;
 };
 
 export type UpdateKnowledgeBaseBody = {
@@ -12,6 +13,7 @@ export type UpdateKnowledgeBaseBody = {
   domain_type?: string;
   description?: string;
   status?: "active" | "archived";
+  graph_enabled?: boolean;
 };
 
 export async function listKnowledgeBases(includeArchived = false): Promise<KnowledgeBase[]> {

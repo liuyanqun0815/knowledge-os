@@ -40,7 +40,7 @@ function clampLimit(value: number, min: number, max: number, fallback: number): 
 }
 
 export function GraphPage() {
-  const { kbId } = useKb();
+  const { kbId, graphEnabled } = useKb();
   const [entities, setEntities] = useState<GraphEntity[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [searchResults, setSearchResults] = useState<GraphEntity[]>([]);
@@ -258,7 +258,7 @@ export function GraphPage() {
     setEdgeLimitInput(String(DEFAULT_EDGE_LIMIT));
     setError(null);
     setNotice(null);
-    if (!kbId) {
+    if (!kbId || graphEnabled === false) {
       setIsLoading(false);
       return;
     }
@@ -267,10 +267,10 @@ export function GraphPage() {
     void loadGraph({ entityLimit: DEFAULT_ENTITY_LIMIT, edgeLimit: DEFAULT_EDGE_LIMIT });
     // Only reload when knowledge base changes; limit edits apply on explicit refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kbId]);
+  }, [kbId, graphEnabled]);
 
   useEffect(() => {
-    if (!kbId || !edgePredicate.trim()) {
+    if (!kbId || graphEnabled === false || !edgePredicate.trim()) {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -379,6 +379,15 @@ export function GraphPage() {
 
   if (!kbId) {
     return <EmptyState title="请先选择知识库" description="选择知识库后即可浏览知识图谱。" />;
+  }
+
+  if (graphEnabled === false) {
+    return (
+      <EmptyState
+        title="当前知识库未开启图谱"
+        description="可在知识库详情页开启「知识图谱」后使用本页；关闭期间不会写入实体/关系，问答也不走图谱召回。"
+      />
+    );
   }
 
   return (

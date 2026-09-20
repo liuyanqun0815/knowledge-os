@@ -89,8 +89,12 @@ def build_wiki_compile_deps(
             wiki_retrieval=wiki_retrieval,
         )
 
-    _resolve_kb(knowledge_base_id, cfg)
-    knowledge, graph, _, _ = _build_repos(knowledge_base_id, cfg)
+    kb = _resolve_kb(knowledge_base_id, cfg)
+    knowledge, graph, _, _ = _build_repos(
+        knowledge_base_id,
+        cfg,
+        graph_enabled=bool(getattr(kb, "graph_enabled", True)),
+    )
     llm_client = OpenAiCompatibleClient(cfg)
     wiki_retrieval = WikiPageRetrieval(llm_client=llm_client) if cfg.wiki_compile else None
     return WikiCompileDeps(
@@ -135,10 +139,15 @@ def _resolve_kb(knowledge_base_id: str, settings: Settings) -> KnowledgeBase:
         status="active",
         created_at=now,
         updated_at=now,
+        graph_enabled=True,
     )
 
 
-def _build_graph(settings: Settings, engine, kb_id: str) -> GraphPort:
+def _build_graph(settings: Settings, engine, kb_id: str, *, graph_enabled: bool = True) -> GraphPort:
+    if not graph_enabled:
+        from akos.adapters.graph.noop import NoOpGraph
+
+        return NoOpGraph()
     backend = settings.graph_backend.lower()
     if backend == "neo4j":
         from akos.adapters.graph.neo4j import Neo4jGraph
@@ -157,7 +166,10 @@ def _build_graph(settings: Settings, engine, kb_id: str) -> GraphPort:
 
 
 def _build_repos(
-    knowledge_base_id: str, settings: Settings
+    knowledge_base_id: str,
+    settings: Settings,
+    *,
+    graph_enabled: bool = True,
 ) -> tuple[KnowledgePort, GraphPort, EvidencePort, MemoryPort]:
     if settings.use_pg:
         from infra.db import get_engine
@@ -167,13 +179,13 @@ def _build_repos(
         engine = get_engine(settings)
         return (
             PgKnowledge(engine, knowledge_base_id),
-            _build_graph(settings, engine, knowledge_base_id),
+            _build_graph(settings, engine, knowledge_base_id, graph_enabled=graph_enabled),
             PgEvidence(engine, knowledge_base_id),
             PgMemory(engine, knowledge_base_id),
         )
     return (
         InMemoryKnowledge(),
-        _build_graph(settings, None, knowledge_base_id),
+        _build_graph(settings, None, knowledge_base_id, graph_enabled=graph_enabled),
         InMemoryEvidence(),
         InMemoryMemoryStore(),
     )
@@ -263,7 +275,11 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     domain = load_domain(kb.domain_type)
     ontology = InMemoryOntology()
     domain.register_ontology(ontology)
-    knowledge, graph, evidence, memory = _build_repos(knowledge_base_id, settings)
+    knowledge, graph, evidence, memory = _build_repos(
+        knowledge_base_id,
+        settings,
+        graph_enabled=bool(getattr(kb, "graph_enabled", True)),
+    )
     embedder = _LazyEmbedder(settings) if settings.embedding_enabled else None
     embedding_store = None
     if settings.use_pg and embedder is not None:
