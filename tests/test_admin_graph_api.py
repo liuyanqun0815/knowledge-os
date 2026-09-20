@@ -12,6 +12,7 @@ from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID, build_orchestrator_for_kb
 def admin_client(tmp_path, monkeypatch):
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
     monkeypatch.setenv("AKOS_USE_PG", "false")
+    monkeypatch.setenv("AKOS_GRAPH_BACKEND", "memory")
     return TestClient(create_app(data_root=str(tmp_path)))
 
 
@@ -190,3 +191,73 @@ def test_graph_neighbors_returns_enriched_payload(admin_client):
     assert body["edges"][0]["dst_name"] == "卖家"
     neighbor_ids = {item["id"] for item in body["entities"]}
     assert seller_id in neighbor_ids
+
+
+def test_graph_snapshot_respects_entity_and_edge_limits(admin_client):
+    kb_id = DEFAULT_IN_MEMORY_KB_ID
+    orch = _cached_orchestrator(admin_client, kb_id)
+    graph = orch.deps.graph
+    knowledge = orch.deps.knowledge
+    from datetime import datetime, timezone
+
+    from akos.domain.models.knowledge import Claim
+
+    now = datetime.now(timezone.utc)
+    for index in range(5):
+        subject = f"规则{index}"
+        obj = f"对象{index}"
+        src = _entity_id(subject, "RefundRule")
+        dst = _entity_id(obj, "Concept")
+        graph.upsert_entity(src, "RefundRule", {"name": subject})
+        graph.upsert_entity(dst, "Concept", {"name": obj})
+        graph.upsert_relation(src, "包含", dst, {})
+        knowledge.append_claim(
+            Claim(
+                id=f"c-limit-{index}",
+                family_id=f"fam-limit-{index}",
+                version=1,
+                subject=subject,
+                predicate="包含",
+                object=obj,
+                subject_type="RefundRule",
+                object_type="Concept",
+                confidence=0.9,
+                status="active",
+                valid_from=now,
+                valid_to=None,
+                source_ids=["s1"],
+            )
+        )
+
+    response = admin_client.get(
+        f"/admin/knowledge-bases/{kb_id}/graph/snapshot",
+        params={"entity_limit": 3, "edge_limit": 2},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["entity_total"] >= 5
+    assert len(body["entities"]) == 3
+    assert len(body["edges"]) == 2
+    assert body["truncated"] is True
+
+
+def test_graph_retrieve_returns_graph_hits(admin_client):
+    kb_id = DEFAULT_IN_MEMORY_KB_ID
+    rule_id, _seller_id = _seed_graph(admin_client, kb_id)
+    orch = _cached_orchestrator(admin_client, kb_id)
+    orch.deps.retrieval.warm_index()
+
+    response = admin_client.post(
+        f"/admin/knowledge-bases/{kb_id}/graph/retrieve",
+        json={"query": "七天无理由运费关系", "top_k": 10},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["query"] == "七天无理由运费关系"
+    assert body["hit_count"] >= 1
+    assert any("运费承担方" in (hit["snippet"] or "") for hit in body["hits"])
+    assert any(hit.get("entity_id") == rule_id or "七天无理由" in (hit.get("snippet") or "") for hit in body["hits"])
+    assert len(body["entities"]) >= 2
+    assert len(body["edges"]) >= 1
+    assert any(edge["predicate"] == "运费承担方" for edge in body["edges"])
+    assert {entity["id"] for entity in body["entities"]} >= {rule_id, _seller_id}

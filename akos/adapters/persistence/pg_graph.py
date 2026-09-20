@@ -98,6 +98,25 @@ class PgGraph:
 
         return [(row.id, self._entity_from_row(row.id, row.type, row.props)) for row in rows]
 
+    def list_relations(self) -> list[Edge]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT src, predicate, dst, props
+                    FROM relations
+                    WHERE knowledge_base_id = :knowledge_base_id
+                    """),
+                {"knowledge_base_id": self._knowledge_base_id},
+            ).fetchall()
+
+        edges: list[Edge] = []
+        for row in rows:
+            props = row.props
+            if isinstance(props, str):
+                props = json.loads(props)
+            edges.append(Edge(src=row.src, predicate=row.predicate, dst=row.dst, props=dict(props)))
+        return edges
+
     def get_entity(self, entity_id: str) -> dict | None:
         with self._engine.connect() as conn:
             row = conn.execute(

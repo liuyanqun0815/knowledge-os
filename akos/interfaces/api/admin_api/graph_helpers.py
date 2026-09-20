@@ -10,8 +10,8 @@ from akos.domain.ports.graph import Edge, GraphPort
 _STRUCTURAL_PREDICATES = frozenset({"涵盖", "包含段落"})
 
 
-def entity_name(graph: GraphPort, entity_id: str) -> str:
-    entity = graph.get_entity(entity_id)
+def entity_name(graph: GraphPort, entity_id: str, entities: dict[str, dict[str, Any]] | None = None) -> str:
+    entity = entities.get(entity_id) if entities is not None else graph.get_entity(entity_id)
     if entity is None:
         return entity_id
     name = entity.get("name")
@@ -32,13 +32,17 @@ def to_entity_response(entity_id: str, props: dict[str, Any]) -> GraphEntityResp
     )
 
 
-def to_edge_response(graph: GraphPort, edge: Edge) -> GraphEdgeResponse:
+def to_edge_response(
+    graph: GraphPort,
+    edge: Edge,
+    entities: dict[str, dict[str, Any]] | None = None,
+) -> GraphEdgeResponse:
     return GraphEdgeResponse(
         src=edge.src,
         predicate=edge.predicate,
         dst=edge.dst,
-        src_name=entity_name(graph, edge.src),
-        dst_name=entity_name(graph, edge.dst),
+        src_name=entity_name(graph, edge.src, entities),
+        dst_name=entity_name(graph, edge.dst, entities),
     )
 
 
@@ -61,35 +65,63 @@ def _topic_is_active(props: dict[str, Any] | None) -> bool:
     return props.get("status") != "stale"
 
 
-def edge_is_active(graph: GraphPort, edge: Edge, active_keys: set[tuple[str, str, str]]) -> bool:
+def edge_is_active(
+    edge: Edge,
+    active_keys: set[tuple[str, str, str]],
+    entities: dict[str, dict[str, Any]],
+) -> bool:
     key = (edge.src, edge.predicate, edge.dst)
     if key in active_keys:
         return True
     if edge.predicate not in _STRUCTURAL_PREDICATES:
         return False
-    src_props = graph.get_entity(edge.src)
-    return _topic_is_active(src_props)
+    return _topic_is_active(entities.get(edge.src))
 
 
 def _is_stale_topic(props: dict[str, Any]) -> bool:
     return props.get("type") == "Topic" and props.get("status") == "stale"
 
 
-def collect_active_entity_ids(graph: GraphPort, knowledge: Any) -> set[str]:
+def _load_graph_maps(graph: GraphPort) -> tuple[dict[str, dict[str, Any]], list[Edge]]:
+    entities = dict(graph.list_entities())
+    list_relations = getattr(graph, "list_relations", None)
+    if callable(list_relations):
+        relations = list(list_relations())
+    else:
+        relations = []
+        for entity_id in entities:
+            relations.extend(graph.neighbors(entity_id))
+    return entities, relations
+
+
+def collect_active_entity_ids(
+    graph: GraphPort,
+    knowledge: Any,
+    *,
+    entities: dict[str, dict[str, Any]] | None = None,
+    relations: list[Edge] | None = None,
+) -> set[str]:
+    if entities is None or relations is None:
+        entities, relations = _load_graph_maps(graph)
     active_keys = active_claim_relation_keys(knowledge)
     entity_ids: set[str] = set()
     for src, _pred, dst in active_keys:
         entity_ids.add(src)
         entity_ids.add(dst)
 
-    for entity_id, props in graph.list_entities():
+    for entity_id, props in entities.items():
         if not _topic_is_active(props):
             continue
         entity_ids.add(entity_id)
-        for edge in graph.neighbors(entity_id):
-            if edge_is_active(graph, edge, active_keys):
-                entity_ids.add(edge.src)
-                entity_ids.add(edge.dst)
+
+    for edge in relations:
+        if not edge_is_active(edge, active_keys, entities):
+            continue
+        if edge.predicate in _STRUCTURAL_PREDICATES and not _topic_is_active(entities.get(edge.src)):
+            continue
+        if edge.predicate in _STRUCTURAL_PREDICATES or edge.src in entity_ids:
+            entity_ids.add(edge.src)
+            entity_ids.add(edge.dst)
     return entity_ids
 
 
@@ -99,11 +131,13 @@ def filter_edges(
     *,
     knowledge: Any,
     active_only: bool,
+    entities: dict[str, dict[str, Any]] | None = None,
 ) -> list[Edge]:
     if not active_only:
         return edges
+    entity_map = entities if entities is not None else dict(graph.list_entities())
     active_keys = active_claim_relation_keys(knowledge)
-    return [edge for edge in edges if edge_is_active(graph, edge, active_keys)]
+    return [edge for edge in edges if edge_is_active(edge, active_keys, entity_map)]
 
 
 def build_snapshot(
@@ -114,36 +148,44 @@ def build_snapshot(
     knowledge: Any = None,
     active_only: bool = True,
 ) -> tuple[list[GraphEntityResponse], list[GraphEdgeResponse], bool, int]:
-    raw_entities = graph.list_entities()
+    entities_map, relations = _load_graph_maps(graph)
     if active_only:
-        allowed_ids = collect_active_entity_ids(graph, knowledge)
+        allowed_ids = collect_active_entity_ids(
+            graph,
+            knowledge,
+            entities=entities_map,
+            relations=relations,
+        )
         filtered = [
             (entity_id, props)
-            for entity_id, props in raw_entities
+            for entity_id, props in entities_map.items()
             if entity_id in allowed_ids and not _is_stale_topic(props)
         ]
     else:
-        filtered = list(raw_entities)
+        filtered = list(entities_map.items())
 
     entity_total = len(filtered)
     truncated = entity_total > entity_limit
-    entities = [to_entity_response(entity_id, props) for entity_id, props in filtered[:entity_limit]]
+    limited_entities = filtered[:entity_limit]
+    entities = [to_entity_response(entity_id, props) for entity_id, props in limited_entities]
+    selected_ids = {entity_id for entity_id, _props in limited_entities}
 
     active_keys = active_claim_relation_keys(knowledge) if active_only else set()
     edges: list[GraphEdgeResponse] = []
     seen: set[tuple[str, str, str]] = set()
-    for entity in entities:
-        for edge in graph.neighbors(entity.id):
-            if active_only and not edge_is_active(graph, edge, active_keys):
-                continue
-            key = (edge.src, edge.predicate, edge.dst)
-            if key in seen:
-                continue
-            seen.add(key)
-            edges.append(to_edge_response(graph, edge))
-            if len(edges) >= edge_limit:
-                truncated = True
-                return entities, edges, truncated, entity_total
+    for edge in relations:
+        if edge.src not in selected_ids:
+            continue
+        if active_only and not edge_is_active(edge, active_keys, entities_map):
+            continue
+        key = (edge.src, edge.predicate, edge.dst)
+        if key in seen:
+            continue
+        seen.add(key)
+        edges.append(to_edge_response(graph, edge, entities_map))
+        if len(edges) >= edge_limit:
+            truncated = True
+            break
     return entities, edges, truncated, entity_total
 
 
@@ -156,17 +198,17 @@ def list_predicates(
     active_only: bool = True,
 ) -> list[str]:
     query = (q or "").strip().lower()
-    predicates: set[str] = set()
+    entities_map, relations = _load_graph_maps(graph)
     active_keys = active_claim_relation_keys(knowledge) if active_only else set()
-    for entity_id, _props in graph.list_entities():
-        for edge in graph.neighbors(entity_id):
-            if active_only and not edge_is_active(graph, edge, active_keys):
-                continue
-            if query and query not in edge.predicate.lower():
-                continue
-            predicates.add(edge.predicate)
-            if len(predicates) >= limit:
-                return sorted(predicates)
+    predicates: set[str] = set()
+    for edge in relations:
+        if active_only and not edge_is_active(edge, active_keys, entities_map):
+            continue
+        if query and query not in edge.predicate.lower():
+            continue
+        predicates.add(edge.predicate)
+        if len(predicates) >= limit:
+            return sorted(predicates)
     return sorted(predicates)
 
 
@@ -184,22 +226,26 @@ def search_entities(
     if not query and not predicate_query:
         return []
 
-    entities_map = dict(graph.list_entities())
-    allowed_ids = collect_active_entity_ids(graph, knowledge) if active_only else set(entities_map)
+    entities_map, relations = _load_graph_maps(graph)
+    allowed_ids = (
+        collect_active_entity_ids(graph, knowledge, entities=entities_map, relations=relations)
+        if active_only
+        else set(entities_map)
+    )
     active_keys = active_claim_relation_keys(knowledge) if active_only else set()
 
     candidate_ids: set[str] | None = None
     if predicate_query:
         candidate_ids = set()
-        for entity_id in entities_map:
-            if active_only and entity_id not in allowed_ids:
+        for edge in relations:
+            if active_only and not edge_is_active(edge, active_keys, entities_map):
                 continue
-            for edge in graph.neighbors(entity_id):
-                if active_only and not edge_is_active(graph, edge, active_keys):
-                    continue
-                if predicate_query in edge.predicate.lower():
-                    candidate_ids.add(entity_id)
-                    candidate_ids.add(edge.dst)
+            if predicate_query not in edge.predicate.lower():
+                continue
+            if active_only and edge.src not in allowed_ids and edge.dst not in allowed_ids:
+                continue
+            candidate_ids.add(edge.src)
+            candidate_ids.add(edge.dst)
 
     results: list[GraphEntityResponse] = []
     for entity_id, props in entities_map.items():

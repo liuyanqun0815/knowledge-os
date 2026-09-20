@@ -24,7 +24,26 @@ def run_sql_script(engine, script_path: Path) -> None:
     from sqlalchemy import text
 
     content = script_path.read_text(encoding="utf-8")
-    statements = [s.strip() for s in content.split(";") if s.strip() and not s.strip().startswith("--")]
+    statements: list[str] = []
+    buf: list[str] = []
+    in_dollar = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not in_dollar and stripped.startswith("--"):
+            continue
+        if "$$" in line:
+            # Toggle for each $$ pair on the line (handles DO $$ ... $$;).
+            in_dollar = (line.count("$$") % 2 == 1) != in_dollar
+        buf.append(line)
+        if not in_dollar and stripped.endswith(";"):
+            statement = "\n".join(buf).strip()
+            if statement:
+                statements.append(statement)
+            buf = []
+    trailing = "\n".join(buf).strip()
+    if trailing:
+        statements.append(trailing)
+
     with engine.begin() as conn:
         for stmt in statements:
             conn.execute(text(stmt))
@@ -71,6 +90,11 @@ def pg_engine():
     run_sql_script(engine, ROOT / "infra" / "migrations" / "005_source_chunks.sql")
     run_sql_script(engine, ROOT / "infra" / "migrations" / "006_topic_clusters.sql")
     run_sql_script(engine, ROOT / "infra" / "migrations" / "008_source_chunks_stale_unique.sql")
+    from infra.schema_bootstrap import _sources_pk_is_kb_scoped
+
+    migration_009 = ROOT / "infra" / "migrations" / "009_sources_kb_scoped_pk.sql"
+    if not _sources_pk_is_kb_scoped(engine):
+        run_sql_script(engine, migration_009)
     yield engine
     reset_engine()
 

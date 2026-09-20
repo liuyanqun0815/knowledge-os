@@ -129,7 +129,7 @@ def test_enrich_chunks_skips_rebuild_when_topic_cluster_disabled():
     assert updated.topics == ['尺码选择']
 
 
-def test_export_wiki_rebuilds_topics_when_empty(tmp_path: Path):
+def test_export_wiki_does_not_rebuild_topics_when_empty(tmp_path: Path):
     knowledge = InMemoryKnowledge()
     evidence = InMemoryEvidence()
     graph = InMemoryGraph()
@@ -174,10 +174,10 @@ def test_export_wiki_rebuilds_topics_when_empty(tmp_path: Path):
         graph=graph,
     )
 
-    assert len(knowledge.list_topic_clusters()) >= 1
+    assert knowledge.list_topic_clusters() == []
 
 
-def test_export_wiki_rebuilds_topics_when_all_stale(tmp_path: Path):
+def test_export_wiki_does_not_rebuild_topics_when_all_stale(tmp_path: Path):
     knowledge = InMemoryKnowledge()
     evidence = InMemoryEvidence()
     graph = InMemoryGraph()
@@ -235,5 +235,5 @@ def test_export_wiki_rebuilds_topics_when_all_stale(tmp_path: Path):
         graph=graph,
     )
 
-    active = knowledge.list_topic_clusters(status='active')
-    assert len(active) >= 1
+    assert knowledge.list_topic_clusters(status='active') == []
+    assert len(knowledge.list_topic_clusters(status='stale')) == 1

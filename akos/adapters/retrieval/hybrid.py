@@ -4,6 +4,7 @@ import hashlib
 import math
 import re
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,16 @@ _TOP_K = 8
 _GRAPH_MAX_DEPTH = 2
 _TOKEN_PATTERN = re.compile(r"[\w\u4e00-\u9fff]+")
 _LEGACY_HASH_DIMS = 64
+
+
+@dataclass
+class GraphEdgeHit:
+    score: float
+    snippet: str
+    claim_id: str | None
+    src: str
+    dst: str
+    predicate: str
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -182,7 +193,27 @@ class HybridRetrieval:
         return hits
 
     def _search_graph(self, query: str, as_of: datetime | None = None) -> list[Hit]:
-        hits: list[Hit] = []
+        detail = self.search_graph_detail(query, as_of=as_of)
+        return [
+            Hit(
+                claim_id=item.claim_id,
+                score=item.score,
+                snippet=item.snippet,
+                entity_id=item.src,
+            )
+            for item in detail
+        ]
+
+    def search_graph_detail(
+        self,
+        query: str,
+        *,
+        as_of: datetime | None = None,
+        top_k: int | None = None,
+    ) -> list[GraphEdgeHit]:
+        """Walk seeded graph neighborhood and return scored edge hits with endpoints."""
+        limit = top_k if top_k is not None else 10_000
+        hits: list[GraphEdgeHit] = []
         seed_entities: list[tuple[str, str]] = []
         for entity_id, entity in self._graph.list_entities():
             name = entity.get("name", "")
@@ -209,13 +240,17 @@ class HybridRetrieval:
                     snippet = f"{src_name} {edge.predicate} {dst_name}".strip()
                     score = 1.0 / (hop + 1)
                     hits.append(
-                        Hit(
-                            claim_id=claim_id,
+                        GraphEdgeHit(
                             score=score,
                             snippet=snippet,
-                            entity_id=edge.src,
+                            claim_id=claim_id,
+                            src=edge.src,
+                            dst=edge.dst,
+                            predicate=edge.predicate,
                         )
                     )
+                    if len(hits) >= limit:
+                        return hits
                     if edge.dst not in seen_nodes and hop + 1 < _GRAPH_MAX_DEPTH:
                         seen_nodes.add(edge.dst)
                         frontier.append((edge.dst, hop + 1))

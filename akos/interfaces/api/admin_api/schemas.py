@@ -387,3 +387,26 @@ class GraphNeighborsResponse(BaseModel):
     entity_id: str
     entities: list[GraphEntityResponse] = Field(default_factory=list)
     edges: list[GraphEdgeResponse] = Field(default_factory=list)
+
+
+class GraphRetrieveRequest(BaseModel):
+    query: str = Field(min_length=1)
+    top_k: int = Field(default=20, ge=1, le=100)
+
+
+class GraphRetrieveHitResponse(BaseModel):
+    score: float
+    snippet: str | None = None
+    claim_id: str | None = None
+    entity_id: str | None = None
+    src: str | None = None
+    dst: str | None = None
+    predicate: str | None = None
+
+
+class GraphRetrieveResponse(BaseModel):
+    query: str
+    hit_count: int
+    hits: list[GraphRetrieveHitResponse] = Field(default_factory=list)
+    entities: list[GraphEntityResponse] = Field(default_factory=list)
+    edges: list[GraphEdgeResponse] = Field(default_factory=list)

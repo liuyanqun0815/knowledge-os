@@ -23,5 +23,8 @@ class InMemoryGraph:
     def list_entities(self) -> list[tuple[str, dict]]:
         return list(self.entities.items())
 
+    def list_relations(self) -> list[Edge]:
+        return list(self.relations)
+
     def get_entity(self, entity_id: str) -> dict | None:
         return self.entities.get(entity_id)

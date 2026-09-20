@@ -21,6 +21,23 @@ def run_sql_script(engine: Engine, script_path: Path) -> None:
             conn.execute(text(statement))
 
 
+def _sources_pk_is_kb_scoped(engine: Engine) -> bool:
+    with engine.connect() as conn:
+        return bool(
+            conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conrelid = 'sources'::regclass
+                      AND contype = 'p'
+                      AND pg_get_constraintdef(oid) LIKE '%knowledge_base_id%'
+                    """
+                )
+            ).scalar()
+        )
+
+
 def ensure_pg_schema(settings: Settings | None = None) -> None:
     """Apply schema.sql once per process (CREATE IF NOT EXISTS is idempotent)."""
     cfg = settings or Settings()
@@ -33,7 +50,8 @@ def ensure_pg_schema(settings: Settings | None = None) -> None:
 
     from infra.db import get_engine
 
-    run_sql_script(get_engine(cfg), _SCHEMA_PATH)
+    engine = get_engine(cfg)
+    run_sql_script(engine, _SCHEMA_PATH)
     migrations_dir = Path(__file__).resolve().parent / "migrations"
     for name in (
         "005_source_chunks.sql",
@@ -43,5 +61,8 @@ def ensure_pg_schema(settings: Settings | None = None) -> None:
     ):
         migration_path = migrations_dir / name
         if migration_path.exists():
-            run_sql_script(get_engine(cfg), migration_path)
+            run_sql_script(engine, migration_path)
+    migration_009 = migrations_dir / "009_sources_kb_scoped_pk.sql"
+    if migration_009.exists() and not _sources_pk_is_kb_scoped(engine):
+        run_sql_script(engine, migration_009)
     _schema_ready.add(cache_key)

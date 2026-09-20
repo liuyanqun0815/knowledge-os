@@ -193,3 +193,21 @@ export type GraphNeighborsResponse = {
   entities: GraphEntity[];
   edges: GraphEdge[];
 };
+
+export type GraphRetrieveHit = {
+  score: number;
+  snippet: string | null;
+  claim_id: string | null;
+  entity_id: string | null;
+  src?: string | null;
+  dst?: string | null;
+  predicate?: string | null;
+};
+
+export type GraphRetrieveResponse = {
+  query: string;
+  hit_count: number;
+  hits: GraphRetrieveHit[];
+  entities: GraphEntity[];
+  edges: GraphEdge[];
+};

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS knowledge_bases (
 );
 
 CREATE TABLE IF NOT EXISTS sources (
-    id TEXT PRIMARY KEY,
+    id TEXT NOT NULL,
     knowledge_base_id TEXT NOT NULL REFERENCES knowledge_bases (id),
     title TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -20,15 +20,21 @@ CREATE TABLE IF NOT EXISTS sources (
     version TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     status TEXT NOT NULL,
-    replaces_source_id TEXT REFERENCES sources (id)
+    replaces_source_id TEXT,
+    PRIMARY KEY (knowledge_base_id, id),
+    FOREIGN KEY (knowledge_base_id, replaces_source_id)
+        REFERENCES sources (knowledge_base_id, id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sources_kb ON sources (knowledge_base_id);
 
 CREATE TABLE IF NOT EXISTS source_texts (
-    source_id TEXT PRIMARY KEY REFERENCES sources (id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
     knowledge_base_id TEXT NOT NULL REFERENCES knowledge_bases (id),
-    text TEXT NOT NULL
+    text TEXT NOT NULL,
+    PRIMARY KEY (knowledge_base_id, source_id),
+    FOREIGN KEY (knowledge_base_id, source_id)
+        REFERENCES sources (knowledge_base_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS entities (
@@ -77,11 +83,13 @@ CREATE TABLE IF NOT EXISTS claim_evidence (
     id SERIAL PRIMARY KEY,
     knowledge_base_id TEXT NOT NULL REFERENCES knowledge_bases (id),
     claim_id TEXT NOT NULL REFERENCES claims (id) ON DELETE CASCADE,
-    source_id TEXT NOT NULL REFERENCES sources (id),
+    source_id TEXT NOT NULL,
     start_pos INTEGER NOT NULL,
     end_pos INTEGER NOT NULL,
     quote TEXT NOT NULL,
-    weight DOUBLE PRECISION NOT NULL
+    weight DOUBLE PRECISION NOT NULL,
+    FOREIGN KEY (knowledge_base_id, source_id)
+        REFERENCES sources (knowledge_base_id, id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence (claim_id);
@@ -145,7 +153,9 @@ CREATE TABLE IF NOT EXISTS events (
     type TEXT NOT NULL,
     participants JSONB NOT NULL DEFAULT '[]'::jsonb,
     timestamp TIMESTAMPTZ NOT NULL,
-    source_id TEXT NOT NULL REFERENCES sources (id)
+    source_id TEXT NOT NULL,
+    FOREIGN KEY (knowledge_base_id, source_id)
+        REFERENCES sources (knowledge_base_id, id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_kb ON events (knowledge_base_id);

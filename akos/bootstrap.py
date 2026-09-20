@@ -239,6 +239,19 @@ def _get_shared_reranker(settings: Settings):
     return _SHARED_RERANKER
 
 
+class _LazyEmbedder:
+    """Delay sentence-transformers load until the first embed() call."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        inner = _get_shared_embedder(self._settings)
+        if inner is None:
+            raise RuntimeError("embedding is disabled")
+        return inner.embed(texts)
+
+
 def build_orchestrator_deps(knowledge_base_id: str | None = None) -> OrchestratorDeps:
     settings = Settings()
     kb_id = knowledge_base_id or (LEGACY_PG_KB_ID if settings.use_pg else DEFAULT_IN_MEMORY_KB_ID)
@@ -251,7 +264,7 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
     ontology = InMemoryOntology()
     domain.register_ontology(ontology)
     knowledge, graph, evidence, memory = _build_repos(knowledge_base_id, settings)
-    embedder = _get_shared_embedder(settings)
+    embedder = _LazyEmbedder(settings) if settings.embedding_enabled else None
     embedding_store = None
     if settings.use_pg and embedder is not None:
         from infra.db import get_engine
@@ -275,7 +288,8 @@ def _build_orchestrator_deps_for_kb(knowledge_base_id: str, settings: Settings) 
         embedding_store=embedding_store,
     )
     chunk_retrieval.warm_index()
-    reranker = _get_shared_reranker(settings)
+    # Reranker weights are heavy; load on first Ask rerank, not on every admin page.
+    reranker = None
     compiler = KnowledgeCompiler(ontology, knowledge, graph, evidence, domain.get_extractor(), retrieval)
     llm_client = OpenAiCompatibleClient(settings)
     wiki_retrieval: WikiPageRetrieval | None = None

@@ -84,7 +84,7 @@ class PgKnowledge:
                         :id, :knowledge_base_id, :title, :type, :uri, :version, :created_at, :status,
                         :replaces_source_id
                     )
-                    ON CONFLICT (id) DO UPDATE SET
+                    ON CONFLICT (knowledge_base_id, id) DO UPDATE SET
                         title = EXCLUDED.title,
                         type = EXCLUDED.type,
                         uri = EXCLUDED.uri,
@@ -92,7 +92,6 @@ class PgKnowledge:
                         created_at = EXCLUDED.created_at,
                         status = EXCLUDED.status,
                         replaces_source_id = EXCLUDED.replaces_source_id
-                    WHERE sources.knowledge_base_id = EXCLUDED.knowledge_base_id
                     """),
                 {
                     "id": source.id,
@@ -106,7 +105,10 @@ class PgKnowledge:
                     "replaces_source_id": source.replaces_source_id,
                 },
             )
-        return source
+        saved = self.get_source(source.id)
+        if saved is None:
+            raise DomainError(f"source_persist_failed: {source.id}")
+        return saved
 
     def get_source(self, source_id: str) -> Source | None:
         with self._engine.connect() as conn:
@@ -221,8 +223,7 @@ class PgKnowledge:
                 text("""
                     INSERT INTO source_texts (source_id, knowledge_base_id, text)
                     VALUES (:source_id, :knowledge_base_id, :text)
-                    ON CONFLICT (source_id) DO UPDATE SET text = EXCLUDED.text
-                    WHERE source_texts.knowledge_base_id = EXCLUDED.knowledge_base_id
+                    ON CONFLICT (knowledge_base_id, source_id) DO UPDATE SET text = EXCLUDED.text
                     """),
                 {
                     "source_id": source_id,

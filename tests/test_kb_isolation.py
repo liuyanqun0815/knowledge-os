@@ -74,6 +74,28 @@ def test_two_kbs_sources_do_not_leak(pg_kb_repo, pg_engine):
     assert repo_b.get_source_text("shared-source-id") is None
 
 
+def test_two_kbs_can_share_same_source_id(pg_kb_repo, pg_engine):
+    from akos.adapters.persistence.pg_knowledge import PgKnowledge
+
+    kb_a = pg_kb_repo.create(name="A-share-sid", domain_type="ecommerce_cs", description="")
+    kb_b = pg_kb_repo.create(name="B-share-sid", domain_type="ecommerce_cs", description="")
+    repo_a = PgKnowledge(pg_engine, kb_a.id)
+    repo_b = PgKnowledge(pg_engine, kb_b.id)
+
+    repo_a.save_source(_sample_source("理财产品汇总"))
+    repo_a.save_source_text("理财产品汇总", "kb-a body")
+    repo_a.update_source_status("理财产品汇总", "pending")
+
+    repo_b.save_source(_sample_source("理财产品汇总"))
+    repo_b.save_source_text("理财产品汇总", "kb-b body")
+    repo_b.update_source_status("理财产品汇总", "running")
+
+    assert repo_a.get_source_text("理财产品汇总") == "kb-a body"
+    assert repo_b.get_source_text("理财产品汇总") == "kb-b body"
+    assert repo_a.get_source("理财产品汇总").status == "pending"
+    assert repo_b.get_source("理财产品汇总").status == "running"
+
+
 def test_two_kbs_quarantine_do_not_leak(pg_kb_repo, pg_engine):
     from akos.adapters.persistence.pg_knowledge import PgKnowledge
 

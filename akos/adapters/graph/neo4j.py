@@ -116,6 +116,30 @@ class Neo4jGraph:
                 entities.append((record["id"], {"type": record["type"], **props}))
         return entities
 
+    def list_relations(self) -> list[Edge]:
+        edges: list[Edge] = []
+        with self._get_driver().session() as session:
+            rows = session.run(
+                f"""
+                MATCH (src:Entity {{kb_id: $kb_id}})-[r:{_RELATIONSHIP_TYPE} {{kb_id: $kb_id}}]->(dst:Entity {{kb_id: $kb_id}})
+                RETURN src.id AS src, r.predicate AS predicate, dst.id AS dst, properties(r) AS rprops
+                """,
+                kb_id=self._knowledge_base_id,
+            )
+            for record in rows:
+                rel_props = dict(record["rprops"])
+                for key in _SYSTEM_REL_PROPS:
+                    rel_props.pop(key, None)
+                edges.append(
+                    Edge(
+                        src=record["src"],
+                        predicate=record["predicate"],
+                        dst=record["dst"],
+                        props=rel_props,
+                    )
+                )
+        return edges
+
     def get_entity(self, entity_id: str) -> dict | None:
         with self._get_driver().session() as session:
             record = session.run(

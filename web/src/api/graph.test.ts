@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchGraphNeighbors, fetchGraphSnapshot, listGraphEntities, listGraphPredicates } from "./graph";
+import {
+  fetchGraphNeighbors,
+  fetchGraphSnapshot,
+  listGraphEntities,
+  listGraphPredicates,
+  retrieveGraph,
+} from "./graph";
 
 const { apiFetch } = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -22,6 +28,16 @@ describe("graph api", () => {
     await fetchGraphSnapshot("kb-1", { entityLimit: 100, edgeLimit: 200 });
 
     expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/graph/snapshot?entity_limit=100&edge_limit=200");
+  });
+
+  it("fetchGraphSnapshot uses default limits", async () => {
+    apiFetch.mockResolvedValue({
+      json: async () => ({ entities: [], edges: [], truncated: false, entity_total: 0 }),
+    });
+
+    await fetchGraphSnapshot("kb-1");
+
+    expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/graph/snapshot?entity_limit=200&edge_limit=500");
   });
 
   it("fetchGraphNeighbors calls neighbors endpoint", async () => {
@@ -56,5 +72,19 @@ describe("graph api", () => {
     await listGraphPredicates("kb-1", "适用");
 
     expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/graph/predicates?q=%E9%80%82%E7%94%A8");
+  });
+
+  it("retrieveGraph posts graph retrieve payload", async () => {
+    apiFetch.mockResolvedValue({
+      json: async () => ({ query: "七天无理由", hit_count: 0, hits: [] }),
+    });
+
+    await retrieveGraph("kb-1", "七天无理由", { topK: 8 });
+
+    expect(apiFetch).toHaveBeenCalledWith("/admin/knowledge-bases/kb-1/graph/retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "七天无理由", top_k: 8 }),
+    });
   });
 });

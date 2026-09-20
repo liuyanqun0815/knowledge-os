@@ -4,11 +4,19 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GraphPage } from "./GraphPage";
 
-const { fetchGraphSnapshot, listGraphEntities, listGraphPredicates, fetchGraphNeighbors, useKb } = vi.hoisted(() => ({
+const {
+  fetchGraphSnapshot,
+  listGraphEntities,
+  listGraphPredicates,
+  fetchGraphNeighbors,
+  retrieveGraph,
+  useKb,
+} = vi.hoisted(() => ({
   fetchGraphSnapshot: vi.fn(),
   listGraphEntities: vi.fn(),
   listGraphPredicates: vi.fn(),
   fetchGraphNeighbors: vi.fn(),
+  retrieveGraph: vi.fn(),
   useKb: vi.fn(),
 }));
 
@@ -17,6 +25,7 @@ vi.mock("../api/graph", () => ({
   listGraphEntities,
   listGraphPredicates,
   fetchGraphNeighbors,
+  retrieveGraph,
 }));
 
 vi.mock("../app/KbContext", () => ({
@@ -53,6 +62,23 @@ describe("GraphPage", () => {
       entities: [{ id: "e_seller", type: "Concept", name: "卖家" }],
       edges,
     });
+    retrieveGraph.mockResolvedValue({
+      query: "七天无理由运费",
+      hit_count: 1,
+      hits: [
+        {
+          score: 1,
+          snippet: "七天无理由 运费承担方 卖家",
+          claim_id: "c1",
+          entity_id: "e_rule",
+          src: "e_rule",
+          dst: "e_seller",
+          predicate: "运费承担方",
+        },
+      ],
+      entities: entities,
+      edges: edges,
+    });
   });
 
   it("does not show entity list before search", async () => {
@@ -66,6 +92,49 @@ describe("GraphPage", () => {
     expect(screen.queryByRole("button", { name: "七天无理由" })).not.toBeInTheDocument();
     expect(screen.getByText("输入实体名称或关系条件后点击搜索，结果将显示在此处。")).toBeInTheDocument();
     expect(screen.getByText("点击上方画布中的节点，此处将单独展示该节点及直接关联实体。")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchGraphSnapshot).toHaveBeenCalledWith("kb-1", { entityLimit: 200, edgeLimit: 500 });
+    });
+  });
+
+  it("reloads snapshot with custom limits on refresh", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <GraphPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: "知识图谱" });
+    await user.clear(screen.getByLabelText("实体上限（1–1000）"));
+    await user.type(screen.getByLabelText("实体上限（1–1000）"), "50");
+    await user.clear(screen.getByLabelText("边上限（1–5000）"));
+    await user.type(screen.getByLabelText("边上限（1–5000）"), "80");
+    await user.click(screen.getByRole("button", { name: "刷新" }));
+
+    await waitFor(() => {
+      expect(fetchGraphSnapshot).toHaveBeenLastCalledWith("kb-1", { entityLimit: 50, edgeLimit: 80 });
+    });
+  });
+
+  it("runs graph retrieve and selects hit entity", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <GraphPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: "知识图谱" });
+    await user.type(screen.getByLabelText("检索文本"), "七天无理由运费");
+    await user.click(screen.getByRole("button", { name: "试跑检索" }));
+
+    expect(await screen.findByText(/图谱检索返回 1 条关系，右侧已切换为检索子图/)).toBeInTheDocument();
+    expect(retrieveGraph).toHaveBeenCalledWith("kb-1", "七天无理由运费", { topK: 20 });
+    await waitFor(() => {
+      expect(fetchGraphNeighbors).toHaveBeenCalledWith("kb-1", "e_rule");
+    });
+    expect(screen.getByText(/右侧当前为图谱检索子图/)).toBeInTheDocument();
   });
 
   it("loads focus view after selecting an entity from search", async () => {

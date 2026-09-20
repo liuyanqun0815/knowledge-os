@@ -103,13 +103,16 @@ def _schedule_upload_processing(
     results: list[ZipUploadItemResponse] = []
     single = len(originals) == 1
     for original in originals:
-        source = register_pending_source(
-            knowledge=orchestrator.deps.knowledge,
-            kb_dir=kb_dir,
-            original=original,
-            source_type=source_type,
-            replaces_source_id=replaces_source_id if single else None,
-        )
+        try:
+            source = register_pending_source(
+                knowledge=orchestrator.deps.knowledge,
+                kb_dir=kb_dir,
+                original=original,
+                source_type=source_type,
+                replaces_source_id=replaces_source_id if single else None,
+            )
+        except DomainError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         results.append(pending_item_response(kb_dir, original, source.id))
         background_tasks.add_task(
             process_uploaded_source,

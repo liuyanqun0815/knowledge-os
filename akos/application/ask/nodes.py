@@ -445,6 +445,14 @@ def rerank_node(state: AskState, deps: Any) -> dict:
     question = state.get("normalized_question") or state["question"]
     hits = list(state.get("hits") or [])
     reranker = getattr(deps, "reranker", None)
+    if reranker is None and settings.rerank_enabled:
+        from akos.bootstrap import _get_shared_reranker
+
+        reranker = _get_shared_reranker(settings)
+        try:
+            deps.reranker = reranker
+        except Exception:
+            pass
     enabled = bool(settings.rerank_enabled and reranker is not None and hits)
 
     if not enabled:

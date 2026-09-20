@@ -280,16 +280,7 @@ def export_wiki(
 ) -> WikiExportResult:
     """Write markdown wiki pages from claims; optional LLM summaries on export."""
     del evidence  # reserved for future evidence excerpts on source pages
-
-    if (
-        settings is not None
-        and getattr(settings, "topic_cluster", False)
-        and graph is not None
-        and not knowledge.list_topic_clusters()
-    ):
-        from akos.application.topics.service import rebuild_topic_clusters
-
-        rebuild_topic_clusters(knowledge, graph, kb_id, settings)
+    del graph  # export reads existing topics only; rebuild happens on ingest/admin topics
 
     summarizer = None
     cache_dir = None
