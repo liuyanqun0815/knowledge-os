@@ -15,11 +15,41 @@ def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def _fold_overflow_chunks(chunks: list[SourceChunk], text: str, *, max_chunks: int) -> tuple[list[SourceChunk], bool]:
+    if len(chunks) <= max_chunks:
+        return chunks, False
+    kept = chunks[: max_chunks - 1]
+    overflow = chunks[max_chunks - 1 :]
+    first = overflow[0]
+    last = overflow[-1]
+    merged_text = text[first.start : last.end]
+    folded = SourceChunk(
+        id=str(uuid.uuid4()),
+        source_id=first.source_id,
+        chunk_index=max_chunks - 1,
+        title=first.title,
+        summary=None,
+        text=merged_text,
+        start=first.start,
+        end=last.end,
+        section_path=list(first.section_path),
+        topics=[],
+        token_count=estimate_token_count(merged_text),
+        status="active",
+        content_hash=_content_hash(merged_text),
+        created_at=first.created_at,
+    )
+    return kept + [folded], True
+
+
 def build_source_chunks(source_id: str, text: str, settings: Settings) -> tuple[list[SourceChunk], bool]:
+    # Structural split first with a high ceiling so blank-line fragments are not
+    # prematurely glued into a giant tail by max_chunks; compact, then fold.
+    structural_cap = max(settings.chunk_max_per_doc * 20, 500)
     result = chunk_document(
         text,
         settings.chunk_max_chars,
-        settings.chunk_max_per_doc,
+        structural_cap,
         mode=settings.chunk_mode,
         heading_level=settings.chunk_heading_level,
     )
@@ -44,7 +74,18 @@ def build_source_chunks(source_id: str, text: str, settings: Settings) -> tuple[
                 created_at=now,
             )
         )
-    return chunks, result.truncated
+    # Merge blank-line / heading fragments before compile uses these units.
+    if settings.chunk_min_tokens > 0 and len(chunks) > 1:
+        from akos.application.ingest.chunk_segmentation import compact_small_chunks
+
+        chunks, _changed = compact_small_chunks(
+            source_id,
+            text,
+            chunks,
+            min_tokens=settings.chunk_min_tokens,
+        )
+    chunks, folded = _fold_overflow_chunks(chunks, text, max_chunks=settings.chunk_max_per_doc)
+    return chunks, bool(result.truncated or folded)
 
 
 def index_source_chunks(

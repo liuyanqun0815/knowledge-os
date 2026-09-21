@@ -19,11 +19,23 @@ logger = logging.getLogger(__name__)
 
 def _build_prompt(chunk_index: int, text: str) -> str:
     return (
-        "你是文档标注助手。根据给定 chunk 生成标题、摘要和主题词。\n"
-        "只输出 JSON 对象，字段：chunk_index, title, summary, topics。\n"
-        f"chunk_index 必须为 {chunk_index}。\n"
-        "不要修改原文，不要编造 chunk 中不存在的信息。\n"
-        f"chunk:\n{text[:2000]}"
+        "# 角色\n"
+        "你是文档标注助手，为已切分的 chunk 生成检索友好的元数据。\n"
+        "\n"
+        "# 目标\n"
+        "根据给定 chunk 生成 title、summary、topics，便于浏览与主题聚类。\n"
+        "\n"
+        "# 规则\n"
+        f"- chunk_index 必须为 {chunk_index}\n"
+        "- 不要修改原文，不要编造 chunk 中不存在的信息\n"
+        "- title 简洁；summary 概括要点；topics 为短词列表\n"
+        "\n"
+        "# 输出\n"
+        "只输出一个 JSON 对象，不要 Markdown 代码围栏，不要其他说明。\n"
+        f'格式：{{"chunk_index":{chunk_index},"title":"...","summary":"...","topics":["..."]}}\n'
+        "\n"
+        "# 参考\n"
+        f"chunk:\n{text[:2000]}\n"
     )
 
 
@@ -86,36 +98,49 @@ def _maybe_compile_wiki(*, kb_id: str, source_id: str, deps: Any, settings: Sett
         wiki_retrieval.index_wiki_root(compile_wiki_root(data_root, kb_id))
 
 
-def _replace_with_segmented_chunks(
-    *,
-    kb_id: str,
-    source_id: str,
-    text: str,
-    deps: Any,
-    settings: Settings,
-    client: Any,
-) -> bool:
+def _persist_chunks(deps: Any, source_id: str, chunks: list, settings: Settings) -> None:
+    deps.knowledge.save_chunks(source_id, chunks)
+    if settings.purge_stale_chunks:
+        deps.knowledge.purge_stale_chunks(source_id)
+    chunk_retrieval = getattr(deps, "chunk_retrieval", None)
+    if chunk_retrieval is None:
+        return
+    chunk_retrieval.remove_source(source_id)
+    chunk_retrieval.index_chunks(chunks)
+
+
+def plan_chunks_for_source(*, source_id: str, deps: Any, settings: Settings) -> bool:
+    """LLM chapter planning on structural chunks. Returns True when chunks were replaced.
+
+    On failure or when disabled, leaves existing structural chunks unchanged.
+    """
+    if not settings.chunk_llm_segment:
+        return False
+    client = getattr(deps, "llm_client", None)
+    if client is None or not client.is_configured:
+        return False
+
+    text = deps.knowledge.get_source_text(source_id)
+    if text is None:
+        logger.warning("Chunk planning skipped for source %s: source text missing", source_id)
+        return False
+
     chunks = deps.knowledge.list_chunks(source_id, status="active")
     if not chunks:
         return False
+
     spans = spans_from_chunks(chunks)
     sections = request_segmentation_plan(client, spans, settings)
     if sections is None:
+        logger.warning("Chunk planning failed for source %s; keeping structural chunks", source_id)
         return False
 
     drafts = apply_segmentation_plan(text, spans, sections)
     merged_chunks = build_segmented_source_chunks(source_id, text, drafts, sections)
-    deps.knowledge.save_chunks(source_id, merged_chunks)
-    if settings.purge_stale_chunks:
-        deps.knowledge.purge_stale_chunks(source_id)
-    deps.chunk_retrieval.remove_source(source_id)
-    deps.chunk_retrieval.index_chunks(merged_chunks)
-    _rebuild_topic_clusters(deps, kb_id, settings)
-    _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+    _persist_chunks(deps, source_id, merged_chunks, settings)
     logger.info(
-        "Chunk segmentation finished for source %s in kb %s (%s -> %s chunks)",
+        "Chunk planning finished for source %s (%s -> %s chunks)",
         source_id,
-        kb_id,
         len(chunks),
         len(merged_chunks),
     )
@@ -129,6 +154,7 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
     if not chunks:
         return
 
+    chunk_retrieval = getattr(deps, "chunk_retrieval", None)
     for chunk in chunks:
         enriched = None
         for attempt in range(2):
@@ -158,7 +184,8 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
                 topics=enriched["topics"] or chunk.topics,
             )
         )
-        deps.chunk_retrieval.index_chunks([updated])
+        if chunk_retrieval is not None:
+            chunk_retrieval.index_chunks([updated])
 
     _rebuild_topic_clusters(deps, kb_id, settings)
     _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
@@ -167,27 +194,11 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
 
 @traceable(name="akos.enrich_chunks", run_type="chain")
 def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
+    """Post-claim metadata enrich only — does not change chunk boundaries."""
     client = getattr(deps, "llm_client", None)
-    if getattr(deps, "chunk_retrieval", None) is None:
-        return
-    if client is None or not client.is_configured:
-        return
-
-    text = deps.knowledge.get_source_text(source_id)
-
-    if settings.chunk_llm_segment and text is not None:
-        if _replace_with_segmented_chunks(
-            kb_id=kb_id,
-            source_id=source_id,
-            text=text,
-            deps=deps,
-            settings=settings,
-            client=client,
-        ):
-            return
-        logger.warning("Chunk segmentation failed for source %s in kb %s; falling back", source_id, kb_id)
-    elif settings.chunk_llm_segment and text is None:
-        logger.warning("Chunk segmentation skipped for source %s in kb %s: source text missing", source_id, kb_id)
-
-    if settings.chunk_llm_enrich:
+    configured = client is not None and client.is_configured
+    if settings.chunk_llm_enrich and configured:
         _enrich_chunks_individually(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings, client=client)
+        return
+    _rebuild_topic_clusters(deps, kb_id, settings)
+    _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)

@@ -14,6 +14,9 @@ class CreateKnowledgeBaseRequest(BaseModel):
     domain_type: str
     description: str = ""
     graph_enabled: bool = False
+
+
+class PatchKnowledgeBaseRequest(BaseModel):
     name: str | None = None
     domain_type: str | None = None
     description: str | None = None

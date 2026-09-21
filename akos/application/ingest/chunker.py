@@ -284,4 +284,13 @@ def validate_chunk_coverage(text: str, chunks: list[DocumentChunkDraft]) -> None
 
 
 def estimate_token_count(text: str) -> int:
-    return len(_TOKEN_PATTERN.findall(text))
+    """Rough token estimate for budget checks.
+
+    Whitespace-separated languages use word-like matches. Continuous CJK text
+    under-counts with that alone, so fall back to ~2 chars per token for CJK-heavy spans.
+    """
+    tokens = _TOKEN_PATTERN.findall(text)
+    cjk_chars = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+    if cjk_chars >= max(1, len(text.strip()) // 3):
+        return max(len(tokens), cjk_chars // 2)
+    return len(tokens)

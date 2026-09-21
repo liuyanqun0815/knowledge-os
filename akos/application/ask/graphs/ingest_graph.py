@@ -1,6 +1,13 @@
 from langgraph.graph import END, StateGraph
 
-from akos.application.ask.nodes import compile_node, evolve_node, index_chunks_node, store_source_node, verify_sample_node
+from akos.application.ask.nodes import (
+    compile_node,
+    evolve_node,
+    index_chunks_node,
+    plan_chunks_node,
+    store_source_node,
+    verify_sample_node,
+)
 from akos.application.ask.state import IngestState
 
 
@@ -15,14 +22,16 @@ def _route_after_verify(state: IngestState) -> str:
 def build_ingest_graph(deps):
     graph = StateGraph(IngestState)
     graph.add_node("store", lambda state: store_source_node(state, deps))
-    graph.add_node("compile", lambda state: compile_node(state, deps))
     graph.add_node("index_chunks", lambda state: index_chunks_node(state, deps))
+    graph.add_node("plan_chunks", lambda state: plan_chunks_node(state, deps))
+    graph.add_node("compile", lambda state: compile_node(state, deps))
     graph.add_node("verify_sample", lambda state: verify_sample_node(state, deps))
     graph.add_node("evolve", lambda state: evolve_node(state, deps))
     graph.set_entry_point("store")
-    # 先切分入库，compile / enrich_source 复用同一批 source_chunks
+    # 结构切分 → LLM 章节规划（失败回退结构块）→ 按最终 chunk 抽 Claim
     graph.add_edge("store", "index_chunks")
-    graph.add_edge("index_chunks", "compile")
+    graph.add_edge("index_chunks", "plan_chunks")
+    graph.add_edge("plan_chunks", "compile")
     graph.add_edge("compile", "verify_sample")
     graph.add_conditional_edges(
         "verify_sample",

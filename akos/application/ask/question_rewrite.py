@@ -92,11 +92,23 @@ def build_rewrite_prompt(question: str, episodes: list[dict[str, Any]]) -> str:
             lines.append(f"   A: {a[:255]}")
     history = "\n".join(lines) if lines else "（无）"
     return (
-        "你是检索问句改写器。根据会话历史，把当前不完整的用户问题改写成完整、可检索的中文问句。\n"
-        "要求：只输出改写后的问句本身；不要解释；不要回答问题；不要添加引号。\n\n"
-        f"历史会话：\n{history}\n\n"
-        f"当前问题：{question}\n"
-        "完整问句："
+        "# 角色\n"
+        "你是检索问句改写器。\n"
+        "\n"
+        "# 目标\n"
+        "根据会话历史，把当前不完整的用户问题改写成完整、可检索的中文问句。\n"
+        "\n"
+        "# 规则\n"
+        "- 只输出改写后的问句本身\n"
+        "- 不要解释、不要回答问题、不要添加引号\n"
+        "- 保留用户原意，补全省略的主语/对象\n"
+        "\n"
+        "# 输出\n"
+        "一行完整问句，无其它内容。\n"
+        "\n"
+        "# 参考\n"
+        f"## 历史会话\n{history}\n\n"
+        f"## 当前问题\n{question}\n"
     )
 
 

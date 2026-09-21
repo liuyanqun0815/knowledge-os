@@ -59,11 +59,23 @@ class WikiLlmSummarizer:
 
     def summarize_source(self, source: Source, claims: list[Claim], chunks: list[SourceChunk]) -> str | None:
         prompt = (
-            "你是 Wiki 摘要助手。根据 source 元数据、claims 与 chunks 生成中文摘要。\n"
-            '只输出 JSON：{"summary":"..."}\n'
+            "# 角色\n"
+            "你是 Wiki 摘要助手。\n"
+            "\n"
+            "# 目标\n"
+            "根据 source 元数据、claims 与 chunks 生成简洁中文摘要。\n"
+            "\n"
+            "# 规则\n"
+            "- 只使用给定材料，不得编造\n"
+            "- 摘要应覆盖核心主体与要点\n"
+            "\n"
+            "# 输出\n"
+            '只输出 JSON 对象：{"summary":"..."}\n'
+            "\n"
+            "# 参考\n"
             f"source: {json.dumps({'id': source.id, 'title': source.title, 'type': source.type}, ensure_ascii=False)}\n"
             f"claims: {json.dumps([{'subject': c.subject, 'predicate': c.predicate, 'object': c.object} for c in claims[:20]], ensure_ascii=False)}\n"
-            f"chunks: {json.dumps([{'title': c.title, 'summary': c.summary, 'excerpt': c.text[:200]} for c in chunks[:10]], ensure_ascii=False)}"
+            f"chunks: {json.dumps([{'title': c.title, 'summary': c.summary, 'excerpt': c.text[:200]} for c in chunks[:10]], ensure_ascii=False)}\n"
         )
         return self._summarize(prompt)
 
@@ -74,10 +86,22 @@ class WikiLlmSummarizer:
         related_chunks: list[SourceChunk],
     ) -> str | None:
         prompt = (
-            "你是 Wiki 摘要助手。根据实体 claims 与相关 chunk 生成中文摘要。\n"
-            '只输出 JSON：{"summary":"..."}\n'
+            "# 角色\n"
+            "你是 Wiki 摘要助手。\n"
+            "\n"
+            "# 目标\n"
+            "根据实体 claims 与相关 chunk 生成简洁中文摘要。\n"
+            "\n"
+            "# 规则\n"
+            "- 只使用给定材料，不得编造\n"
+            "- 摘要围绕该实体展开\n"
+            "\n"
+            "# 输出\n"
+            '只输出 JSON 对象：{"summary":"..."}\n'
+            "\n"
+            "# 参考\n"
             f"entity: {subject}\n"
             f"claims: {json.dumps([{'predicate': c.predicate, 'object': c.object, 'source_ids': c.source_ids} for c in claims[:20]], ensure_ascii=False)}\n"
-            f"chunks: {json.dumps([{'source_id': c.source_id, 'title': c.title, 'summary': c.summary} for c in related_chunks[:10]], ensure_ascii=False)}"
+            f"chunks: {json.dumps([{'source_id': c.source_id, 'title': c.title, 'summary': c.summary} for c in related_chunks[:10]], ensure_ascii=False)}\n"
         )
         return self._summarize(prompt)

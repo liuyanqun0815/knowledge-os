@@ -60,16 +60,26 @@ def _build_segmentation_prompt(spans: list[StructuralSpan], *, max_sections: int
         for span in spans
     ]
     return (
-        "你是文档章节规划助手。根据结构切分 span 列表，合并语义相关的相邻 span，形成类似 Wiki 章节的 chunk 规划。\n"
-        "只输出 JSON 对象，字段 sections，每项含 title, summary, topics, span_indexes。\n"
-        "规则：\n"
+        "# 角色\n"
+        "你是文档章节规划助手，负责把结构切分后的 span 整理成类似 Wiki 章节的 chunk 规划。\n"
+        "\n"
+        "# 目标\n"
+        "合并语义相关的相邻 span，形成可读、可检索的章节边界；不改写原文，只规划合并范围。\n"
+        "\n"
+        "# 规则\n"
         f"- sections 数量不超过 {max_sections}\n"
         "- 每个 span index 必须出现且仅出现一次\n"
         "- 同一 section 的 span_indexes 必须连续递增\n"
         "- 优先按 ## 级主题合并，避免 1-token 标题块单独成章\n"
         f"- 每个 section 合并后的正文至少约 {min_tokens} tokens，过短块必须与相邻 span 合并\n"
-        "- 不要改写原文，只规划合并边界\n"
-        f"spans: {json.dumps(payload, ensure_ascii=False)}"
+        "- 不要改写原文内容，只输出合并边界与章节元数据\n"
+        "\n"
+        "# 输出\n"
+        "只输出一个 JSON 对象，不要 Markdown 代码围栏，不要其他说明。\n"
+        '格式：{"sections":[{"title":"...","summary":"...","topics":["..."],"span_indexes":[0,1]}]}\n'
+        "\n"
+        "# 参考\n"
+        f"spans: {json.dumps(payload, ensure_ascii=False)}\n"
     )
 
 
@@ -132,19 +142,25 @@ def merge_small_spans(text: str, spans: list[StructuralSpan], *, min_tokens: int
     if not spans or min_tokens <= 0:
         return spans
 
+    def _group_tokens(group: list[StructuralSpan]) -> int:
+        return estimate_token_count(text[group[0].start : group[-1].end])
+
     groups: list[list[StructuralSpan]] = [[spans[0]]]
     for span in spans[1:]:
-        group = groups[-1]
-        group_tokens = sum(estimate_token_count(item.text) for item in group)
-        if group_tokens < min_tokens:
-            group.append(span)
+        if _group_tokens(groups[-1]) < min_tokens:
+            groups[-1].append(span)
         else:
             groups.append([span])
 
-    if len(groups) > 1:
-        last_tokens = sum(estimate_token_count(item.text) for item in groups[-1])
-        if last_tokens < min_tokens:
-            groups[-2].extend(groups.pop())
+    # Collapse leftover undersized groups into neighbors (prefer forward merge).
+    index = 0
+    while index < len(groups) - 1:
+        if _group_tokens(groups[index]) < min_tokens:
+            groups[index].extend(groups.pop(index + 1))
+            continue
+        index += 1
+    if len(groups) > 1 and _group_tokens(groups[-1]) < min_tokens:
+        groups[-2].extend(groups.pop())
 
     merged: list[StructuralSpan] = []
     for index, group in enumerate(groups):

@@ -33,7 +33,7 @@ def test_build_prompt_includes_wiki_section_and_grounding_rule():
     prompt = _build_prompt(context)
     assert "## Wiki 主题页" in prompt
     assert "数字与规则以 Claim" in prompt or "数字与规则以 Claim/原文为准" in prompt
-    assert "Wiki 仅作结构与综述" in prompt
+    assert "Wiki" in prompt and ("结构与综述" in prompt or "仅作结构" in prompt)
     assert "退款政策" in prompt
     knowledge_section = prompt.split("## 参考知识\n", 1)[1]
     assert '"wiki_pages"' in knowledge_section

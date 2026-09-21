@@ -137,7 +137,7 @@ def process_uploaded_source(
             _LOG.exception("failed to mark source failed: %s", source_id)
         return
 
-    if (settings.chunk_llm_enrich or settings.chunk_llm_segment) and deps.llm_client.is_configured:
+    if settings.chunk_llm_enrich or settings.topic_cluster or settings.wiki_compile:
         try:
             enrich_chunks(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
         except Exception as exc:

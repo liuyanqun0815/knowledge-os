@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 class ExtractionUnit:
     text: str
     title: str | None = None
+    summary: str | None = None
 
 
 def claim_triple_key(
@@ -98,9 +99,20 @@ def union_extracted(
 
 
 def units_from_source_chunks(chunks: list) -> list[ExtractionUnit]:
-    """Convert stored SourceChunk rows into extraction units (title = subject anchor)."""
+    """Convert stored SourceChunk rows into extraction units.
+
+    Title and summary are chapter context only; the product anchor stays document-level.
+    """
     ordered = sorted(chunks, key=lambda item: getattr(item, "chunk_index", 0))
-    return [ExtractionUnit(text=chunk.text, title=getattr(chunk, "title", None)) for chunk in ordered if chunk.text]
+    return [
+        ExtractionUnit(
+            text=chunk.text,
+            title=getattr(chunk, "title", None),
+            summary=getattr(chunk, "summary", None),
+        )
+        for chunk in ordered
+        if chunk.text
+    ]
 
 
 def resolve_extraction_units(
@@ -152,9 +164,12 @@ def extract_llm_claims_from_text(
     claims: list[ExtractedClaim] = []
     seen: set[tuple[str, str, str]] = set()
     for unit in units:
-        # Section title (e.g. product heading) is a stronger subject anchor than doc-level name.
-        unit_anchor = (unit.title or "").strip() or document_anchor
-        for claim in extractor.extract(unit.text, document_anchor=unit_anchor):
+        for claim in extractor.extract(
+            unit.text,
+            document_anchor=document_anchor,
+            section_title=unit.title,
+            section_summary=unit.summary,
+        ):
             key = (claim.subject.strip(), claim.predicate.strip(), claim.object.strip())
             if key in seen:
                 continue

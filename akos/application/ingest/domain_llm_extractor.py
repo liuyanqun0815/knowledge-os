@@ -47,26 +47,46 @@ _CLAIM_JSON_SCHEMA = {
     },
 }
 
-_PROMPT = """Extract knowledge claims from the text.
-Respond with only a JSON array matching json_schema.
-Each quote must be an exact, non-empty substring of the source text.
-Subject selection (priority high → low):
-1. Prefer a concrete named entity in this passage (specific product / company / policy name).
-2. If the natural subject is a generic/deictic reference to THIS document
-   (examples — not exhaustive: 本产品、本理财计划、本理财产品、本计划、投资者、客户、托管人、管理人,
-   or 「本…产品/计划」+角色 such as 本理财产品托管人), rewrite with document_anchor when provided:
-   - 本产品 / 本理财计划 / 本理财产品 → document_anchor
-   - 投资者 / 客户 → {{document_anchor}}的投资者
-   - 本理财产品托管人 → {{document_anchor}}的托管人
-   Apply the same pattern to similar deictic subjects; do not leave bare 本产品/投资者 as subject.
-3. Only if this passage has no usable subject, fall back to document_anchor alone.
-4. Never let document_anchor override a different concrete product/company already named in this passage.
-5. subject 禁止单独使用属性词（如「利率」「额度」「还款方式」「收入要求」）；属性写入 predicate，取值写入 object.
-Extraction configuration:
+_PROMPT = """# 角色
+你是知识抽取助手，从业务文档中抽取可入库的知识 Claim（三元组事实）。
+
+# 目标
+阅读下方「原文」，抽取准确、可溯源的 Claim；主语尽量具体、可检索；不要编造原文没有的信息。
+
+# 规则
+## 主语选择（优先级从高到低）
+1. 优先使用本段中的具体具名实体（具体产品 / 公司 / 政策名称）。
+2. 若自然主语是指向「本文档」的泛指/指示语（示例非穷尽：本产品、本理财计划、本理财产品、本计划、投资者、客户、托管人、管理人，或「本…产品/计划」+角色如本理财产品托管人），在提供 `document_anchor` 时改写为：
+   - 本产品 / 本理财计划 / 本理财产品 → `document_anchor`
+   - 投资者 / 客户 → `{{document_anchor}}的投资者`
+   - 本理财产品托管人 → `{{document_anchor}}的托管人`
+   同类指示主语按同样模式处理；不要把光秃秃的「本产品」「投资者」留作 subject。
+3. 仅当本段没有可用主语时，才单独回退为 `document_anchor`。
+4. 切勿用 `document_anchor` 覆盖本段已点名的其他具体产品/公司。
+5. subject 禁止单独使用属性词（如「利率」「额度」「还款方式」「收入要求」）；属性写入 predicate，取值写入 object。
+6. 本段在讲某产品条款、但正文未反复写出产品名时，subject 使用 `document_anchor`（文档级产品名），不要用「普通单位」「优质单位」「贷款额度」「房产因素」等范畴词或属性词作 subject；这些词可写入 predicate 或 object。章节标题不是产品名，不得当作 document_anchor。
+
+## 证据与内容
+- 每条 `quote` 必须是原文中的非空精确连续子串，不得摘自章节摘要。
+- 章节标题与摘要只帮助判断产品/主题，不作为 quote 来源。
+- 不要编造原文未出现的事实；不确定时提高谨慎或降低 confidence。
+
+# 输出
+- 只输出符合下方 json_schema 的 **JSON 数组**，不要 Markdown 代码围栏，不要其他说明文字。
+- 每项字段：`subject`、`predicate`、`object`、`confidence`、`quote`。
+
+# 参考
+## 抽取配置
 {configuration}
-json_schema:
+
+## 章节上下文
+- 章节标题：{section_title}
+- 章节摘要：{section_summary}
+
+## json_schema
 {json_schema}
-Source text:
+
+## 原文
 {text}
 """
 
@@ -86,13 +106,30 @@ class DomainLlmExtractor:
         self._client = client
         self._spec = spec
 
-    def extract(self, text: str, *, document_anchor: str | None = None) -> list[ExtractedClaim]:
+    def extract(
+        self,
+        text: str,
+        *,
+        document_anchor: str | None = None,
+        section_title: str | None = None,
+        section_summary: str | None = None,
+    ) -> list[ExtractedClaim]:
         if not self._client.is_configured:
             return []
 
         try:
             content = self._client.chat_completions(
-                [{"role": "user", "content": self._build_prompt(text, document_anchor=document_anchor)}]
+                [
+                    {
+                        "role": "user",
+                        "content": self._build_prompt(
+                            text,
+                            document_anchor=document_anchor,
+                            section_title=section_title,
+                            section_summary=section_summary,
+                        ),
+                    }
+                ]
             )
         except LlmConfigError:
             return []
@@ -122,7 +159,14 @@ class DomainLlmExtractor:
             return rebound
         return claims
 
-    def _build_prompt(self, text: str, *, document_anchor: str | None = None) -> str:
+    def _build_prompt(
+        self,
+        text: str,
+        *,
+        document_anchor: str | None = None,
+        section_title: str | None = None,
+        section_summary: str | None = None,
+    ) -> str:
         mode = effective_subject_bind_mode(get_settings().subject_bind_mode)
         if self._spec.open_predicates:
             configuration = {
@@ -167,6 +211,8 @@ class DomainLlmExtractor:
         return _PROMPT.format(
             configuration=json.dumps(configuration, ensure_ascii=False),
             json_schema=json.dumps(_CLAIM_JSON_SCHEMA, ensure_ascii=False),
+            section_title=(section_title or "").strip() or "（无）",
+            section_summary=(section_summary or "").strip() or "（无）",
             text=text,
         )
 

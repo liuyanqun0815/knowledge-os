@@ -122,4 +122,6 @@ def subject_bind_prompt_rules(document_anchor: str) -> list[str]:
         "以上仅为示例，非穷举；对同类指代主体套用同一模式。",
         "本段已出现与 document_anchor 不同的具体产品名/公司名时，优先用该具体名，不要强行替换。",
         "禁止单独用属性词作 subject（利率、额度、还款方式等）。",
+        "本段在讲产品条款但未反复点名产品时，subject 使用 document_anchor，"
+        "不要用范畴词或属性词（如普通单位、优质单位、贷款额度、房产因素）作 subject。",
     ]

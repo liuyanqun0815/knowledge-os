@@ -125,7 +125,14 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
         def __init__(self, client, spec):
             pass
 
-        def extract(self, chunk: str, *, document_anchor=None):
+        def extract(
+            self,
+            chunk: str,
+            *,
+            document_anchor=None,
+            section_title=None,
+            section_summary=None,
+        ):
             return llm_claims
 
     import akos.application.ingest.intersect as intersect_module
@@ -162,7 +169,7 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-        def extract(self, text, *, document_anchor=None):
+        def extract(self, text, *, document_anchor=None, section_title=None, section_summary=None):
             calls.append(document_anchor)
             return []
 

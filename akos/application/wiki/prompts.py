@@ -36,7 +36,7 @@ def build_topic_merge_prompt(
 只输出一个 JSON 对象，不要 Markdown 代码块，不要解释：
 {{"markdown": "<完整主题页 Markdown 正文>"}}
 
-## 上下文
+## 参考
 topic_name: {topic_name}
 
 required_wikilinks:
@@ -110,7 +110,7 @@ def build_source_wiki_outline_prompt(
   ]
 }}
 
-## 上下文
+## 参考
 source_id: {source_id}
 source_title: {source_title}
 split_mode: {split_mode}
@@ -152,6 +152,9 @@ def build_source_wiki_page_prompt(
     return f"""## 角色
 你是 AKOS Wiki 单页撰写助手。只写**当前这一页**的 Markdown 正文。
 
+## 目标
+只写当前页 Markdown 正文，覆盖 focus 要求的要点范围。
+
 ## 当前页
 - folder: {folder}
 - slug: {slug}
@@ -178,7 +181,7 @@ def build_source_wiki_page_prompt(
 ## 输出
 只输出 JSON：{{"markdown": "完整 Markdown 正文"}}
 
-## 上下文
+## 参考
 source_id: {source_id}
 source_title: {source_title}
 
@@ -235,7 +238,7 @@ def build_source_wiki_plan_prompt(
 只输出 JSON：
 {{"pages":[{{"folder":"{folder}","slug":"{default_slug}","title":"{product}","markdown":"..."}}]}}
 
-## 上下文
+## 参考
 source_id: {source_id}
 source_title: {source_title}
 required_wikilinks:

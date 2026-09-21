@@ -125,13 +125,22 @@ def test_build_prompt_includes_subject_rules_and_anchor() -> None:
     )
     assert "还款方式" in prompt
     assert "青银理财成就系列（低波共享）" in prompt
+    assert "章节标题" in prompt
+    assert "章节摘要" in prompt
+    assert "普通单位" in prompt
     assert "document_anchor" in prompt
+
     assert "subject_priority" in prompt
     assert "bind_generic_deixis_to_document_anchor" in prompt
-    assert "Prefer a concrete named entity" in prompt
-    assert "generic/deictic" in prompt
-    assert "Never let document_anchor override" in prompt
+    assert "优先使用本段中的具体具名实体" in prompt
+    assert "泛指/指示语" in prompt
+    assert "切勿用" in prompt and "document_anchor" in prompt and "覆盖" in prompt
     assert "禁止单独使用属性词" in prompt or "属性词" in prompt
+    assert "# 角色" in prompt
+    assert "# 目标" in prompt
+    assert "# 规则" in prompt
+    assert "# 输出" in prompt
+    assert "# 参考" in prompt
 
 
 def test_open_prompt_uses_suggested_predicates_and_allows_novel() -> None:

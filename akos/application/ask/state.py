@@ -17,6 +17,7 @@ class IngestState(TypedDict):
     replaces_source_id: NotRequired[str | None]
     report: CompileReport | None
     chunk_report: NotRequired[ChunkIndexReport | None]
+    chunks_planned: NotRequired[bool]
     verify_report: NotRequired[dict | None]
     evolve_report: NotRequired[ApplyReport | None]
     error: str | None

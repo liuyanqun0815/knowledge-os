@@ -111,7 +111,7 @@ def test_topic_merge_prompt_has_structured_sections():
     assert "## 目标" in prompt
     assert "## 规则" in prompt
     assert "## 输出" in prompt
-    assert "## 上下文" in prompt
+    assert "## 参考" in prompt
     assert "只合并" in prompt or "不编造" in prompt
     assert "相关实体" in prompt
     assert "wikilink" in prompt.lower() or "[[source-" in prompt

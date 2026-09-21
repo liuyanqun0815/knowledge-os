@@ -28,7 +28,7 @@ def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypat
     def capture_task(self, func, *args, **kwargs) -> None:
         scheduled.append((func, args, kwargs))
 
-    def track_sync_llm(self, text: str, *, document_anchor=None) -> list[ExtractedClaim]:
+    def track_sync_llm(self, text: str, *, document_anchor=None, section_title=None, section_summary=None, **_kwargs) -> list[ExtractedClaim]:
         sync_llm_calls.append(text)
         return []
 
@@ -79,7 +79,7 @@ def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> Non
         scheduled.append((func, kwargs))
 
     monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
-    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text, *, document_anchor=None: [])
+    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text, *, document_anchor=None, **_kwargs: [])
     source_text = "七天无理由由买家承担"
     response = TestClient(app).post(
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
@@ -96,7 +96,7 @@ def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> Non
 
     extracted_texts: list[str] = []
 
-    def extract_unknown(self, text: str, *, document_anchor=None) -> list[ExtractedClaim]:
+    def extract_unknown(self, text: str, *, document_anchor=None, section_title=None, section_summary=None, **_kwargs) -> list[ExtractedClaim]:
         extracted_texts.append(text)
         return [
             ExtractedClaim(
@@ -149,7 +149,7 @@ def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch)
         scheduled.append((func, kwargs))
 
     monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
-    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text, *, document_anchor=None: [])
+    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text, *, document_anchor=None, **_kwargs: [])
     source_text = "七天无理由由买家承担"
     response = TestClient(app).post(
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
@@ -163,7 +163,7 @@ def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch)
     kwargs["settings"] = closed_settings
     task(**kwargs)
 
-    def extract_unknown(self, text: str, *, document_anchor=None) -> list[ExtractedClaim]:
+    def extract_unknown(self, text: str, *, document_anchor=None, section_title=None, section_summary=None, **_kwargs) -> list[ExtractedClaim]:
         return [
             ExtractedClaim(
                 subject="七天无理由",

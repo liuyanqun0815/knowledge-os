@@ -188,9 +188,23 @@ def _llm_select_paths(llm_client, question: str, index_text: str, limit: int) ->
     if llm_client is None or not getattr(llm_client, "is_configured", False):
         return []
     prompt = (
-        "你是 Wiki 路由助手。根据用户问题，从 index.md 中选择最相关的页面路径。"
-        f"最多返回 {limit} 条。只输出 JSON：{{\"paths\": [\"hub/leaf\", ...]}}。\n\n"
-        f"## 用户问题\n{question}\n\n## index.md\n{index_text}\n"
+        "# 角色\n"
+        "你是 Wiki 路由助手。\n"
+        "\n"
+        "# 目标\n"
+        "根据用户问题，从 index.md 中选择最相关的页面路径。\n"
+        "\n"
+        "# 规则\n"
+        f"- 最多返回 {limit} 条路径\n"
+        "- 路径必须来自 index.md，不得编造\n"
+        "- 按相关性从高到低排序\n"
+        "\n"
+        "# 输出\n"
+        '只输出 JSON 对象，不要 Markdown 代码围栏：{"paths": ["hub/leaf", ...]}\n'
+        "\n"
+        "# 参考\n"
+        f"## 用户问题\n{question}\n\n"
+        f"## index.md\n{index_text}\n"
     )
     try:
         raw = llm_client.chat_completions(

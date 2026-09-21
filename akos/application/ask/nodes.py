@@ -87,6 +87,20 @@ def index_chunks_node(state: IngestState, deps: Any) -> dict:
     return {"chunk_report": report}
 
 
+def plan_chunks_node(state: IngestState, deps: Any) -> dict:
+    """LLM chapter planning after structural index; failures keep structural chunks."""
+    if state.get("error"):
+        return {}
+    source_id = state.get("source_id")
+    if not source_id:
+        return {"error": "no source_id"}
+    settings = get_settings()
+    from akos.application.ingest.chunk_enrichment import plan_chunks_for_source
+
+    planned = plan_chunks_for_source(source_id=source_id, deps=deps, settings=settings)
+    return {"chunks_planned": planned}
+
+
 def evolve_node(state: IngestState, deps: Any) -> dict:
     if state.get("error"):
         return {}

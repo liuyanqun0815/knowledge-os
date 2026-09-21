@@ -52,10 +52,16 @@ def enrich_source(
         failed_chunks = 0
 
         for unit in units:
-            unit_anchor = (unit.title or "").strip() or document_anchor
             for attempt in range(2):
                 try:
-                    extracted.extend(extractor.extract(unit.text, document_anchor=unit_anchor))
+                    extracted.extend(
+                        extractor.extract(
+                            unit.text,
+                            document_anchor=document_anchor,
+                            section_title=unit.title,
+                            section_summary=unit.summary,
+                        )
+                    )
                     break
                 except Exception:
                     if attempt == 1:

@@ -205,8 +205,8 @@ def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) ->
         def __init__(self, *args, **kwargs):
             pass
 
-        def extract(self, text, *, document_anchor=None):
-            calls.append(document_anchor)
+        def extract(self, text, *, document_anchor=None, section_title=None, section_summary=None):
+            calls.append((document_anchor, section_title, section_summary))
             return []
 
     monkeypatch.setattr(enrichment, "DomainLlmExtractor", FakeExtractor)
@@ -224,7 +224,7 @@ def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) ->
                 source_id="source-1",
                 chunk_index=0,
                 title="个人信用贷款",
-                summary=None,
+                summary="介绍融e借的征信与单位要求",
                 text="## 个人信用贷款\n\n无需抵押。\n\n",
                 start=0,
                 end=20,
@@ -256,7 +256,10 @@ def test_enrich_source_uses_source_chunk_title_as_subject_anchor(monkeypatch) ->
 
     enrich_source(kb_id="kb-1", source_id="source-1", deps=deps, settings=_settings())
 
-    assert calls == ["个人信用贷款", "房屋贷款"]
+    assert calls == [
+        ("文档级产品", "个人信用贷款", "介绍融e借的征信与单位要求"),
+        ("文档级产品", "房屋贷款", None),
+    ]
 
 
 def test_enrich_source_passes_document_anchor(monkeypatch) -> None:
@@ -268,7 +271,7 @@ def test_enrich_source_passes_document_anchor(monkeypatch) -> None:
         def __init__(self, *args, **kwargs):
             pass
 
-        def extract(self, text, *, document_anchor=None):
+        def extract(self, text, *, document_anchor=None, section_title=None, section_summary=None):
             calls.append(document_anchor)
             return []
 
