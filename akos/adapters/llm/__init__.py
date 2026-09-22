@@ -1,1 +1,1 @@
-"""LLM client adapters."""
+"""LLM 客户端适配器。"""

@@ -58,23 +58,31 @@ def build_wiki_tree(wiki_root: Path) -> dict:
         index_text = index_path.read_text(encoding="utf-8")
         hub_descriptions = _parse_hub_descriptions(index_text)
 
-    hubs: dict[str, list[dict]] = {}
-    for page_id, meta in pages_meta.items():
-        if meta.hub:
-            hub_name = meta.hub
-        elif page_id.endswith("/_index"):
-            hub_name = page_id[: -len("/_index")]
-        elif "/" in page_id:
-            hub_name = page_id.rsplit("/", 1)[0]
-        else:
-            hub_name = "其他"
-        hubs.setdefault(hub_name, []).append(
-            {
-                "page_id": page_id,
-                "title": meta.title,
-                "summary": meta.summary,
-            }
+    def _sort_pages(pages: list[dict]) -> list[dict]:
+        return sorted(
+            pages,
+            key=lambda item: (0 if str(item["page_id"]).endswith("/_index") else 1, item["title"] or ""),
         )
+
+    def _page_entry(page_id: str, meta: WikiPageMeta) -> dict:
+        return {
+            "page_id": page_id,
+            "title": meta.title,
+            "summary": meta.summary,
+        }
+
+    category_pages: dict[str, list[dict]] = {}
+    category_products: dict[str, dict[str, list[dict]]] = {}
+
+    for page_id, meta in pages_meta.items():
+        entry = _page_entry(page_id, meta)
+        parts = page_id.split("/")
+        if len(parts) <= 2:
+            category = parts[0] if len(parts) == 2 else (meta.hub or "其他")
+            category_pages.setdefault(category, []).append(entry)
+            continue
+        category, product = parts[0], parts[1]
+        category_products.setdefault(category, {}).setdefault(product, []).append(entry)
 
     hub_items = []
     if index_text is not None:
@@ -89,21 +97,28 @@ def build_wiki_tree(wiki_root: Path) -> dict:
                         "summary": None,
                     }
                 ],
+                "groups": [],
             }
         )
 
-    for hub_name in sorted(hubs):
-        if hub_name == "总览":
+    for category in sorted(set(category_pages) | set(category_products)):
+        if category == "总览":
             continue
-        pages = sorted(
-            hubs[hub_name],
-            key=lambda item: (0 if str(item["page_id"]).endswith("/_index") else 1, item["title"] or ""),
-        )
+        groups: list[dict] = []
+        for product_slug in sorted(category_products.get(category, {})):
+            product_pages = _sort_pages(category_products[category][product_slug])
+            display_name = product_slug
+            for page in product_pages:
+                if str(page["page_id"]).endswith("/_index"):
+                    display_name = page["title"] or product_slug
+                    break
+            groups.append({"name": display_name, "pages": product_pages})
         hub_items.append(
             {
-                "name": hub_name,
-                "description": hub_descriptions.get(hub_name),
-                "pages": pages,
+                "name": category,
+                "description": hub_descriptions.get(category),
+                "pages": _sort_pages(category_pages.get(category, [])),
+                "groups": groups,
             }
         )
     return {"hubs": hub_items}

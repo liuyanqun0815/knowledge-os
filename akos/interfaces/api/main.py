@@ -55,7 +55,7 @@ def _resume_enriching_sources(app: FastAPI) -> None:
                     settings=settings,
                 )
             except Exception:
-                logger.exception("Failed to resume enrichment for source %s in knowledge base %s", source.id, kb_id)
+                logger.exception("恢复 enrich 失败 source=%s kb=%s", source.id, kb_id)
 
 
 def _resume_background_source_jobs(app: FastAPI) -> None:
@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
             except Exception:
-                logger.exception("background source resume task failed during shutdown")
+                logger.exception("关闭时后台恢复 source 任务失败")
 
 
 def create_app(data_root: str | None = None) -> FastAPI:

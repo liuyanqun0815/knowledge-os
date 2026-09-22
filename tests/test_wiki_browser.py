@@ -180,6 +180,58 @@ def test_build_tree_includes_index_when_present(tmp_path: Path):
     assert page["title"] == "综合概览"
 
 
+def test_build_tree_nests_product_bundles_under_category(tmp_path: Path):
+    from akos.application.wiki.browser import build_wiki_tree
+
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    (wiki / "贷款产品").mkdir()
+    (wiki / "贷款产品" / "工行融e借.md").write_text("# 融e借\n", encoding="utf-8")
+    bundle = wiki / "贷款产品" / "招商银行闪电贷"
+    bundle.mkdir()
+    (bundle / "_index.md").write_text("# 闪电贷\n", encoding="utf-8")
+    (bundle / "申请条件.md").write_text("# 申请条件\n", encoding="utf-8")
+    save_pages_meta(
+        wiki,
+        {
+            "贷款产品/工行融e借": WikiPageMeta(
+                path="贷款产品/工行融e借.md",
+                title="工行融e借",
+                kind="source_page",
+                content_hash="h1",
+                source_ids=["rong"],
+                hub="贷款产品",
+            ),
+            "贷款产品/招商银行闪电贷/_index": WikiPageMeta(
+                path="贷款产品/招商银行闪电贷/_index.md",
+                title="招商银行闪电贷",
+                kind="source_page",
+                content_hash="h2",
+                source_ids=["sd"],
+                hub="贷款产品/招商银行闪电贷",
+            ),
+            "贷款产品/招商银行闪电贷/申请条件": WikiPageMeta(
+                path="贷款产品/招商银行闪电贷/申请条件.md",
+                title="申请条件",
+                kind="source_page",
+                content_hash="h3",
+                source_ids=["sd"],
+                hub="贷款产品/招商银行闪电贷",
+            ),
+        },
+    )
+    tree = build_wiki_tree(wiki)
+    hub_names = [h["name"] for h in tree["hubs"]]
+    assert "贷款产品/招商银行闪电贷" not in hub_names
+    loan = next(h for h in tree["hubs"] if h["name"] == "贷款产品")
+    assert loan["pages"][0]["page_id"] == "贷款产品/工行融e借"
+    group = next(g for g in loan["groups"] if g["name"] == "招商银行闪电贷")
+    assert {p["page_id"] for p in group["pages"]} == {
+        "贷款产品/招商银行闪电贷/_index",
+        "贷款产品/招商银行闪电贷/申请条件",
+    }
+
+
 def test_build_tree_includes_hub_that_only_has_index_page(tmp_path: Path):
     """product_bundle / catalog hubs whose only page is ``_index.md`` must still appear."""
     from akos.application.wiki.browser import build_wiki_tree
@@ -204,9 +256,10 @@ def test_build_tree_includes_hub_that_only_has_index_page(tmp_path: Path):
         },
     )
     tree = build_wiki_tree(wiki)
-    hub = next(h for h in tree["hubs"] if h["name"] == "理财产品/青银理财成就系列（低波共享）")
-    assert hub["pages"][0]["page_id"] == "理财产品/青银理财成就系列（低波共享）/_index"
-    assert hub["pages"][0]["title"] == "青银理财成就系列（低波共享）"
+    hub = next(h for h in tree["hubs"] if h["name"] == "理财产品")
+    group = next(g for g in hub["groups"] if g["name"] == "青银理财成就系列（低波共享）")
+    assert group["pages"][0]["page_id"] == "理财产品/青银理财成就系列（低波共享）/_index"
+    assert group["pages"][0]["title"] == "青银理财成就系列（低波共享）"
 
 
 def test_read_wiki_page_works_with_relative_wiki_root(tmp_path: Path, monkeypatch: object):

@@ -12,7 +12,7 @@
 |------|--------|----------|
 | **Claim** | 结构化三元组（主谓宾）+ 证据引用 | 精确事实、可核验；综合作答时优先进入上下文 |
 | **Chunk** | 原文切片 + 向量 | 补全叙述细节、未抽全的段落 |
-| **Wiki** | 由 Claim/主题编译的 Markdown 页 | 主题浏览与主题级检索 |
+| **Wiki** | 由源文档 + Claim/Chunk 证据编译的 Markdown 页 | 主题浏览与主题级检索 |
 | **知识图谱** | 实体/关系（含主题簇等） | 关系型问题、主题导航 |
 
 ```text
@@ -33,7 +33,7 @@ Claim 是可审计的真相单元；Chunk 保真原文；Wiki 做人读与主题
 
 | 能力 | 说明 |
 |------|------|
-| **入库** | 上传文档；规则同步抽取 + LLM 异步补抽；切片与证据绑定 |
+| **入库** | 结构切 Chunk →（可选）LLM 章节规划 → 规则/LLM 抽 Claim；后台补 Chunk 元数据与 Wiki 编译 |
 | **问答** | Claim / Wiki / Chunk 三路检索 + 重排；答案带引用、核验状态与可选轨迹 |
 | **Wiki** | 从 Claim 编译/导出 Markdown；Lint 检查冲突与缺证 |
 | **管理台** | 知识库、文档、Claim、隔离审批、问答调试 |
@@ -42,17 +42,31 @@ Claim 是可审计的真相单元；Chunk 保真原文；Wiki 做人读与主题
 
 ### 入库
 
-同步先可检索；LLM 补抽与 Wiki 编译在后台完成。
+上传后 **LangGraph ingest** 在单次任务内完成主链路；**Chunk 元数据 enrich** 与 **Wiki compile** 仍在后台收尾（见 `upload_jobs.process_uploaded_source`）。
 
 ```mermaid
-flowchart LR
-  A[上传文档] --> B[落盘 + 登记 Source]
-  B --> C[规则抽取 Claim]
-  C --> D[切 Chunk / 绑证据]
-  D --> E[可问答]
-  E -.-> F[后台 LLM 补抽合并]
-  F -.-> G[Wiki 编译层更新]
+flowchart TB
+  A[上传 / 落盘 Source] --> B[index_chunks<br/>结构切分 + min_tokens 合并]
+  B --> C[plan_chunks<br/>可选 LLM 合并 span]
+  C --> D[compile<br/>规则 + LLM 按最终 Chunk 抽 Claim]
+  D --> E[verify_sample]
+  E --> F[可问答 / Claim 已入库]
+  F -.-> G[enrich_chunks<br/>title / summary / topics]
+  G -.-> H[Wiki compile<br/>可选]
 ```
+
+**阶段说明（与代码一致）：**
+
+| 阶段 | 作用 |
+|------|------|
+| **index_chunks** | 按标题/空行/`chunk_max_chars` 确定性切分，写入 DB 并建 **Chunk 检索索引**；产出带 **start/end** 的 span，供规划与溯源 |
+| **plan_chunks** | `chunk_llm_segment` 开启时，LLM **只合并**已有 span（不改写原文）；失败则保留结构 Chunk |
+| **compile** | `extract_rules` / `extract_llm` 混合抽 Claim，**按当前 active Chunk** 逐段 LLM（`document_anchor` 为文档级产品名，章节 title/summary 仅作上下文） |
+| **enrich_source** | 仅在 compile 未跑 LLM、或服务重启续跑 `enriching` 状态时补抽；**正常上传且已 LLM compile 时不再重复** |
+| **enrich_chunks** | `chunk_llm_enrich`：每 Chunk 补 **title / summary / topics**，不改边界；供 Chunk 检索与 Wiki 证据摘要 |
+| **Wiki compile** | 按 `resolve_wiki_layout`（篇幅/章节/catalog）决定单页或 `贷款产品/{产品}/` 多页；侧边栏按 **类目** 聚合展示 |
+
+常用开关见 `infra/settings.py`（如 `chunk_llm_segment`、`chunk_llm_enrich`、`wiki_compile`、`chunk_index`）。知识库级 **`graph_enabled`** 关闭时图谱写入为 NoOp，Ask 仍可用 Claim/Chunk/Wiki。
 
 ![文档来源](docs/images/ui-sources.png)
 
@@ -63,7 +77,7 @@ flowchart TB
   Q[用户问题] --> R[会话召回 / 问句改写]
   R --> M[路由检索模式]
   M --> T["并行召回<br/>Claim · Wiki · Chunk"]
-  T --> Z[融合 + 重排]
+  T --> Z[融合 + 重排<br/>Chunk 索引含 title/summary/topics+正文]
   Z --> V[证据核验]
   V --> S[LLM 综合作答]
   S --> ANS[答案 + 引用 + 核验状态]
@@ -113,6 +127,11 @@ uv run pytest --ignore=web
 ```
 
 生产栈见 `deploy/`。
+
+## 开发与约定
+
+- **备注语言**：全仓库业务注释、docstring、日志使用**简体中文**（见 [docs/conventions/zh-remarks.md](docs/conventions/zh-remarks.md) 与 `.cursor/rules/chinese-remarks.mdc`）。
+- **入库日志**：logger `akos.ingest.flow`，前缀 `入库·` / `上传任务` / `混合抽取`；LangSmith 中可搜 `akos.ingest`。
 
 ## 代码结构
 

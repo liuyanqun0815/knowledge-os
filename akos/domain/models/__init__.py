@@ -1,4 +1,4 @@
-"""Domain models (Claim, Source, KnowledgeBase, Procedure, …)."""
+"""领域模型（Claim、Source、KnowledgeBase 等）。"""
 
 from akos.domain.models.knowledge import (  # noqa: F401
     Source,

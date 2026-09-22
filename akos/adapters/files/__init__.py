@@ -1,1 +1,1 @@
-"""File storage adapters."""
+"""文件存储适配器。"""

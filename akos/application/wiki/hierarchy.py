@@ -1,4 +1,4 @@
-"""Pure hierarchy assignment: map raw topic names to hub / leaf / snippet."""
+"""主题层级映射：hub / leaf / snippet。"""
 
 from __future__ import annotations
 

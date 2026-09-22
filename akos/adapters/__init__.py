@@ -1,1 +1,1 @@
-"""IO adapters implementing domain ports."""
+"""IO 适配器，实现领域端口。"""

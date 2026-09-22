@@ -1,4 +1,4 @@
-"""Cross-page wikilink suggestions and injection for compiled wiki pages."""
+"""Wiki 跨页 wikilink 推荐与注入。"""
 
 from __future__ import annotations
 

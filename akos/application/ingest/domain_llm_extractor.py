@@ -79,14 +79,16 @@ _PROMPT = """# 角色
 ## 抽取配置
 {configuration}
 
-## 章节上下文
-- 章节标题：{section_title}
-- 章节摘要：{section_summary}
-
 ## json_schema
 {json_schema}
 
 ## 原文
+章节标题与摘要仅辅助理解本段主题，不可作为 quote 来源；可抽取证据仅来自下方正文。
+
+- 章节标题：{section_title}
+- 章节摘要：{section_summary}
+
+### 正文
 {text}
 """
 
@@ -100,7 +102,7 @@ def _strip_json_fence(content: str) -> str:
 
 
 class DomainLlmExtractor:
-    """Extract raw claims using domain-specific prompt configuration."""
+    """按领域抽取配置，用 LLM 从正文抽取原始 Claim。"""
 
     def __init__(self, client: LlmClient, spec: LlmExtractionSpec) -> None:
         self._client = client
@@ -134,7 +136,7 @@ class DomainLlmExtractor:
         except LlmConfigError:
             return []
         except Exception:
-            logger.exception("LLM claim extraction request failed")
+            logger.exception("LLM Claim 抽取请求失败")
             raise
         claims = self._parse_response(content, text)
         mode = effective_subject_bind_mode(get_settings().subject_bind_mode)

@@ -138,7 +138,7 @@ def parse_segmentation_plan(raw: str, *, span_count: int) -> list[SegmentSection
 
 
 def merge_small_spans(text: str, spans: list[StructuralSpan], *, min_tokens: int = 50) -> list[StructuralSpan]:
-    """Merge adjacent structural spans until each group has at least min_tokens (except a trailing tail)."""
+    """合并相邻结构 span，使每组至少 min_tokens（末尾不足一组时除外）。"""
     if not spans or min_tokens <= 0:
         return spans
 
@@ -302,5 +302,5 @@ def request_segmentation_plan(client: Any, spans: list[StructuralSpan], settings
                 return sections
         except Exception:
             if attempt == 1:
-                logger.exception("Chunk segmentation LLM call failed")
+                logger.exception("章节规划 LLM 调用失败")
     return None

@@ -1,1 +1,1 @@
-"""HTTP API interface (FastAPI app + admin routes)."""
+"""HTTP API（FastAPI 应用与管理路由）。"""

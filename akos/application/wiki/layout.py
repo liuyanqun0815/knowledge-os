@@ -1,11 +1,11 @@
-"""Wiki folder classification and split heuristics for source-centric compile."""
+"""Wiki 目录分类与单页/多页拆分启发式。"""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
-# Built-in business folders (reuse across KB). Last resort: 未分类.
+# 内置业务目录（跨 KB 复用）；兜底：未分类。
 BUILTIN_WIKI_FOLDERS: tuple[str, ...] = (
     "理财产品",
     "贷款产品",
@@ -32,7 +32,7 @@ BUILTIN_WIKI_FOLDERS: tuple[str, ...] = (
     "未分类",
 )
 
-# Keyword → folder scores (examples, not exhaustive).
+# 关键词 → 目录得分（示例，非穷举）。
 _FOLDER_KEYWORDS: dict[str, tuple[str, ...]] = {
     "理财产品": ("理财", "净值", "业绩比较基准", "产品说明书", "托管人", "理财计划", "非保本"),
     "贷款产品": ("贷款", "年利率", "额度", "抵押", "还款方式", "授信", "借款人"),
@@ -73,7 +73,7 @@ _CHAPTER_SKIP_TITLES = _CATALOG_SKIP_TITLES
 
 @dataclass(frozen=True)
 class CatalogItem:
-    """One numbered product/section inside a catalog source document."""
+    """目录型源文档中的一个编号产品/章节。"""
 
     slug: str
     title: str
@@ -82,7 +82,7 @@ class CatalogItem:
 
 @dataclass(frozen=True)
 class ChapterItem:
-    """One top-level chapter inside a long product manual."""
+    """长文档产品手册中的一个顶层章节。"""
 
     slug: str
     title: str
@@ -91,7 +91,7 @@ class ChapterItem:
 
 @dataclass(frozen=True)
 class WikiLayoutDecision:
-    """Where a source should land in the wiki tree."""
+    """源文档在 Wiki 树中的落点决策。"""
 
     category: str
     folder: str
@@ -108,7 +108,7 @@ def _title_stem(source_title: str) -> str:
 
 
 def extract_catalog_items(text: str) -> list[CatalogItem]:
-    """Extract numbered H2 product sections from a catalog-style document."""
+    """从目录型文档解析 ``## 1. 产品名`` 式章节。"""
     if not text:
         return []
     matches = list(_CATALOG_H2_RE.finditer(text))
@@ -133,7 +133,7 @@ def extract_catalog_items(text: str) -> list[CatalogItem]:
 
 
 def extract_chapter_items(text: str) -> list[ChapterItem]:
-    """Extract top-level chapters from a long manual (``一、…`` or Markdown ``##``)."""
+    """从长文档解析顶层章节（``一、…`` 或 Markdown ``##``）。"""
     if not text:
         return []
 
@@ -171,7 +171,7 @@ def extract_chapter_items(text: str) -> list[ChapterItem]:
 
 
 def classify_folder(text: str, title: str | None = None) -> str:
-    """Pick a built-in folder from title/body keywords; fallback 未分类."""
+    """根据标题/正文关键词选择内置目录；无匹配则未分类。"""
     blob = f"{title or ''}\n{text or ''}"
     best_folder = "未分类"
     best_score = 0
@@ -199,14 +199,14 @@ def should_split_source(
     claim_subject_count: int = 0,
     min_chars: int = 5000,
 ) -> bool:
-    """Decide whether to create a product subfolder with multiple wiki pages."""
+    """判断是否拆成产品子目录（多 Wiki 页）。"""
     body = text or ""
     chars = len(body)
     sections = count_major_sections(body)
     title_text = title or ""
     title_hint = any(token in title_text for token in _TITLE_SPLIT_HINTS)
 
-    # Strong signals
+    # 强信号
     if chars >= min_chars:
         return True
     if sections >= 4:
@@ -216,7 +216,7 @@ def should_split_source(
     if len(extract_catalog_items(body)) >= 2:
         return True
 
-    # Weak signals: need at least two
+    # 弱信号：至少满足两条
     weak = 0
     if chars >= max(2500, min_chars // 2):
         weak += 1
@@ -238,7 +238,7 @@ def resolve_wiki_layout(
     claim_subject_count: int = 0,
     min_chars: int = 5000,
 ) -> WikiLayoutDecision:
-    """Resolve category/folder/slug and whether to split into a product bundle."""
+    """解析类目/目录/slug 及是否 product_bundle 拆分。"""
     if "__" in source_id:
         folder, slug = source_id.split("__", 1)
         return WikiLayoutDecision(

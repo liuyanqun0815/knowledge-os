@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { WikiSearchHit, WikiTreeHubItem } from "../api/wiki";
+import type { WikiSearchHit, WikiTreeGroupItem, WikiTreeHubItem } from "../api/wiki";
 import { highlightPlainText } from "./wikiHighlight";
 
 export type WikiSidebarProps = {
@@ -28,6 +28,7 @@ export function WikiSidebar({
   onSelectPage,
 }: WikiSidebarProps) {
   const [expandedHubs, setExpandedHubs] = useState<Set<string>>(() => new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 
   const indexPage = useMemo(() => {
     const hub = hubs.find(isIndexHub);
@@ -36,15 +37,36 @@ export function WikiSidebar({
 
   const folderHubs = useMemo(() => hubs.filter((hub) => !isIndexHub(hub)), [hubs]);
 
+  function groupKey(hubName: string, group: WikiTreeGroupItem): string {
+    return `${hubName}\0${group.name}`;
+  }
+
   const visibleExpanded = useMemo(() => {
     const next = new Set(expandedHubs);
     for (const hub of folderHubs) {
       if (hub.pages.some((page) => page.page_id === activePageId)) {
         next.add(hub.name);
       }
+      for (const group of hub.groups ?? []) {
+        if (group.pages.some((page) => page.page_id === activePageId)) {
+          next.add(hub.name);
+        }
+      }
     }
     return next;
   }, [activePageId, expandedHubs, folderHubs]);
+
+  const visibleExpandedGroups = useMemo(() => {
+    const next = new Set(expandedGroups);
+    for (const hub of folderHubs) {
+      for (const group of hub.groups ?? []) {
+        if (group.pages.some((page) => page.page_id === activePageId)) {
+          next.add(groupKey(hub.name, group));
+        }
+      }
+    }
+    return next;
+  }, [activePageId, expandedGroups, folderHubs]);
 
   function toggleHub(name: string) {
     setExpandedHubs((current) => {
@@ -56,6 +78,33 @@ export function WikiSidebar({
       }
       return next;
     });
+  }
+
+  function toggleGroup(hubName: string, group: WikiTreeGroupItem) {
+    const key = groupKey(hubName, group);
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function renderPageButtons(pages: WikiTreeGroupItem["pages"]) {
+    return pages.map((page) => (
+      <li key={page.page_id}>
+        <button
+          type="button"
+          className={page.page_id === activePageId ? "wiki-page-item active" : "wiki-page-item"}
+          onClick={() => onSelectPage(page.page_id)}
+        >
+          {page.title}
+        </button>
+      </li>
+    ));
   }
 
   if (searchHits !== null || isSearching) {
@@ -136,23 +185,33 @@ export function WikiSidebar({
                   <span>{hub.name}</span>
                 </button>
                 {expanded ? (
-                  <ul className="wiki-page-list">
-                    {hub.pages.map((page) => (
-                      <li key={page.page_id}>
-                        <button
-                          type="button"
-                          className={
-                            page.page_id === activePageId
-                              ? "wiki-page-item active"
-                              : "wiki-page-item"
-                          }
-                          onClick={() => onSelectPage(page.page_id)}
-                        >
-                          {page.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    {hub.pages.length > 0 ? (
+                      <ul className="wiki-page-list">{renderPageButtons(hub.pages)}</ul>
+                    ) : null}
+                    {(hub.groups ?? []).map((group) => {
+                      const gkey = groupKey(hub.name, group);
+                      const groupExpanded = visibleExpandedGroups.has(gkey);
+                      return (
+                        <div key={gkey} className="wiki-product-group">
+                          <button
+                            type="button"
+                            className="wiki-hub-toggle wiki-group-toggle"
+                            aria-expanded={groupExpanded}
+                            onClick={() => toggleGroup(hub.name, group)}
+                          >
+                            <span aria-hidden="true">{groupExpanded ? "▾" : "▸"}</span>
+                            <span>{group.name}</span>
+                          </button>
+                          {groupExpanded ? (
+                            <ul className="wiki-page-list wiki-group-pages">
+                              {renderPageButtons(group.pages)}
+                            </ul>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </>
                 ) : null}
               </li>
             );

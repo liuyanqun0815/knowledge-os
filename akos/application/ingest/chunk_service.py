@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -9,6 +10,8 @@ from akos.domain.ports.compiler import ChunkIndexReport
 from infra.settings import Settings
 from akos.domain.models.knowledge import SourceChunk
 from akos.domain.ports.knowledge import KnowledgePort
+
+logger = logging.getLogger("akos.ingest.flow")
 
 
 def _content_hash(text: str) -> str:
@@ -43,8 +46,7 @@ def _fold_overflow_chunks(chunks: list[SourceChunk], text: str, *, max_chunks: i
 
 
 def build_source_chunks(source_id: str, text: str, settings: Settings) -> tuple[list[SourceChunk], bool]:
-    # Structural split first with a high ceiling so blank-line fragments are not
-    # prematurely glued into a giant tail by max_chunks; compact, then fold.
+    # 先结构切分（上限放宽，避免空行碎块被 max_chunks 压成一条大尾），再 compact，最后 fold。
     structural_cap = max(settings.chunk_max_per_doc * 20, 500)
     result = chunk_document(
         text,
@@ -74,7 +76,8 @@ def build_source_chunks(source_id: str, text: str, settings: Settings) -> tuple[
                 created_at=now,
             )
         )
-    # Merge blank-line / heading fragments before compile uses these units.
+    # compile 前合并过短的空行/标题碎块。
+    before_compact = len(chunks)
     if settings.chunk_min_tokens > 0 and len(chunks) > 1:
         from akos.application.ingest.chunk_segmentation import compact_small_chunks
 
@@ -84,7 +87,17 @@ def build_source_chunks(source_id: str, text: str, settings: Settings) -> tuple[
             chunks,
             min_tokens=settings.chunk_min_tokens,
         )
+    after_compact = len(chunks)
     chunks, folded = _fold_overflow_chunks(chunks, text, max_chunks=settings.chunk_max_per_doc)
+    logger.debug(
+        "结构切分 source=%s 结构=%s compact后=%s 最终=%s truncated=%s folded=%s",
+        source_id,
+        before_compact,
+        after_compact,
+        len(chunks),
+        result.truncated,
+        folded,
+    )
     return chunks, bool(result.truncated or folded)
 
 
@@ -95,6 +108,7 @@ def index_source_chunks(
     settings: Settings,
 ) -> ChunkIndexReport:
     if not settings.chunk_index:
+        logger.info("跳过 chunk 索引 source=%s（chunk_index=false）", source_id)
         return ChunkIndexReport(source_id=source_id, chunks_created=0, truncated=False, errors=[])
 
     text = knowledge.get_source_text(source_id)

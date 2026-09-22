@@ -20,7 +20,7 @@ def is_exclusive_predicate(predicate: str) -> bool:
 
 
 def _split_object_parts(value: str) -> list[str]:
-    """Split only on join separators we emit (；), never on natural顿号 inside a value."""
+    """只按我们写出的分号（；或 ;）切开，不把值内部的顿号（、）当分隔符。"""
     text = value.strip()
     if not text:
         return []
@@ -43,14 +43,14 @@ def _join_objects(parts: list[str]) -> str:
             unique = [existing for existing in unique if existing not in text]
             unique.append(text)
             seen.add(text)
-    # Prefer顿号 for short tokens; semicolon for long / punctuated values.
+    # 短词用顿号；长句或已含标点的用分号。
     if any(len(item) > 8 or "，" in item or "。" in item or "、" in item for item in unique):
         return "；".join(unique)
     return "、".join(unique)
 
 
 def join_claim_objects(*parts: str) -> str:
-    """Public helper: dedupe and join complementary object values."""
+    """对外：去重并拼接可互补的 object 值。"""
     return _join_objects(list(parts))
 
 
@@ -60,7 +60,7 @@ def _join_quotes(claims: list[ExtractedClaim]) -> tuple[str, int, int]:
 
 
 def merge_complementary_extracted(claims: list[ExtractedClaim]) -> list[ExtractedClaim]:
-    """Merge same subject+predicate objects unless the predicate is exclusive."""
+    """合并相同 subject+predicate 的 object；互斥谓词不合并。"""
     buckets: dict[tuple[str, str], list[ExtractedClaim]] = {}
     order: list[tuple[str, str]] = []
     for claim in claims:

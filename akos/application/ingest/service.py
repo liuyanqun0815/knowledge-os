@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -17,6 +18,8 @@ from akos.domain.ports.ontology import OntologyPort
 
 if TYPE_CHECKING:
     from akos.domain.ports.retrieval import RetrievalPort
+
+logger = logging.getLogger("akos.ingest.flow")
 
 
 def _family_id(subject: str, predicate: str, object_type: str) -> str:
@@ -148,6 +151,13 @@ class KnowledgeCompiler:
         resolved_settings = settings or get_settings()
         source = self._knowledge.get_source(source_id)
         stored_chunks = self._knowledge.list_chunks(source_id, status="active")
+        logger.info(
+            "混合抽取 开始 source=%s active_chunks=%s extract_rules=%s extract_llm=%s",
+            source_id,
+            len(stored_chunks),
+            resolved_settings.extract_rules,
+            resolved_settings.extract_llm,
+        )
         candidates = select_hybrid_candidates(
             text,
             rule_extractor=self._extractor,
@@ -254,6 +264,13 @@ class KnowledgeCompiler:
             if self._retrieval is not None and claim_status == "active":
                 self._retrieval.index_claim(claim)
 
+        logger.info(
+            "混合抽取 完成 source=%s candidates=%s claims_created=%s quarantined=%s",
+            source_id,
+            len(candidates),
+            claims_created,
+            quarantined,
+        )
         return CompileReport(
             source_id=source_id,
             claims_created=claims_created,

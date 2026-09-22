@@ -297,7 +297,7 @@ def _try_llm_merge(
     try:
         raw = llm_client.chat_completions([{"role": "user", "content": prompt}], temperature=0.2)
     except Exception:
-        logger.exception("Wiki topic LLM merge call failed for topic %s", topic_name)
+        logger.exception("Wiki 主题页 LLM 合并失败 topic=%s", topic_name)
         return None
     markdown = _parse_llm_markdown(raw)
     if markdown is None:
@@ -594,7 +594,7 @@ def _compile_hierarchy_for_source(
             if merged is not None:
                 content = merged
             else:
-                logger.info("Wiki topic LLM merge fell back to template for topic %s", bundle.title)
+                logger.info("Wiki 主题页 LLM 失败，回退模板 topic=%s", bundle.title)
 
         page_path.write_text(content, encoding="utf-8")
         written += 1
@@ -691,7 +691,7 @@ def _compile_flat_for_source(
             if merged is not None:
                 content = merged
             else:
-                logger.info("Wiki topic LLM merge fell back to template for topic %s", cluster.name)
+                logger.info("Wiki 主题页 LLM 失败，回退模板 topic=%s", cluster.name)
 
         page_path.write_text(content, encoding="utf-8")
         written += 1

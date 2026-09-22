@@ -1,9 +1,8 @@
-"""Domain ports package.
+"""领域端口包。
 
-Import concrete modules directly, e.g.::
+请直接导入具体模块，例如::
 
     from akos.domain.ports.knowledge import KnowledgePort
 
-Avoid barrel imports here — eager re-exports create cycles with legacy shims
-(``knowledge_base.__init__`` → ``ports`` → hub → ``knowledge_base.models``).
+勿在此做 barrel 重导出，以免与 legacy shim 循环依赖。
 """

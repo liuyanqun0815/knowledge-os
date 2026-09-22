@@ -1842,6 +1842,19 @@ button {
   border-left: 2px solid var(--color-border);
 }
 
+.wiki-product-group {
+  margin-top: 0.35rem;
+}
+
+.wiki-group-toggle {
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+.wiki-group-pages {
+  margin-left: 1.25rem;
+}
+
 .wiki-page-item:hover,
 .wiki-hit-item:hover,
 .wiki-page-item.active,

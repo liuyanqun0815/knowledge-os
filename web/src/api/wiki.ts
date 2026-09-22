@@ -59,7 +59,13 @@ export async function downloadWikiZip(kbId: string): Promise<void> {
 }
 
 export type WikiTreePageItem = { page_id: string; title: string; summary?: string | null };
-export type WikiTreeHubItem = { name: string; description?: string | null; pages: WikiTreePageItem[] };
+export type WikiTreeGroupItem = { name: string; pages: WikiTreePageItem[] };
+export type WikiTreeHubItem = {
+  name: string;
+  description?: string | null;
+  pages: WikiTreePageItem[];
+  groups?: WikiTreeGroupItem[];
+};
 export type WikiTreeResponse = { kb_id: string; wiki_root: string; hubs: WikiTreeHubItem[] };
 export type WikiPageResponse = { page_id: string; title: string; path: string; markdown: string };
 export type WikiSearchHit = { page_id: string; title: string; snippets: string[] };

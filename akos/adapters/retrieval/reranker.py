@@ -92,7 +92,7 @@ class BceCrossEncoderReranker:
         except Exception as exc:
             cross_encoder_error = exc
             _LOG.warning(
-                "sentence-transformers CrossEncoder failed for %s (%s); falling back to transformers",
+                "CrossEncoder 加载失败 %s (%s)，回退 transformers",
                 model_path,
                 exc,
             )
@@ -165,7 +165,7 @@ def create_reranker(settings: Settings) -> RerankerPort | None:
             )
         except Exception as exc:
             # Wiki compile / Ask bootstrap must not hard-fail when rerank weights are incomplete.
-            _LOG.warning("rerank disabled after load failure: %s", exc)
+            _LOG.warning("重排模型加载失败，已禁用 rerank: %s", exc)
             return None
     raise ValueError(f"unsupported rerank provider: {settings.rerank_provider}")
 

@@ -114,10 +114,11 @@ def process_uploaded_source(
     subject_bind_mode: str | None = None,
 ) -> None:
     from akos.application.ingest.chunk_enrichment import enrich_chunks
-    from akos.application.ingest.enrichment import enrich_source
+    from akos.application.ingest.enrichment import enrich_source, ingest_graph_extracts_llm_claims
     from akos.application.ingest.subject_bind import subject_bind_mode_override
 
     source_id = source_id_for_upload(kb_dir, original)
+    _LOG.info("上传任务 开始 kb=%s source=%s file=%s", kb_id, source_id, original.name)
     try:
         deps.knowledge.update_source_status(source_id, "running")
         ingest_path = materialize_markdown_for_ingest(original)
@@ -128,23 +129,39 @@ def process_uploaded_source(
                 replaces_source_id=replaces_source_id,
             )
             source_id = report.source_id
-            enrich_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+            if ingest_graph_extracts_llm_claims(settings, deps):
+                deps.knowledge.update_source_status(source_id, "succeeded")
+                _LOG.info(
+                    "上传任务 ingest 完成（compile 已 LLM 抽 Claim，跳过 enrich_source）source=%s claims=%s",
+                    source_id,
+                    report.claims_created,
+                )
+            else:
+                _LOG.info("上传任务 ingest 完成，进入 enrich_source 补抽 source=%s", source_id)
+                enrich_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
     except Exception as exc:
-        _LOG.exception("async upload failed kb=%s source=%s: %s", kb_id, source_id, exc)
+        _LOG.exception("上传任务 失败 kb=%s source=%s: %s", kb_id, source_id, exc)
         try:
             deps.knowledge.update_source_status(source_id, "failed")
         except Exception:
-            _LOG.exception("failed to mark source failed: %s", source_id)
+            _LOG.exception("标记 source 失败状态出错 source=%s", source_id)
         return
 
-    if settings.chunk_llm_enrich or settings.topic_cluster or settings.wiki_compile:
+    if (
+        getattr(settings, "chunk_llm_enrich", False)
+        or getattr(settings, "topic_cluster", False)
+        or getattr(settings, "wiki_compile", False)
+    ):
+        _LOG.info("上传任务 后台 enrich_chunks / Wiki source=%s", source_id)
         try:
             enrich_chunks(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
         except Exception as exc:
-            # Ingest + enrich_source already succeeded; do not mark source failed.
+            # ingest 已成功，不因 enrich 失败把 source 标为 failed
             _LOG.exception(
-                "chunk enrichment failed after successful ingest kb=%s source=%s: %s",
+                "上传任务 enrich_chunks 失败（source 保持 succeeded）kb=%s source=%s: %s",
                 kb_id,
                 source_id,
                 exc,
             )
+    else:
+        _LOG.info("上传任务 结束 source=%s（未启用 chunk/wiki 后台 enrich）", source_id)

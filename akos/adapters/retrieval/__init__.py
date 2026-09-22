@@ -1,1 +1,1 @@
-"""Retrieval / embedding / rerank adapters."""
+"""检索 / 向量 / 重排适配器。"""

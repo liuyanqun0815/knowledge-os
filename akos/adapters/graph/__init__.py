@@ -1,1 +1,1 @@
-"""Graph engine adapters (e.g. Neo4j)."""
+"""图存储适配器（如 Neo4j）。"""

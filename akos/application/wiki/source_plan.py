@@ -1,4 +1,4 @@
-"""Source-centric wiki compilation: LLM plans pages from full source documents."""
+"""以源文档为中心的 Wiki 编译：LLM 规划页面。"""
 
 from __future__ import annotations
 
@@ -703,7 +703,7 @@ def _plan_with_llm(
         try:
             raw = llm_client.chat_completions([{"role": "user", "content": prompt}], temperature=0.2)
         except Exception:
-            logger.exception("Wiki source plan LLM call failed for source %s", source_id)
+            logger.exception("Wiki 源文档规划 LLM 失败 source=%s", source_id)
             return None
         plans = _parse_llm_plan(raw)
         if plans is None:
@@ -742,7 +742,7 @@ def _plan_with_llm(
             timeout=90.0,
         )
     except Exception:
-        logger.exception("Wiki outline LLM call failed for source %s", source_id)
+        logger.exception("Wiki 目录 outline LLM 失败 source=%s", source_id)
         return None
     outline = _parse_llm_outline(outline_raw)
     if outline is None or len(outline) < 2:
@@ -782,7 +782,7 @@ def _plan_with_llm(
             )
         except Exception:
             logger.exception(
-                "Wiki page LLM call failed for source %s page %s", source_id, item["slug"]
+                "Wiki 单页生成 LLM 失败 source=%s page=%s", source_id, item["slug"]
             )
             return None
         markdown = _parse_llm_page_markdown(page_raw)

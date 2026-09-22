@@ -1,1 +1,1 @@
-"""AKOS package root (hexagonal layout)."""
+"""AKOS 包根（六边形分层）。"""

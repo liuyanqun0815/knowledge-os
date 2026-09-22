@@ -1,4 +1,4 @@
-"""No-op GraphPort used when a knowledge base has graph_enabled=false."""
+"""graph_enabled=false 时使用的空实现 GraphPort。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from akos.domain.ports.graph import Edge
 
 
 class NoOpGraph:
-    """Swallow writes and return empty reads — does not touch Postgres/Neo4j."""
+    """写入空操作、读返回空；不访问 Postgres/Neo4j。"""
 
     def upsert_entity(self, entity_id: str, type: str, props: dict) -> None:
         return None

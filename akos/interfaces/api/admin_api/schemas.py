@@ -295,10 +295,16 @@ class WikiTreePageItem(BaseModel):
     summary: str | None = None
 
 
+class WikiTreeGroupItem(BaseModel):
+    name: str
+    pages: list[WikiTreePageItem] = Field(default_factory=list)
+
+
 class WikiTreeHubItem(BaseModel):
     name: str
     description: str | None = None
     pages: list[WikiTreePageItem] = Field(default_factory=list)
+    groups: list[WikiTreeGroupItem] = Field(default_factory=list)
 
 
 class WikiTreeResponse(BaseModel):

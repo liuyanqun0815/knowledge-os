@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -33,6 +34,7 @@ _YEAR_PATTERN = re.compile(r"(20\d{2})年?")
 _TEMPORAL_WORDS = ("当时", "那时", "之前")
 _PROCEDURE_KEYWORDS = ("怎么做", "流程", "步骤", "怎么走")
 _RETRIEVE_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="akos-retrieve")
+_INGEST_LOG = logging.getLogger("akos.ingest.flow")
 
 
 def _node_duration_ms(started: float) -> int:
@@ -40,6 +42,13 @@ def _node_duration_ms(started: float) -> int:
 
 
 def store_source_node(state: IngestState, deps: Any) -> dict:
+    kb_id = getattr(deps, "knowledge_base_id", "")
+    _INGEST_LOG.info(
+        "入库·落盘 开始 kb=%s path=%s type=%s",
+        kb_id,
+        state.get("file_path"),
+        state.get("source_type"),
+    )
     try:
         stored = deps.files.store(
             state["file_path"],
@@ -52,8 +61,14 @@ def store_source_node(state: IngestState, deps: Any) -> dict:
             source = replace(source, replaces_source_id=replaces_source_id)
         source = deps.knowledge.save_source(source)
         deps.knowledge.save_source_text(source.id, stored.text)
+        _INGEST_LOG.info(
+            "入库·落盘 完成 source=%s 正文字符=%s",
+            source.id,
+            len(stored.text),
+        )
         return {"source_id": source.id, "error": None}
     except Exception as exc:
+        _INGEST_LOG.exception("入库·落盘 失败 kb=%s: %s", kb_id, exc)
         return {"error": str(exc), "source_id": None}
 
 
@@ -64,11 +79,19 @@ def compile_node(state: IngestState, deps: Any) -> dict:
     if not source_id:
         return {"error": "no source_id", "report": None}
     staging = bool(state.get("replaces_source_id"))
+    _INGEST_LOG.info("入库·编译 Claim 开始 source=%s staging=%s", source_id, staging)
     report = deps.compiler.ingest(
         source_id,
         staging=staging,
         llm_client=deps.llm_client,
         domain=deps.domain,
+    )
+    _INGEST_LOG.info(
+        "入库·编译 Claim 完成 source=%s claims=%s quarantined=%s errors=%s",
+        source_id,
+        report.claims_created,
+        report.quarantined,
+        len(report.errors),
     )
     return {"report": report}
 
@@ -81,14 +104,26 @@ def index_chunks_node(state: IngestState, deps: Any) -> dict:
         return {"error": "no source_id", "chunk_report": None}
     settings = get_settings()
     chunk_retrieval = getattr(deps, "chunk_retrieval", None)
+    _INGEST_LOG.info("入库·结构切分 开始 source=%s chunk_index=%s", source_id, settings.chunk_index)
     report = index_source_chunks(deps.knowledge, chunk_retrieval, source_id, settings)
     if report.errors:
+        _INGEST_LOG.warning(
+            "入库·结构切分 失败 source=%s error=%s",
+            source_id,
+            report.errors[0],
+        )
         return {"chunk_report": report, "error": report.errors[0]}
+    _INGEST_LOG.info(
+        "入库·结构切分 完成 source=%s chunks=%s truncated=%s",
+        source_id,
+        report.chunks_created,
+        report.truncated,
+    )
     return {"chunk_report": report}
 
 
 def plan_chunks_node(state: IngestState, deps: Any) -> dict:
-    """LLM chapter planning after structural index; failures keep structural chunks."""
+    """结构切分后的 LLM 章节规划；失败则保留结构 chunk。"""
     if state.get("error"):
         return {}
     source_id = state.get("source_id")
@@ -97,7 +132,17 @@ def plan_chunks_node(state: IngestState, deps: Any) -> dict:
     settings = get_settings()
     from akos.application.ingest.chunk_enrichment import plan_chunks_for_source
 
+    _INGEST_LOG.info(
+        "入库·章节规划 开始 source=%s chunk_llm_segment=%s",
+        source_id,
+        settings.chunk_llm_segment,
+    )
     planned = plan_chunks_for_source(source_id=source_id, deps=deps, settings=settings)
+    _INGEST_LOG.info(
+        "入库·章节规划 结束 source=%s replaced=%s",
+        source_id,
+        planned,
+    )
     return {"chunks_planned": planned}
 
 
@@ -176,6 +221,13 @@ def verify_sample_node(state: IngestState, deps: Any) -> dict:
         claim.status = "quarantined"
         quarantined += 1
 
+    _INGEST_LOG.info(
+        "入库·抽样核验 完成 source=%s checked=%s passed=%s quarantined=%s",
+        source_id,
+        checked,
+        passed,
+        quarantined,
+    )
     return {
         "verify_report": {
             "checked": checked,

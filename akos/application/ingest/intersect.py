@@ -38,7 +38,7 @@ def intersect_extracted(
     llm_claims: list[ExtractedClaim],
     ontology: OntologyPort | None = None,
 ) -> list[ExtractedClaim]:
-    """Keep claims whose (subject, predicate, object) triple appears in both rule and LLM results."""
+    """保留规则与 LLM 均抽出的相同 (subject, predicate, object) 三元组。"""
     llm_by_triple = {
         claim_triple_key(claim.subject, claim.predicate, claim.object, ontology): claim for claim in llm_claims
     }
@@ -63,7 +63,7 @@ def intersect_extracted(
 
 
 def _merge_duplicate_triple(rule: ExtractedClaim, llm: ExtractedClaim) -> ExtractedClaim:
-    """Prefer rule quote/span when both channels agree on the same triple."""
+    """两路结果三元组一致时，优先采用规则的 quote/span。"""
     quote = rule.quote or llm.quote
     start = rule.start if rule.quote else llm.start
     end = rule.end if rule.quote else llm.end
@@ -83,7 +83,7 @@ def union_extracted(
     llm_claims: list[ExtractedClaim],
     ontology: OntologyPort | None = None,
 ) -> list[ExtractedClaim]:
-    """Merge rule and LLM claims; dedupe by triple, preferring rule evidence spans on overlap."""
+    """合并规则与 LLM Claim；按三元组去重，重叠时优先规则证据 span。"""
     merged: dict[tuple[str, str, str], ExtractedClaim] = {}
     for rule in rule_claims:
         key = claim_triple_key(rule.subject, rule.predicate, rule.object, ontology)
@@ -99,10 +99,7 @@ def union_extracted(
 
 
 def units_from_source_chunks(chunks: list) -> list[ExtractionUnit]:
-    """Convert stored SourceChunk rows into extraction units.
-
-    Title and summary are chapter context only; the product anchor stays document-level.
-    """
+    """将 SourceChunk 转为抽取单元；title/summary 仅章节上下文，产品锚点为文档级。"""
     ordered = sorted(chunks, key=lambda item: getattr(item, "chunk_index", 0))
     return [
         ExtractionUnit(
@@ -121,7 +118,7 @@ def resolve_extraction_units(
     *,
     source_chunks: list | None = None,
 ) -> tuple[list[ExtractionUnit], bool]:
-    """Prefer finalized source_chunks; otherwise chunk with the configured document mode."""
+    """优先使用已入库 source_chunks；否则按配置的文档模式临时切分。"""
     if source_chunks:
         return units_from_source_chunks(source_chunks), False
 
@@ -138,7 +135,7 @@ def resolve_extraction_units(
         units = [ExtractionUnit(text=draft.text, title=draft.title) for draft in result.chunks]
         return units, result.truncated
     except Exception:
-        # Keep older chunk_text path if document chunker fails unexpectedly.
+        # 文档切分器异常时回退旧版 chunk_text。
         legacy = chunk_text(
             text,
             max_chars=settings.chunk_max_chars,
@@ -156,7 +153,7 @@ def extract_llm_claims_from_text(
     title: str | None = None,
     source_chunks: list | None = None,
 ) -> list[ExtractedClaim]:
-    """Extract LLM claims from text, preferring finalized source_chunks when available."""
+    """从正文抽 LLM Claim；有 finalized source_chunks 时按 chunk 单元抽取。"""
     extractor = DomainLlmExtractor(llm_client, apply_open_flag(domain.llm_extraction_spec(), settings))
     document_anchor = resolve_document_anchor(text, title=title)
     units, _truncated = resolve_extraction_units(text, settings, source_chunks=source_chunks)
@@ -189,7 +186,7 @@ def select_hybrid_candidates(
     title: str | None = None,
     source_chunks: list | None = None,
 ) -> list[ExtractedClaim]:
-    """Combine rule and LLM extraction according to AKOS_EXTRACT_RULES / AKOS_EXTRACT_LLM settings."""
+    """按 extract_rules / extract_llm 配置合并规则抽取与 LLM 抽取。"""
     rule_claims = rule_extractor.extract(text) if settings.extract_rules else []
     use_llm = settings.extract_llm and llm_client is not None and llm_client.is_configured and domain is not None
     if not use_llm:
@@ -207,7 +204,7 @@ def select_hybrid_candidates(
     except Exception:
         if settings.extract_rules and rule_claims:
             logger.exception(
-                "LLM extraction failed; falling back to %s rule claims",
+                "LLM 抽取失败，回退为 %s 条规则 Claim",
                 len(rule_claims),
             )
             return rule_claims

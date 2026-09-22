@@ -1,1 +1,1 @@
-"""Domain layer: models and ports (no IO adapters)."""
+"""领域层：模型与端口（不含 IO 适配器）。"""

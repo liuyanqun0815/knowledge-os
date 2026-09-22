@@ -1,1 +1,1 @@
-"""Knowledge-base lint use cases."""
+"""知识库 Lint 用例。"""

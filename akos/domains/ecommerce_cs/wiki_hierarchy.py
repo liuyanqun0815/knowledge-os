@@ -1,4 +1,4 @@
-"""Ecommerce CS wiki hierarchy seed maps (parents / snippets)."""
+"""电商客服 Wiki 层级种子映射。"""
 
 from __future__ import annotations
 

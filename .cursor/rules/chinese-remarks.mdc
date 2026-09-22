@@ -1,0 +1,27 @@
+---
+description: 代码注释、docstring 与日志使用简体中文
+alwaysApply: true
+---
+
+# 中文备注约定
+
+适用于本仓库 `akos/`、`infra/`、`web/src/` 的新增与修改。提交前可运行 `uv run python scripts/check_english_remarks.py`。
+
+## 必须使用简体中文
+
+- 模块 / 类 / 公共函数的 **docstring**（说明业务意图，非重复签名）
+- **行内注释**（解释非显而易见的业务或算法）
+- **`logging` / 应用日志** 的消息正文（保留 `%s` 占位与 logger 名称）
+- **README / 对内运维文档** 中的流程说明
+
+## 可保留英文
+
+- 标识符：变量、函数、类、文件名、环境变量、JSON/API 字段名
+- pytest 用例函数名、纯测试夹具说明
+- 机器可读错误码片段（如 `path_escape`、`knowledge_base_not_found`），可附中文日志
+- 第三方库、协议、许可证原文
+
+## 日志习惯
+
+- 关键链路使用可 grep 的前缀：`入库·`、`上传任务`、`混合抽取`、`Wiki·` 等
+- 入库流程统一 logger：`akos.ingest.flow`

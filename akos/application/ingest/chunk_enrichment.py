@@ -110,36 +110,36 @@ def _persist_chunks(deps: Any, source_id: str, chunks: list, settings: Settings)
 
 
 def plan_chunks_for_source(*, source_id: str, deps: Any, settings: Settings) -> bool:
-    """LLM chapter planning on structural chunks. Returns True when chunks were replaced.
-
-    On failure or when disabled, leaves existing structural chunks unchanged.
-    """
+    """对结构 chunk 做 LLM 章节规划。成功替换 chunk 时返回 True；失败或未启用则保留原 chunk。"""
     if not settings.chunk_llm_segment:
+        logger.debug("跳过章节规划 source=%s（chunk_llm_segment=false）", source_id)
         return False
     client = getattr(deps, "llm_client", None)
     if client is None or not client.is_configured:
+        logger.debug("跳过章节规划 source=%s（LLM 未配置）", source_id)
         return False
 
     text = deps.knowledge.get_source_text(source_id)
     if text is None:
-        logger.warning("Chunk planning skipped for source %s: source text missing", source_id)
+        logger.warning("跳过章节规划 source=%s：源正文不存在", source_id)
         return False
 
     chunks = deps.knowledge.list_chunks(source_id, status="active")
     if not chunks:
+        logger.warning("跳过章节规划 source=%s：无 active chunk", source_id)
         return False
 
     spans = spans_from_chunks(chunks)
     sections = request_segmentation_plan(client, spans, settings)
     if sections is None:
-        logger.warning("Chunk planning failed for source %s; keeping structural chunks", source_id)
+        logger.warning("章节规划失败 source=%s，保留结构 chunk", source_id)
         return False
 
     drafts = apply_segmentation_plan(text, spans, sections)
     merged_chunks = build_segmented_source_chunks(source_id, text, drafts, sections)
     _persist_chunks(deps, source_id, merged_chunks, settings)
     logger.info(
-        "Chunk planning finished for source %s (%s -> %s chunks)",
+        "章节规划完成 source=%s %s -> %s 段",
         source_id,
         len(chunks),
         len(merged_chunks),
@@ -169,7 +169,7 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
             except Exception:
                 if attempt == 1:
                     logger.exception(
-                        "Chunk enrichment failed for source %s chunk %s in kb %s",
+                        "Chunk 元数据 enrich 失败 source=%s chunk=%s kb=%s",
                         source_id,
                         chunk.id,
                         kb_id,
@@ -189,12 +189,20 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
 
     _rebuild_topic_clusters(deps, kb_id, settings)
     _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
-    logger.info("Chunk enrichment finished for source %s in kb %s", source_id, kb_id)
+    logger.info("Chunk 元数据补全完成 source=%s kb=%s", source_id, kb_id)
 
 
 @traceable(name="akos.enrich_chunks", run_type="chain")
 def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
-    """Post-claim metadata enrich only — does not change chunk boundaries."""
+    """Claim 入库后仅补 chunk 元数据，不改变切分边界。"""
+    logger.info(
+        "Chunk 元数据补全 开始 source=%s kb=%s llm_enrich=%s wiki=%s topic_cluster=%s",
+        source_id,
+        kb_id,
+        settings.chunk_llm_enrich,
+        getattr(settings, "wiki_compile", False),
+        getattr(settings, "topic_cluster", False),
+    )
     client = getattr(deps, "llm_client", None)
     configured = client is not None and client.is_configured
     if settings.chunk_llm_enrich and configured:

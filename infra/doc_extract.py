@@ -1,4 +1,4 @@
-"""Extract plain text from uploaded Office/PDF documents for ingest."""
+"""从 Office/PDF 等上传文件提取纯文本供入库。"""
 
 from __future__ import annotations
 

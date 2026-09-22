@@ -15,6 +15,18 @@ from infra.settings import Settings
 logger = logging.getLogger(__name__)
 
 
+def ingest_graph_extracts_llm_claims(settings: Settings, deps: Any) -> bool:
+    """判断 ingest 图的 compile_node 是否已按 chunk 跑过 LLM Claim 抽取。"""
+    client = getattr(deps, "llm_client", None)
+    domain = getattr(deps, "domain", None)
+    return (
+        settings.extract_llm
+        and client is not None
+        and client.is_configured
+        and domain is not None
+    )
+
+
 @traceable(name="akos.enrich_source", run_type="chain")
 def enrich_source(
     *,
@@ -23,7 +35,7 @@ def enrich_source(
     deps: Any,
     settings: Settings,
 ) -> None:
-    """Backfill one source with claims extracted by the configured LLM."""
+    """compile 未抽取 Claim 时补抽（例如崩溃恢复后）。"""
     client = getattr(deps, "llm_client", None)
     if not settings.extract_llm or client is None or not client.is_configured:
         deps.knowledge.update_source_status(source_id, "succeeded")
@@ -74,16 +86,17 @@ def enrich_source(
             open_predicates=settings.extract_open_predicates,
         )
         logger.info(
-            "LLM enrichment finished for source %s in kb %s: extracted=%s claims units=%s",
+            "补抽 Claim 完成 source=%s kb=%s extracted=%s units=%s failed_chunks=%s",
             source_id,
             kb_id,
             len(extracted),
             len(units),
+            failed_chunks,
         )
         failure_ratio = failed_chunks / len(units) if units else 0.0
         final_status = "succeeded_partial" if truncated or failure_ratio >= 0.5 else "succeeded"
         deps.knowledge.update_source_status(source_id, final_status)
     except Exception:
-        logger.exception("LLM enrichment failed for source %s in kb %s", source_id, kb_id)
+        logger.exception("补抽 Claim 失败 source=%s kb=%s", source_id, kb_id)
         deps.knowledge.update_source_status(source_id, "failed")
         raise

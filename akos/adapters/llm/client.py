@@ -22,11 +22,11 @@ _RETRYABLE_EXCEPTIONS = (
 
 
 class LlmConfigError(RuntimeError):
-    """Raised when LLM is invoked without required configuration."""
+    """未配置 LLM 仍发起调用时抛出。"""
 
 
 class OpenAiCompatibleClient:
-    """Minimal OpenAI-compatible chat completions client."""
+    """OpenAI 兼容的最小 chat completions 客户端。"""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -93,7 +93,7 @@ class OpenAiCompatibleClient:
                     raise
                 delay = min(2 ** (attempt - 1), 8)
                 logger.warning(
-                    "LLM request failed (%s), retry %s/%s in %ss: %s",
+                    "LLM 请求失败 (%s)，重试 %s/%s，%ss 后: %s",
                     type(exc).__name__,
                     attempt,
                     attempts,

@@ -1,1 +1,1 @@
-"""Application use-case layer."""
+"""应用用例层。"""

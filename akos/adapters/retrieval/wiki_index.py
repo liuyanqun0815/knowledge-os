@@ -55,7 +55,7 @@ def _is_blocked_rel(rel: str) -> bool:
 
 
 def _safe_page_path(root: Path, rel: str) -> Path | None:
-    """Return resolved page path if it stays under wiki_root and is a file."""
+    """解析页面路径，确保仍在 wiki_root 下且为文件。"""
     rel = _normalize_rel(rel)
     if _is_blocked_rel(rel):
         return None
@@ -233,7 +233,7 @@ def _llm_select_paths(llm_client, question: str, index_text: str, limit: int) ->
 
 
 class WikiPageRetrieval:
-    """Index-routed wiki retrieval (on-disk reads; no body cache)."""
+    """经 index.md 路由的 Wiki 检索（读盘，不缓存正文）。"""
 
     def __init__(self, llm_client=None) -> None:
         self._wiki_root: Path | None = None

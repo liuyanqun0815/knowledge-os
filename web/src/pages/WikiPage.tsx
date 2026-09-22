@@ -24,6 +24,11 @@ function collectPageIds(tree: WikiTreeResponse | null): Set<string> {
     for (const page of hub.pages) {
       ids.add(page.page_id);
     }
+    for (const group of hub.groups ?? []) {
+      for (const page of group.pages) {
+        ids.add(page.page_id);
+      }
+    }
   }
   return ids;
 }
@@ -33,7 +38,16 @@ function pickDefaultPageId(tree: WikiTreeResponse): string | null {
   if (pageIds.has("index")) {
     return "index";
   }
-  return tree.hubs[0]?.pages[0]?.page_id ?? null;
+  for (const hub of tree.hubs) {
+    if (hub.pages[0]?.page_id) {
+      return hub.pages[0].page_id;
+    }
+    const groupPage = hub.groups?.[0]?.pages[0]?.page_id;
+    if (groupPage) {
+      return groupPage;
+    }
+  }
+  return null;
 }
 
 export function WikiPage() {
