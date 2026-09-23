@@ -3,6 +3,7 @@ from pathlib import Path
 
 from akos.application.ingest.rule_extractor import RuleExtractor
 from akos.application.ingest.service import KnowledgeCompiler
+from akos.domain.ports.compiler import ExtractedClaim
 from akos.domains.ecommerce_cs.domain import EcommerceCsDomain
 from akos.domains.ecommerce_cs.rules import ECOMMERCE_RULES
 from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
@@ -90,3 +91,99 @@ def test_compiler_indexes_claims_in_retrieval(monkeypatch):
     assert report.claims_created >= 1
     hits = retrieval.search("定制商品 七天无理由", RetrievalMode.HYBRID, {})
     assert hits
+
+
+def test_ingest_open_registers_novel_predicate_from_llm(monkeypatch):
+    onto = InMemoryOntology()
+    register_ecommerce_cs(onto)
+    knowledge = InMemoryKnowledge()
+    graph = InMemoryGraph()
+    evidence = InMemoryEvidence()
+    text = "商品完好，不影响二次销售。"
+    src = Source(
+        id="s-open",
+        title="七天无理由退货",
+        type="policy",
+        uri="mem://open",
+        version="1",
+        created_at=datetime.now(timezone.utc),
+        status="ready",
+    )
+    knowledge.save_source(src)
+    knowledge.save_source_text(src.id, text)
+    quote = "商品完好"
+    llm_claim = ExtractedClaim(
+        subject="七天无理由退货",
+        predicate="适用条件",
+        object="商品完好，不影响二次销售",
+        confidence=0.95,
+        quote=quote,
+        start=text.index(quote),
+        end=text.index(quote) + len(quote),
+    )
+    monkeypatch.setattr(
+        "akos.application.ingest.service.select_hybrid_candidates",
+        lambda text, **kwargs: [llm_claim],
+    )
+    compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor([]))
+    report = compiler.ingest(
+        src.id,
+        llm_client=_ConfiguredLlm(),
+        domain=EcommerceCsDomain(),
+        settings=Settings(_env_file=None, llm_api_key="test", extract_open_predicates=True),
+    )
+    assert report.quarantined == 0
+    assert report.claims_created == 1
+    claims = knowledge.get_claims_for_source(src.id)
+    assert len(claims) == 1
+    assert claims[0].predicate == "适用条件"
+    assert claims[0].subject == "七天无理由"
+    assert onto.validate_claim("RefundRule", "适用条件", "Concept")
+
+
+def test_ingest_closed_quarantines_novel_predicate_from_llm(monkeypatch):
+    onto = InMemoryOntology()
+    register_ecommerce_cs(onto)
+    knowledge = InMemoryKnowledge()
+    text = "商品完好，不影响二次销售。"
+    src = Source(
+        id="s-closed",
+        title="七天无理由退货",
+        type="policy",
+        uri="mem://closed",
+        version="1",
+        created_at=datetime.now(timezone.utc),
+        status="ready",
+    )
+    knowledge.save_source(src)
+    knowledge.save_source_text(src.id, text)
+    quote = "商品完好"
+    claim = ExtractedClaim(
+        subject="七天无理由",
+        predicate="适用条件",
+        object="商品完好",
+        confidence=0.95,
+        quote=quote,
+        start=0,
+        end=len(quote),
+    )
+    monkeypatch.setattr(
+        "akos.application.ingest.service.select_hybrid_candidates",
+        lambda text, **kwargs: [claim],
+    )
+    compiler = KnowledgeCompiler(
+        onto,
+        knowledge,
+        InMemoryGraph(),
+        InMemoryEvidence(),
+        RuleExtractor([]),
+    )
+    report = compiler.ingest(
+        src.id,
+        llm_client=_ConfiguredLlm(),
+        domain=EcommerceCsDomain(),
+        settings=Settings(_env_file=None, llm_api_key="test", extract_open_predicates=False),
+    )
+    assert report.claims_created == 0
+    assert report.quarantined == 1
+    assert knowledge.list_quarantine()[0]["reason"] == "invalid_predicate"

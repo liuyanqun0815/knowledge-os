@@ -83,8 +83,9 @@ describe("knowledge base pages", () => {
     renderAt("/knowledge-bases");
 
     const table = await screen.findByRole("table");
-    expect(within(table).getByText("电商客服")).toBeInTheDocument();
-    expect(within(table).getByText("ecommerce_cs")).toBeInTheDocument();
+    // 名称与领域中文标签在本夹具下同为「电商客服」
+    expect(within(table).getAllByText("电商客服")).toHaveLength(2);
+    expect(within(table).queryByText("ecommerce_cs")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "设为当前" }));
 
@@ -146,10 +147,12 @@ describe("knowledge base pages", () => {
     const nameInput = await screen.findByLabelText("名称");
     await user.clear(nameInput);
     await user.type(nameInput, "售后客服");
+    await user.selectOptions(screen.getByLabelText("领域类型"), "loan_finance");
     await user.click(screen.getByRole("button", { name: "保存修改" }));
 
     expect(updateKnowledgeBase).toHaveBeenCalledWith("kb-1", {
       name: "售后客服",
+      domain_type: "loan_finance",
       description: "客服知识",
       graph_enabled: true,
     });
@@ -164,5 +167,14 @@ describe("knowledge base pages", () => {
     expect(screen.getByRole("link", { name: "开始问答" })).toHaveAttribute("href", "/ask?kb=kb-1");
     expect(screen.getByRole("link", { name: "打开 Wiki" })).toHaveAttribute("href", "/wiki?kb=kb-1");
     expect(screen.queryByRole("button", { name: "导出 Wiki" })).not.toBeInTheDocument();
+  });
+
+  it("echoes graph_enabled checkbox from detail payload", async () => {
+    getKnowledgeBase.mockResolvedValueOnce({ ...knowledgeBase, graph_enabled: false });
+    renderAt("/knowledge-bases/kb-1");
+
+    const checkbox = await screen.findByLabelText(/开启知识图谱/);
+    expect(checkbox).not.toBeChecked();
+    expect(await screen.findByText(/图谱已关闭/)).toBeInTheDocument();
   });
 });

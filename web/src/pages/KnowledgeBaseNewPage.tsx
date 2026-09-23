@@ -3,19 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { createKnowledgeBase } from "../api/knowledgeBases";
 import { useKb } from "../app/KbContext";
 import { ErrorBanner } from "../components/ErrorBanner";
-
-const domain_types = [
-  { value: "ecommerce_cs", label: "电商客服" },
-  { value: "corporate_culture", label: "企业文化" },
-  { value: "loan_finance", label: "贷款金融" },
-  { value: "generic", label: "通用" },
-] as const;
+import { DOMAIN_TYPE_OPTIONS, type DomainTypeValue } from "../domainTypes";
 
 export function KnowledgeBaseNewPage() {
   const navigate = useNavigate();
   const { setKbId } = useKb();
   const [name, setName] = useState("");
-  const [domainType, setDomainType] = useState<(typeof domain_types)[number]["value"]>("generic");
+  const [domainType, setDomainType] = useState<DomainTypeValue>("generic");
   const [description, setDescription] = useState("");
   const [graphEnabled, setGraphEnabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,9 +61,9 @@ export function KnowledgeBaseNewPage() {
         <select
           id="knowledge-base-domain"
           value={domainType}
-          onChange={(event) => setDomainType(event.target.value as typeof domainType)}
+          onChange={(event) => setDomainType(event.target.value as DomainTypeValue)}
         >
-          {domain_types.map((domainTypeOption) => (
+          {DOMAIN_TYPE_OPTIONS.map((domainTypeOption) => (
             <option key={domainTypeOption.value} value={domainTypeOption.value}>
               {domainTypeOption.label}（{domainTypeOption.value}）
             </option>

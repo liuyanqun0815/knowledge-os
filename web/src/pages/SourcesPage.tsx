@@ -53,7 +53,7 @@ export function SourcesPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
-  const pollGenerationRef = useRef(0);
+  const uploadPollSeqRef = useRef(0);
 
   const hasSelectedUpload = selectedFile !== null || selectedTreeEntries.length > 0;
   const isZipSelected = Boolean(selectedFile?.name.toLowerCase().endsWith(".zip"));
@@ -90,7 +90,6 @@ export function SourcesPage() {
 
   useEffect(() => {
     requestSequence.current += 1;
-    pollGenerationRef.current += 1;
     setSources([]);
     setSelectedFile(null);
     setSelectedTreeEntries([]);
@@ -100,6 +99,9 @@ export function SourcesPage() {
     setExpandedSourceId(null);
     setSearchQuery("");
     setError(null);
+    return () => {
+      uploadPollSeqRef.current += 1;
+    };
   }, [kbId]);
 
   useEffect(() => {
@@ -111,12 +113,6 @@ export function SourcesPage() {
     }, 300);
     return () => window.clearTimeout(timer);
   }, [kbId, loadSources]);
-
-  useEffect(() => {
-    return () => {
-      pollGenerationRef.current += 1;
-    };
-  }, []);
 
   function selectFile(file: File | undefined) {
     if (!file) {
@@ -190,9 +186,10 @@ export function SourcesPage() {
       setIsUploading(false);
       await loadSources();
       if (result.accepted_async === true && uploadedIds.length > 0) {
-        const pollGen = ++pollGenerationRef.current;
+        uploadPollSeqRef.current += 1;
+        const pollSeq = uploadPollSeqRef.current;
         void pollUploadedSources(pollKbId, uploadedIds, {
-          isActive: () => pollGenerationRef.current === pollGen,
+          isActive: () => uploadPollSeqRef.current === pollSeq,
           onUpdate: (items) => {
             setSources((prev) => mergeSourceItems(prev, items));
             const summaryParts = items.map(

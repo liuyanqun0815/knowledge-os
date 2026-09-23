@@ -20,7 +20,7 @@ def _row_to_kb(row: Any) -> KnowledgeBase:
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
-        graph_enabled=bool(getattr(row, "graph_enabled", True)),
+        graph_enabled=bool(getattr(row, "graph_enabled", False)),
     )
 
 

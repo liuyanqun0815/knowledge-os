@@ -154,6 +154,8 @@ def test_pg_delete_source_updates_claim_references(pg_knowledge):
     )
     pg_knowledge.append_claim(only_source)
     pg_knowledge.append_claim(shared)
+    pg_knowledge.save_chunks(source_id, [_chunk("chunk-del-1", source_id, 0, "七天")])
+    pg_knowledge.add_quarantine("bad", {"source_id": source_id, "subject": "a", "predicate": "b", "object": "c"})
 
     pg_knowledge.delete_source(source_id)
 
@@ -163,6 +165,8 @@ def test_pg_delete_source_updates_claim_references(pg_knowledge):
     kept = pg_knowledge.get_claim("c-del-2")
     assert kept is not None
     assert kept.source_ids == ["s-keep"]
+    assert pg_knowledge.list_chunks(source_id, status="active") == []
+    assert all(item.get("raw", {}).get("source_id") != source_id for item in pg_knowledge.list_quarantine())
 
 
 def _chunk(chunk_id: str, source_id: str, index: int, text: str) -> SourceChunk:

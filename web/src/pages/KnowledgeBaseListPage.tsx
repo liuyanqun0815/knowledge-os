@@ -5,6 +5,7 @@ import type { KnowledgeBase } from "../api/types";
 import { useKb } from "../app/KbContext";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { domainTypeLabel } from "../domainTypes";
 
 export function KnowledgeBaseListPage() {
   const navigate = useNavigate();
@@ -108,7 +109,7 @@ export function KnowledgeBaseListPage() {
                   onClick={() => navigate(`/knowledge-bases/${knowledgeBase.id}`)}
                 >
                   <td>{knowledgeBase.name}</td>
-                  <td>{knowledgeBase.domain_type}</td>
+                  <td>{domainTypeLabel(knowledgeBase.domain_type)}</td>
                   <td>{new Date(knowledgeBase.updated_at).toLocaleString()}</td>
                   <td>
                     <div className="table-row-actions">

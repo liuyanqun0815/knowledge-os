@@ -605,11 +605,42 @@ def _parse_llm_page_markdown(raw: str) -> str | None:
     return None
 
 
-def _evidence_for_page(evidence: dict[str, Any], *, title: str, focus: str) -> dict[str, Any]:
+def _focus_tokens(title: str, focus: str) -> list[str]:
+    """从 title/focus 的 include 段提取用于匹配的关键词。"""
+    text = focus or title
+    if "include:" in text or "include：" in text:
+        part = re.split(r"include[:：]", text, maxsplit=1)[-1]
+        part = re.split(r"exclude[:：]", part, maxsplit=1)[0]
+        text = part
+    tokens: list[str] = []
+    for token in re.split(r"\s+|、|；|;|/|，|,", f"{title} {text}"):
+        token = token.strip()
+        if len(token) >= 2 and token not in {"include", "exclude", "本页", "其他"}:
+            tokens.append(token)
+    return tokens
+
+
+def _chunk_window(all_chunks: list[dict[str, Any]], *, title: str, page_index: int) -> list[dict[str, Any]]:
+    """无强匹配时按页序分窗，避免每页都落到相同的前几条 chunk。"""
+    if not all_chunks:
+        return []
+    width = max(2, min(4, len(all_chunks) // max(page_index + 1, 1)))
+    start = min(page_index * width, max(0, len(all_chunks) - width))
+    return all_chunks[start : start + width]
+
+
+def _evidence_for_page(
+    evidence: dict[str, Any],
+    *,
+    title: str,
+    focus: str,
+    page_index: int = 0,
+) -> dict[str, Any]:
     """Narrow evidence to chunks/claims likely relevant to one page."""
-    needle = f"{title} {focus}".lower()
-    chunks = []
-    for chunk in evidence.get("chunks") or []:
+    needle_tokens = _focus_tokens(title, focus)
+    all_chunks = list(evidence.get("chunks") or [])
+    chunks: list[dict[str, Any]] = []
+    for chunk in all_chunks:
         blob = " ".join(
             [
                 str(chunk.get("title") or ""),
@@ -620,26 +651,70 @@ def _evidence_for_page(evidence: dict[str, Any], *, title: str, focus: str) -> d
         ).lower()
         if title in str(chunk.get("title") or "") or any(
             title in str(t) for t in (chunk.get("topics") or [])
-        ) or any(token and token.lower() in blob for token in re.split(r"\s+", needle) if len(token) >= 2):
+        ):
+            chunks.append(chunk)
+            continue
+        if any(token.lower() in blob for token in needle_tokens):
             chunks.append(chunk)
     if not chunks:
-        chunks = list(evidence.get("chunks") or [])[:4]
-    claims = []
-    for claim in evidence.get("claims") or []:
+        chunks = _chunk_window(all_chunks, title=title, page_index=page_index)
+
+    all_claims = list(evidence.get("claims") or [])
+    claims: list[dict[str, Any]] = []
+    for claim in all_claims:
         subject = str(claim.get("subject") or "")
         predicate = str(claim.get("predicate") or "")
-        if title in subject or subject in title or any(
-            token and token in f"{subject}{predicate}" for token in re.split(r"\s+|、|：", title) if len(token) >= 2
-        ):
+        obj = str(claim.get("object") or "")
+        blob = f"{subject}{predicate}{obj}"
+        if title in subject or subject in title:
             claims.append(claim)
-    if not claims:
-        claims = list(evidence.get("claims") or [])[:8]
+            continue
+        if any(token in blob for token in needle_tokens):
+            claims.append(claim)
+    if not claims and all_claims:
+        start = (page_index * 6) % len(all_claims)
+        claims = all_claims[start : start + 6]
+
     return {
         "source_id": evidence.get("source_id"),
         "source_title": evidence.get("source_title"),
         "chunks": chunks[:6],
         "claims": claims[:12],
     }
+
+
+def _source_text_for_page(
+    page_evidence: dict[str, Any],
+    source_text: str,
+    *,
+    slug: str,
+    max_chars: int = 7000,
+) -> str:
+    """撰写单页时尽量只给相关 excerpt，降低跨页重复。"""
+    if slug == "_index":
+        return source_text[: min(1200, len(source_text))]
+
+    parts: list[str] = []
+    for chunk in page_evidence.get("chunks") or []:
+        excerpt = str(chunk.get("excerpt") or "").strip()
+        if excerpt:
+            title = str(chunk.get("title") or "").strip()
+            header = f"### {title}\n" if title else ""
+            parts.append(f"{header}{excerpt}")
+    if parts:
+        joined = "\n\n".join(parts)
+        return joined[:max_chars]
+    return source_text[:max_chars]
+
+
+def _sibling_scope_hint(outline: list[dict[str, str]], *, slug: str) -> str:
+    lines: list[str] = []
+    for item in outline:
+        if item.get("slug") == slug:
+            continue
+        focus = str(item.get("focus") or item.get("title") or "").strip()
+        lines.append(f"- [[{item.get('folder', '')}/{item.get('slug', '')}|{item.get('title', '')}]]：{focus}")
+    return "\n".join(lines) if lines else ""
 
 
 def _wiki_source_plan_uses_llm(settings: Any, llm_client: Any) -> bool:
@@ -752,12 +827,22 @@ def _plan_with_llm(
         link for link in required_links if link.startswith("[[chunk-")
     ][:8]
     plans: list[SourceWikiPagePlan] = []
-    for item in outline:
-        page_evidence = _evidence_for_page(evidence, title=item["title"], focus=item["focus"])
+    for page_index, item in enumerate(outline):
+        page_evidence = _evidence_for_page(
+            evidence,
+            title=item["title"],
+            focus=item["focus"],
+            page_index=page_index,
+        )
+        page_source_text = _source_text_for_page(
+            page_evidence,
+            source_text,
+            slug=item["slug"],
+        )
         page_prompt = build_source_wiki_page_prompt(
             source_id=source_id,
             source_title=source_title,
-            source_text=source_text,
+            source_text=page_source_text,
             folder=item["folder"],
             slug=item["slug"],
             title=item["title"],
@@ -766,6 +851,7 @@ def _plan_with_llm(
             required_wikilinks=page_required,
             sibling_pages=outline,
             product_name=product_name,
+            sibling_scope_hint=_sibling_scope_hint(outline, slug=item["slug"]),
         )
         page_raw = llm_client.chat_completions(
             [{"role": "user", "content": page_prompt}],

@@ -41,7 +41,11 @@ class InMemoryKnowledge:
     def delete_source(self, source_id: str) -> None:
         self._sources.pop(source_id, None)
         self._source_texts.pop(source_id, None)
-        self.mark_chunks_stale(source_id)
+        # 物理删除该源全部 chunk（含可能已 stale 的残留）
+        for chunk_id, chunk in list(self._chunks.items()):
+            if chunk.source_id == source_id:
+                self._chunks.pop(chunk_id, None)
+        self._chunks_by_source.pop(source_id, None)
         sole_claim_ids: list[str] = []
         for claim in self._claims.values():
             if source_id not in claim.source_ids:
@@ -62,6 +66,11 @@ class InMemoryKnowledge:
                 self._families[claim.family_id] = remaining
             else:
                 self._families.pop(claim.family_id, None)
+        self._quarantine = [
+            item
+            for item in self._quarantine
+            if item.get("raw", {}).get("source_id") != source_id
+        ]
 
     def update_source_status(self, source_id: str, status: str) -> None:
         source = self._sources.get(source_id)

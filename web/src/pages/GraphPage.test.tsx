@@ -180,6 +180,18 @@ describe("GraphPage", () => {
     expect(await screen.findByText("已展开 1 条关系。")).toBeInTheDocument();
   });
 
+  it("does not show page title while graph flag is loading", () => {
+    useKb.mockReturnValue({ kbId: "kb-1", graphEnabled: null });
+    render(
+      <MemoryRouter>
+        <GraphPage />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("heading", { name: "知识图谱" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/正在加载知识库配置/);
+    expect(fetchGraphSnapshot).not.toHaveBeenCalled();
+  });
+
   it("shows empty state when graph is disabled for the knowledge base", () => {
     useKb.mockReturnValue({ kbId: "kb-1", graphEnabled: false });
     render(
@@ -189,6 +201,7 @@ describe("GraphPage", () => {
     );
 
     expect(screen.getByText("当前知识库未开启图谱")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "知识图谱" })).not.toBeInTheDocument();
     expect(fetchGraphSnapshot).not.toHaveBeenCalled();
   });
 });

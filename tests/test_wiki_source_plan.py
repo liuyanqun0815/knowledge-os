@@ -12,7 +12,11 @@ from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Claim, Source, SourceChunk
 from akos.application.wiki.paths import compile_wiki_root
-from akos.application.wiki.source_plan import infer_source_layout
+from akos.application.wiki.source_plan import (
+    _evidence_for_page,
+    _source_text_for_page,
+    infer_source_layout,
+)
 
 
 def _now() -> datetime:
@@ -675,3 +679,32 @@ def test_topic_cluster_skips_size_code_entity_subjects() -> None:
     names = {cluster.name for cluster in clusters}
     assert "女装尺码L" not in names
     assert "尺码选择" in names or "退换货政策" in names
+
+
+def test_evidence_for_page_uses_different_chunk_windows_when_unmatched():
+    evidence = {
+        "source_id": "s1",
+        "source_title": "闪电贷",
+        "chunks": [{"title": f"段{i}", "summary": f"内容{i}", "excerpt": f"ex{i}"} for i in range(8)],
+        "claims": [{"subject": f"主体{i}", "predicate": "p", "object": "o"} for i in range(10)],
+    }
+    a = _evidence_for_page(evidence, title="未知A", focus="include: foo", page_index=0)
+    b = _evidence_for_page(evidence, title="未知B", focus="include: bar", page_index=3)
+    assert a["chunks"] != b["chunks"]
+    assert a["claims"] != b["claims"]
+
+
+def test_source_text_for_page_prefers_chunk_excerpts():
+    full = "全文" * 5000
+    page_evidence = {
+        "chunks": [{"title": "利率", "excerpt": "年化利率 3.15% 起"}],
+    }
+    text = _source_text_for_page(page_evidence, full, slug="利率与费用")
+    assert "3.15%" in text
+    assert len(text) < len(full)
+
+
+def test_source_text_for_index_is_short():
+    full = "x" * 5000
+    text = _source_text_for_page({"chunks": []}, full, slug="_index")
+    assert len(text) <= 1200

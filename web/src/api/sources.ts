@@ -49,10 +49,31 @@ export async function listSources(kbId: string, options: ListSourcesOptions = {}
   return raw.map(mapSource);
 }
 
+export async function listSourcesByIds(kbId: string, sourceIds: string[]): Promise<SourceItem[]> {
+  const wanted = new Set(sourceIds.filter(Boolean));
+  if (wanted.size === 0) {
+    return [];
+  }
+  const items = await listSources(kbId);
+  return items.filter((item) => wanted.has(item.id));
+}
+
 export async function fetchSource(kbId: string, sourceId: string): Promise<SourceItem> {
-  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${encodeURIComponent(sourceId)}`);
-  const raw = (await response.json()) as BackendSource;
-  return mapSource(raw);
+  const path = `/admin/knowledge-bases/${kbId}/sources/${encodeURIComponent(sourceId)}`;
+  try {
+    const response = await apiFetch(path);
+    const raw = (await response.json()) as BackendSource;
+    return mapSource(raw);
+  } catch (error) {
+    // 旧版后端仅有 DELETE、无 GET 单文档时，从全量列表按 id 匹配
+    if (error instanceof Error && error.message.startsWith("405:")) {
+      const found = (await listSourcesByIds(kbId, [sourceId]))[0];
+      if (found) {
+        return found;
+      }
+    }
+    throw error;
+  }
 }
 
 export type { UploadSourceOptions };

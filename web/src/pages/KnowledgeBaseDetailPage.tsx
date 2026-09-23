@@ -5,13 +5,20 @@ import { listSources } from "../api/sources";
 import type { KnowledgeBase, SourceItem } from "../api/types";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SourceFileBrowser } from "../components/SourceFileBrowser";
+import { DOMAIN_TYPE_OPTIONS, domainTypeLabel, type DomainTypeValue } from "../domainTypes";
+
+function asDomainType(value: string): DomainTypeValue {
+  const matched = DOMAIN_TYPE_OPTIONS.find((item) => item.value === value);
+  return matched?.value ?? "generic";
+}
 
 export function KnowledgeBaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
   const [name, setName] = useState("");
+  const [domainType, setDomainType] = useState<DomainTypeValue>("generic");
   const [description, setDescription] = useState("");
-  const [graphEnabled, setGraphEnabled] = useState(true);
+  const [graphEnabled, setGraphEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -52,8 +59,9 @@ export function KnowledgeBaseDetailPage() {
         if (active) {
           setKnowledgeBase(item);
           setName(item.name);
+          setDomainType(asDomainType(item.domain_type));
           setDescription(item.description);
-          setGraphEnabled(item.graph_enabled !== false);
+          setGraphEnabled(item.graph_enabled === true);
         }
       })
       .catch(() => {
@@ -89,13 +97,15 @@ export function KnowledgeBaseDetailPage() {
     try {
       const updated = await updateKnowledgeBase(id, {
         name: name.trim(),
+        domain_type: domainType,
         description: description.trim(),
         graph_enabled: graphEnabled,
       });
       setKnowledgeBase(updated);
       setName(updated.name);
+      setDomainType(asDomainType(updated.domain_type));
       setDescription(updated.description);
-      setGraphEnabled(updated.graph_enabled !== false);
+      setGraphEnabled(updated.graph_enabled === true);
       window.dispatchEvent(new CustomEvent("akos:kb-list-changed"));
       setNotice("修改已保存。");
     } catch {
@@ -139,7 +149,9 @@ export function KnowledgeBaseDetailPage() {
         <div>
           <h1>{knowledgeBase.name}</h1>
           <p>
-            {knowledgeBase.domain_type} · {knowledgeBase.status === "active" ? "启用" : "已归档"}
+            {domainTypeLabel(knowledgeBase.domain_type)} ·{" "}
+            {knowledgeBase.status === "active" ? "知识库启用" : "已归档"} ·{" "}
+            {knowledgeBase.graph_enabled ? "图谱已开启" : "图谱已关闭"}
           </p>
         </div>
         <div className="header-actions">
@@ -169,6 +181,21 @@ export function KnowledgeBaseDetailPage() {
             />
           </div>
           <div className="kb-settings-field">
+            <label htmlFor="knowledge-base-domain">领域类型</label>
+            <select
+              id="knowledge-base-domain"
+              value={domainType}
+              onChange={(event) => setDomainType(event.target.value as DomainTypeValue)}
+              disabled={knowledgeBase.status === "archived"}
+            >
+              {DOMAIN_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}（{option.value}）
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="kb-settings-field">
             <label htmlFor="knowledge-base-description">描述</label>
             <textarea
               id="knowledge-base-description"
@@ -184,6 +211,7 @@ export function KnowledgeBaseDetailPage() {
               type="checkbox"
               checked={graphEnabled}
               onChange={(event) => setGraphEnabled(event.target.checked)}
+              disabled={knowledgeBase.status === "archived"}
             />
             <span>
               开启知识图谱
@@ -201,7 +229,7 @@ export function KnowledgeBaseDetailPage() {
           >
             {knowledgeBase.status === "archived" ? "已删除" : "删除知识库"}
           </button>
-          <button className="button button-primary" type="submit" disabled={isSaving}>
+          <button className="button button-primary" type="submit" disabled={isSaving || knowledgeBase.status === "archived"}>
             {isSaving ? "正在保存…" : "保存修改"}
           </button>
         </div>

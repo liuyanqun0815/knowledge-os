@@ -26,7 +26,7 @@ export function TopNav() {
     setTokenSaved(true);
   }
 
-  const visibleNav = navItems.filter((item) => !item.requiresGraph || graphEnabled !== false);
+  const visibleNav = navItems.filter((item) => !item.requiresGraph || graphEnabled === true);
 
   return (
     <header className="top-nav">

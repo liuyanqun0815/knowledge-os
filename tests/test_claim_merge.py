@@ -22,7 +22,9 @@ def _claim(subject: str, predicate: str, obj: str, quote: str) -> ExtractedClaim
 
 def test_is_exclusive_predicate_keeps_single_slot_facts() -> None:
     assert is_exclusive_predicate("运费承担方") is True
-    assert is_exclusive_predicate("适用于") is True
+    assert is_exclusive_predicate("利率_年化") is False
+    assert is_exclusive_predicate("最高额度") is False
+    assert is_exclusive_predicate("适用于") is False
     assert is_exclusive_predicate("保养方式") is False
     assert is_exclusive_predicate("要求") is False
 
@@ -43,6 +45,62 @@ def test_merge_complementary_joins_same_subject_predicate() -> None:
     assert "不同场合轮换穿着" in by_key[("鞋子", "保养方式")].object
     assert "按说明书使用" in by_key[("设备使用", "要求")].object
     assert "保持通风散热" in by_key[("设备使用", "要求")].object
+
+
+def test_merge_complementary_joins_policy_applies_to() -> None:
+    merged = merge_complementary_extracted(
+        [
+            _claim("员工手册", "适用于", "正式员工", "正式员工"),
+            _claim("员工手册", "适用于", "实习生", "实习生"),
+        ]
+    )
+    assert len(merged) == 1
+    assert "正式员工" in merged[0].object
+    assert "实习生" in merged[0].object
+
+
+def test_merge_complementary_joins_refund_applicable_categories() -> None:
+    merged = merge_complementary_extracted(
+        [
+            _claim("七天无理由", "适用类目", "非定制商品", "非定制商品"),
+            _claim("七天无理由", "适用类目", "一般商品", "一般商品"),
+        ]
+    )
+    assert len(merged) == 1
+    assert "非定制商品" in merged[0].object
+    assert "一般商品" in merged[0].object
+
+
+def test_merge_complementary_joins_loan_applicable_customers() -> None:
+    merged = merge_complementary_extracted(
+        [
+            _claim("招商银行闪电贷", "适用客户", "有稳定收入来源的个人", "有稳定收入来源"),
+            _claim("招商银行闪电贷", "适用客户", "有良好信用记录的个人", "良好信用"),
+            _claim("招商银行闪电贷", "适用客户", "年满18周岁", "年满18周岁"),
+        ]
+    )
+    assert len(merged) == 1
+    obj = merged[0].object
+    assert "稳定收入" in obj
+    assert "良好信用" in obj
+    assert "年满18周岁" in obj
+
+
+def test_merge_complementary_joins_loan_rate_and_limit() -> None:
+    merged = merge_complementary_extracted(
+        [
+            _claim("个人信用贷款", "利率_年化", "3.15%起", "3.15%起"),
+            _claim("个人信用贷款", "利率_年化", "活动期间3.5%", "活动期间3.5%"),
+            _claim("个人信用贷款", "最高额度", "30万元", "30万元"),
+            _claim("个人信用贷款", "最高额度", "临时提额50万元", "临时提额50万元"),
+        ]
+    )
+    by_key = {(item.subject, item.predicate): item for item in merged}
+    assert len(merged) == 2
+    assert "3.15%起" in by_key[("个人信用贷款", "利率_年化")].object
+    assert "3.5%" in by_key[("个人信用贷款", "利率_年化")].object
+    assert "30万元" in by_key[("个人信用贷款", "最高额度")].object
+    assert "50万元" in by_key[("个人信用贷款", "最高额度")].object
 
 
 def test_merge_complementary_does_not_join_exclusive_predicates() -> None:

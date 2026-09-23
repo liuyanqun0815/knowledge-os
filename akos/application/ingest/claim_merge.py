@@ -2,17 +2,9 @@ from __future__ import annotations
 
 from akos.domain.ports.compiler import ExtractedClaim
 
-# 单槽互斥谓词：不同客体是版本覆盖，禁止合并。
-EXCLUSIVE_PREDICATES = frozenset(
-    {
-        "运费承担方",
-        "适用于",
-        "适用类目",
-        "适用客户",
-        "利率_年化",
-        "最高额度",
-    }
-)
+# 单槽互斥谓词：同 subject+predicate 下不同 object 在业务上不能并存，禁止拼成一条。
+# 其余谓词（含利率_年化、最高额度、适用客户等）同文档多条默认合并；改版冲突靠 evolution / 人工。
+EXCLUSIVE_PREDICATES = frozenset({"运费承担方"})
 
 
 def is_exclusive_predicate(predicate: str) -> bool:

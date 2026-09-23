@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     # heading 模式下按此级别及更高层切分（更深标题留在块内）
     chunk_heading_level: int = 2
     extract_min_confidence: float = 0.5
+    # True：混合抽取/apply 遇未注册谓词时动态注册并入库；False：进隔离 invalid_predicate
     extract_open_predicates: bool = True
     # Claim 主体绑定产品：auto=有锚点时自动改写泛化主体；on=强制；off=关闭
     # 上传表单可覆盖。词表不可穷举，主要靠提示词示例 + 轻量后处理。

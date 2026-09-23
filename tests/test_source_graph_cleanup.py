@@ -71,3 +71,63 @@ def test_purge_source_side_effects_clears_topic_graph_snapshot():
     assert entity_total == 0
     assert entities == []
     assert edges == []
+
+
+def test_purge_source_side_effects_removes_sole_claim_graph_edges():
+    from akos.application.ingest.service import _entity_id
+    from akos.domain.models.knowledge import Claim
+
+    knowledge = InMemoryKnowledge()
+    graph = InMemoryGraph()
+    knowledge.save_source(
+        Source(
+            id="s1",
+            title="政策",
+            type="md",
+            uri="file://s1",
+            version="1",
+            created_at=datetime(2026, 9, 14, tzinfo=timezone.utc),
+            status="ready",
+        )
+    )
+    claim = Claim(
+        id="c1",
+        family_id="f1",
+        version=1,
+        subject="七天无理由",
+        predicate="运费承担方",
+        object="买家",
+        subject_type="RefundRule",
+        object_type="Concept",
+        confidence=0.9,
+        status="active",
+        valid_from=datetime(2026, 9, 14, tzinfo=timezone.utc),
+        valid_to=None,
+        source_ids=["s1"],
+    )
+    knowledge.append_claim(claim)
+    src = _entity_id(claim.subject, claim.subject_type)
+    dst = _entity_id(claim.object, claim.object_type)
+    graph.upsert_entity(src, claim.subject_type, {"name": claim.subject})
+    graph.upsert_entity(dst, claim.object_type, {"name": claim.object})
+    graph.upsert_relation(src, claim.predicate, dst, {})
+
+    sole = sole_source_claims(knowledge, "s1")
+    knowledge.delete_source("s1")
+    deps = SimpleNamespace(
+        knowledge=knowledge,
+        graph=graph,
+        knowledge_base_id="kb-claim-cleanup",
+        chunk_retrieval=SimpleNamespace(remove_source=lambda _sid: None),
+        retrieval=SimpleNamespace(remove_claim=lambda _cid: None),
+    )
+    purge_source_side_effects(
+        deps,
+        "s1",
+        sole_claims=sole,
+        settings=Settings(_env_file=None, topic_cluster=False, wiki_compile=False),
+    )
+
+    assert graph.list_relations() == []
+    assert graph.get_entity(src) is None
+    assert graph.get_entity(dst) is None

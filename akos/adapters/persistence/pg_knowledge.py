@@ -144,6 +144,31 @@ class PgKnowledge:
             "source_ids": json.dumps([source_id]),
         }
         with self._engine.begin() as conn:
+            chunk_rows = conn.execute(
+                text("""
+                    SELECT id
+                    FROM source_chunks
+                    WHERE knowledge_base_id = :knowledge_base_id AND source_id = :source_id
+                    """),
+                params,
+            ).fetchall()
+            chunk_ids = [row.id for row in chunk_rows]
+            if chunk_ids:
+                conn.execute(
+                    text("""
+                        DELETE FROM embeddings
+                        WHERE ref_type = 'chunk' AND ref_id = ANY(CAST(:chunk_ids AS text[]))
+                        """),
+                    {"chunk_ids": chunk_ids},
+                )
+                conn.execute(
+                    text("""
+                        DELETE FROM source_chunks
+                        WHERE knowledge_base_id = :knowledge_base_id AND source_id = :source_id
+                        """),
+                    params,
+                )
+
             conn.execute(
                 text("""
                     DELETE FROM claim_evidence
@@ -151,6 +176,26 @@ class PgKnowledge:
                     """),
                 params,
             )
+            # 独有 Claim 的向量一并删掉，避免检索索引指向已删记录
+            sole_claim_rows = conn.execute(
+                text("""
+                    SELECT id
+                    FROM claims
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND source_ids @> CAST(:source_ids AS jsonb)
+                      AND jsonb_array_length(source_ids) = 1
+                    """),
+                params,
+            ).fetchall()
+            sole_claim_ids = [row.id for row in sole_claim_rows]
+            if sole_claim_ids:
+                conn.execute(
+                    text("""
+                        DELETE FROM embeddings
+                        WHERE ref_type = 'claim' AND ref_id = ANY(CAST(:claim_ids AS text[]))
+                        """),
+                    {"claim_ids": sole_claim_ids},
+                )
             conn.execute(
                 text("""
                     DELETE FROM claims
@@ -174,6 +219,14 @@ class PgKnowledge:
                 text("""
                     DELETE FROM events
                     WHERE source_id = :source_id AND knowledge_base_id = :knowledge_base_id
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM quarantine
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND raw->>'source_id' = :source_id
                     """),
                 params,
             )

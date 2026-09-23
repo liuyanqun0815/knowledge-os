@@ -53,6 +53,23 @@ class KnowledgeCompiler:
     def ontology(self) -> OntologyPort:
         return self._ontology
 
+    def _accept_predicate_for_types(
+        self,
+        subject_type: str,
+        predicate: str,
+        object_type: str,
+        *,
+        open_predicates: bool,
+    ) -> bool:
+        """校验 SPO 类型三元组；开放模式下动态注册谓词，便于 LLM 自然表述入库。"""
+        pred = predicate.strip()
+        if self._ontology.validate_claim(subject_type, pred, object_type):
+            return True
+        if open_predicates:
+            self._ontology.register_predicate(subject_type, pred, object_type)
+            return True
+        return False
+
     def _exact_spo_covered(self, history: list[Claim], obj: str) -> bool:
         for claim in history:
             if claim.object == obj:
@@ -180,7 +197,12 @@ class KnowledgeCompiler:
             subject_type = self._ontology.resolve_entity_type(subject) or "Concept"
             object_type = self._ontology.resolve_entity_type(obj) or "Concept"
 
-            if not self._ontology.validate_claim(subject_type, extracted.predicate, object_type):
+            if not self._accept_predicate_for_types(
+                subject_type,
+                extracted.predicate,
+                object_type,
+                open_predicates=resolved_settings.extract_open_predicates,
+            ):
                 self._knowledge.add_quarantine(
                     "invalid_predicate",
                     {
@@ -362,13 +384,15 @@ class KnowledgeCompiler:
                     "object_type": object_type,
                 }
             )
-            if not self._ontology.validate_claim(subject_type, candidate.predicate, object_type):
-                if open_predicates:
-                    self._ontology.register_predicate(subject_type, candidate.predicate, object_type)
-                else:
-                    self._knowledge.add_quarantine("invalid_predicate", raw)
-                    quarantined += 1
-                    continue
+            if not self._accept_predicate_for_types(
+                subject_type,
+                candidate.predicate,
+                object_type,
+                open_predicates=open_predicates,
+            ):
+                self._knowledge.add_quarantine("invalid_predicate", raw)
+                quarantined += 1
+                continue
 
             family_id = _family_id(subject, candidate.predicate, object_type)
             history = self._knowledge.get_claim_history(family_id)

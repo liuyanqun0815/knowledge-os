@@ -1,4 +1,4 @@
-import { fetchSource } from "../api/sources";
+import { listSourcesByIds } from "../api/sources";
 import type { SourceItem } from "../api/types";
 
 export const UPLOAD_POLL_INTERVAL_MS = 2000;
@@ -72,16 +72,12 @@ export async function pollUploadedSources(
 
   const deadline = Date.now() + UPLOAD_POLL_MAX_MS;
   while (Date.now() < deadline && options.isActive()) {
-    const fetched = await Promise.all(
-      uniqueIds.map(async (sourceId) => {
-        try {
-          return await fetchSource(kbId, sourceId);
-        } catch {
-          return null;
-        }
-      }),
-    );
-    const items = fetched.filter((item): item is SourceItem => item !== null);
+    let items: SourceItem[] = [];
+    try {
+      items = await listSourcesByIds(kbId, uniqueIds);
+    } catch {
+      items = [];
+    }
     if (items.length > 0 && options.isActive()) {
       options.onUpdate(items);
     }

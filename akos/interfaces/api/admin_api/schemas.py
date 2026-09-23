@@ -30,7 +30,7 @@ class KnowledgeBaseResponse(BaseModel):
     domain_type: str
     description: str
     status: str
-    graph_enabled: bool = True
+    graph_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -42,7 +42,7 @@ class KnowledgeBaseResponse(BaseModel):
             domain_type=kb.domain_type,
             description=kb.description,
             status=kb.status,
-            graph_enabled=bool(getattr(kb, "graph_enabled", True)),
+            graph_enabled=bool(getattr(kb, "graph_enabled", False)),
             created_at=kb.created_at,
             updated_at=kb.updated_at,
         )

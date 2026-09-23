@@ -158,3 +158,57 @@ class Neo4jGraph:
         for key in ("id", "kb_id", "type"):
             props.pop(key, None)
         return {"type": entity_type, **props}
+
+    def delete_relation(self, src: str, predicate: str, dst: str) -> None:
+        with self._get_driver().session() as session:
+            session.run(
+                f"""
+                MATCH (a:Entity {{id: $src, kb_id: $kb_id}})-[r:{_RELATIONSHIP_TYPE} {{predicate: $predicate, kb_id: $kb_id}}]->
+                      (b:Entity {{id: $dst, kb_id: $kb_id}})
+                DELETE r
+                """,
+                src=src,
+                dst=dst,
+                predicate=predicate,
+                kb_id=self._knowledge_base_id,
+            )
+
+    def delete_entity(self, entity_id: str) -> None:
+        with self._get_driver().session() as session:
+            session.run(
+                """
+                MATCH (n:Entity {id: $entity_id, kb_id: $kb_id})
+                DETACH DELETE n
+                """,
+                entity_id=entity_id,
+                kb_id=self._knowledge_base_id,
+            )
+
+    def purge_orphans(self, *, valid_chunk_ids: set[str] | None = None) -> None:
+        """清理 stale 主题边与已无 source_chunk 的 Chunk 节点（与 PgGraph 语义对齐）。"""
+        kb_id = self._knowledge_base_id
+        with self._get_driver().session() as session:
+            session.run(
+                f"""
+                MATCH (t:Entity {{kb_id: $kb_id}})
+                WHERE t.type = 'Topic' AND coalesce(t.status, '') = 'stale'
+                MATCH (t)-[r:{_RELATIONSHIP_TYPE} {{kb_id: $kb_id}}]->()
+                WHERE r.predicate IN $predicates
+                DELETE r
+                """,
+                kb_id=kb_id,
+                predicates=["涵盖", "包含段落"],
+            )
+
+        if valid_chunk_ids is None:
+            return
+
+        valid_entities = {f"chunk:{chunk_id}" for chunk_id in valid_chunk_ids}
+        for edge in self.list_relations():
+            if edge.dst.startswith("chunk:") and edge.dst not in valid_entities:
+                self.delete_relation(edge.src, edge.predicate, edge.dst)
+        for entity_id, props in self.list_entities():
+            if props.get("type") != "Chunk":
+                continue
+            if entity_id not in valid_entities:
+                self.delete_entity(entity_id)

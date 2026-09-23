@@ -5,23 +5,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { SourcesPage } from "./SourcesPage";
 
-const { deleteSource, deleteTree, fetchSource, listSources, moveSources, uploadSource, uploadTree, useKb } =
-  vi.hoisted(() => ({
-    deleteSource: vi.fn(),
-    deleteTree: vi.fn(),
-    fetchSource: vi.fn(),
-    listSources: vi.fn(),
-    moveSources: vi.fn(),
-    uploadSource: vi.fn(),
-    uploadTree: vi.fn(),
-    useKb: vi.fn(),
-  }));
+const { deleteSource, deleteTree, fetchSource, listSources, listSourcesByIds, moveSources, uploadSource, uploadTree, useKb } =
+  vi.hoisted(() => {
+    const listSources = vi.fn();
+    const listSourcesByIds = vi.fn(async (kbId: string, sourceIds: string[]) => {
+      const wanted = new Set(sourceIds.filter(Boolean));
+      const items = await listSources(kbId);
+      return items.filter((item: { id: string }) => wanted.has(item.id));
+    });
+    return {
+      deleteSource: vi.fn(),
+      deleteTree: vi.fn(),
+      fetchSource: vi.fn(),
+      listSources,
+      listSourcesByIds,
+      moveSources: vi.fn(),
+      uploadSource: vi.fn(),
+      uploadTree: vi.fn(),
+      useKb: vi.fn(),
+    };
+  });
 
 vi.mock("../api/sources", () => ({
   deleteSource,
   deleteTree,
   fetchSource,
   listSources,
+  listSourcesByIds,
   moveSources,
   uploadSource,
   uploadTree,
@@ -206,8 +216,7 @@ describe("sources page", () => {
   });
 
   it("shows async accept banner and polls until compile finishes", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     uploadSource.mockResolvedValue({
       accepted_async: true,
       upload_mode: "single",
@@ -226,10 +235,17 @@ describe("sources page", () => {
       compile_status: "pending" as const,
     };
     const succeededSource = { ...pendingSource, claims_count: 3, compile_status: "succeeded" as const };
-    fetchSource
-      .mockResolvedValueOnce(pendingSource)
-      .mockResolvedValueOnce(succeededSource)
-      .mockResolvedValue(succeededSource);
+    let listCall = 0;
+    listSources.mockImplementation(async () => {
+      listCall += 1;
+      if (listCall === 1) {
+        return [source];
+      }
+      if (listCall <= 3) {
+        return [pendingSource];
+      }
+      return [succeededSource];
+    });
 
     render(<SourcesPage />);
     await screen.findByRole("tree");
@@ -238,17 +254,16 @@ describe("sources page", () => {
     await user.upload(screen.getByLabelText("选择文件"), file);
     await user.click(screen.getByRole("button", { name: "上传" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/后台编译中/);
+    expect(await screen.findByRole("status")).toHaveTextContent(/后台编译/);
     await waitFor(() => {
-      expect(fetchSource).toHaveBeenCalledWith("kb-1", "a");
+      expect(screen.getByRole("status")).toHaveTextContent(/条 Claim/);
     });
-    await vi.advanceTimersByTimeAsync(2000);
-    await waitFor(() => {
-      expect(fetchSource.mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/编译完成/);
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByRole("status")).toHaveTextContent(/编译完成/);
+      },
+      { timeout: 8000 },
+    );
     expect(screen.getByText("3 条 Claim")).toBeInTheDocument();
   });
 });

@@ -52,6 +52,27 @@ def test_delete_source_updates_claim_references():
     )
     repo.append_claim(only_source)
     repo.append_claim(shared)
+    from akos.domain.models.knowledge import SourceChunk
+
+    repo.save_chunks(
+        "s1",
+        [
+            SourceChunk(
+                id="chunk-s1",
+                source_id="s1",
+                chunk_index=0,
+                title="t",
+                summary=None,
+                text="七天",
+                start=0,
+                end=2,
+                status="active",
+                content_hash="h1",
+                created_at=datetime.now(timezone.utc),
+            )
+        ],
+    )
+    repo.add_quarantine("bad", {"source_id": "s1", "subject": "x", "predicate": "y", "object": "z"})
 
     repo.delete_source("s1")
 
@@ -59,6 +80,9 @@ def test_delete_source_updates_claim_references():
     assert repo.get_source_text("s1") is None
     assert repo.get_claim("c1") is None
     assert shared.source_ids == ["s2"]
+    assert repo.list_chunks("s1", status="active") == []
+    assert repo.get_chunk("chunk-s1") is None
+    assert all(item.get("raw", {}).get("source_id") != "s1" for item in repo.list_quarantine())
 
 
 def test_append_claim_keeps_history_and_active_filter():

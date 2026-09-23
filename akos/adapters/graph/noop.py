@@ -25,3 +25,9 @@ class NoOpGraph:
 
     def get_entity(self, entity_id: str) -> dict | None:
         return None
+
+    def delete_relation(self, src: str, predicate: str, dst: str) -> None:
+        return None
+
+    def delete_entity(self, entity_id: str) -> None:
+        return None

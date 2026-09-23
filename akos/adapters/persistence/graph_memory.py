@@ -28,3 +28,13 @@ class InMemoryGraph:
 
     def get_entity(self, entity_id: str) -> dict | None:
         return self.entities.get(entity_id)
+
+    def delete_relation(self, src: str, predicate: str, dst: str) -> None:
+        self.relations = [
+            edge
+            for edge in self.relations
+            if not (edge.src == src and edge.predicate == predicate and edge.dst == dst)
+        ]
+
+    def delete_entity(self, entity_id: str) -> None:
+        self.entities.pop(entity_id, None)

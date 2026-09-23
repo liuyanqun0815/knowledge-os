@@ -44,6 +44,7 @@ class EcommerceCsDomain:
             allowed_predicates=predicates,
             entity_types=entity_types,
             few_shot_hints=[
+                "谓词列表为推荐写法，可改用同样贴切的中文谓词（如 适用条件、申请时限），入库不会仅因谓词名被拒",
                 "正例：七天无理由适用类目为非定制商品 → predicate=适用类目，object=非定制商品",
                 "正例：定制商品不适用七天无理由退货 → subject=七天无理由，predicate=排除，object=定制商品",
                 "正例：下列商品不适用七日无理由退货：定作商品、鲜活易腐 → 多条排除，object 各取一类",

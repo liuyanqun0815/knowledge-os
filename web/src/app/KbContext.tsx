@@ -41,7 +41,7 @@ export function KbProvider({ children }: { children: React.ReactNode }) {
     getKnowledgeBase(kbId)
       .then((item) => {
         if (active) {
-          setGraphEnabled(item.graph_enabled !== false);
+          setGraphEnabled(item.graph_enabled === true);
         }
       })
       .catch(() => {
@@ -60,7 +60,7 @@ export function KbProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       getKnowledgeBase(kbId)
-        .then((item) => setGraphEnabled(item.graph_enabled !== false))
+        .then((item) => setGraphEnabled(item.graph_enabled === true))
         .catch(() => undefined);
     }
     window.addEventListener("akos:kb-list-changed", refreshGraphFlag);

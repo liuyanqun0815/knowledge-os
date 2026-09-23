@@ -258,7 +258,7 @@ export function GraphPage() {
     setEdgeLimitInput(String(DEFAULT_EDGE_LIMIT));
     setError(null);
     setNotice(null);
-    if (!kbId || graphEnabled === false) {
+    if (!kbId || graphEnabled !== true) {
       setIsLoading(false);
       return;
     }
@@ -270,7 +270,7 @@ export function GraphPage() {
   }, [kbId, graphEnabled]);
 
   useEffect(() => {
-    if (!kbId || graphEnabled === false || !edgePredicate.trim()) {
+    if (!kbId || graphEnabled !== true || !edgePredicate.trim()) {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -381,12 +381,19 @@ export function GraphPage() {
     return <EmptyState title="请先选择知识库" description="选择知识库后即可浏览知识图谱。" />;
   }
 
-  if (graphEnabled === false) {
+  if (graphEnabled !== true) {
+    if (graphEnabled === false) {
+      return (
+        <EmptyState
+          title="当前知识库未开启图谱"
+          description="可在知识库详情页开启「知识图谱」后使用本页；关闭期间不会写入实体/关系，问答也不走图谱召回。"
+        />
+      );
+    }
     return (
-      <EmptyState
-        title="当前知识库未开启图谱"
-        description="可在知识库详情页开启「知识图谱」后使用本页；关闭期间不会写入实体/关系，问答也不走图谱召回。"
-      />
+      <p className="page-loading" role="status">
+        正在加载知识库配置…
+      </p>
     );
   }
 

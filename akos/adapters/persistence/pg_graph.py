@@ -136,8 +136,9 @@ class PgGraph:
             return None
         return self._entity_from_row(entity_id, row.type, row.props)
 
-    def purge_orphans(self) -> None:
+    def purge_orphans(self, *, valid_chunk_ids: set[str] | None = None) -> None:
         """Remove stale topic edges and chunk entities whose source_chunks row is gone."""
+        del valid_chunk_ids  # 以 DB 为准，参数仅供 Neo4j 等同接口
         params = {"knowledge_base_id": self._knowledge_base_id}
         with self._engine.begin() as conn:
             conn.execute(
@@ -181,6 +182,44 @@ class PgGraph:
                         WHERE sc.knowledge_base_id = :knowledge_base_id
                           AND e.id = 'chunk:' || sc.id
                       )
+                    """),
+                params,
+            )
+
+    def delete_relation(self, src: str, predicate: str, dst: str) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    DELETE FROM relations
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND src = :src
+                      AND predicate = :predicate
+                      AND dst = :dst
+                    """),
+                {
+                    "knowledge_base_id": self._knowledge_base_id,
+                    "src": src,
+                    "predicate": predicate,
+                    "dst": dst,
+                },
+            )
+
+    def delete_entity(self, entity_id: str) -> None:
+        """删除实体及其关联边（文档删除后的孤儿清理）。"""
+        params = {"knowledge_base_id": self._knowledge_base_id, "entity_id": entity_id}
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    DELETE FROM relations
+                    WHERE knowledge_base_id = :knowledge_base_id
+                      AND (src = :entity_id OR dst = :entity_id)
+                    """),
+                params,
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM entities
+                    WHERE knowledge_base_id = :knowledge_base_id AND id = :entity_id
                     """),
                 params,
             )
