@@ -6,6 +6,7 @@ import time
 from akos.domain.ports.compiler import CompileReport
 from akos.domain.ports.evolution import ApplyReport
 from infra.tracing import build_run_config
+from akos.adapters.llm.client import LlmCallError, LlmConfigError
 from akos.domain.errors import DomainError
 from akos.domain.models.knowledge import Answer
 from akos.application.ask.graphs.ask_graph import build_ask_graph
@@ -87,20 +88,28 @@ class LangGraphOrchestrator:
             },
             tags=["ingest", self.deps.knowledge_base_id],
         )
-        state = self._ingest.invoke(
-            {
-                "file_path": file_path,
-                "source_type": source_type,
-                "source_id": None,
-                "replaces_source_id": replaces_source_id,
-                "report": None,
-                "verify_report": None,
-                "evolve_report": None,
-                "error": None,
-            },
-            config=config,
-        )
-        return state["report"]
+        try:
+            state = self._ingest.invoke(
+                {
+                    "file_path": file_path,
+                    "source_type": source_type,
+                    "source_id": None,
+                    "replaces_source_id": replaces_source_id,
+                    "report": None,
+                    "verify_report": None,
+                    "evolve_report": None,
+                    "error": None,
+                },
+                config=config,
+            )
+        except (LlmConfigError, LlmCallError) as exc:
+            raise DomainError(str(exc)) from exc
+        if state.get("error"):
+            raise DomainError(str(state["error"]))
+        report = state.get("report")
+        if report is None:
+            raise DomainError("入库未完成：未生成 compile 报告")
+        return report
 
     def ask(
         self,
@@ -120,29 +129,32 @@ class LangGraphOrchestrator:
             tags=["ask", self.deps.knowledge_base_id],
         )
         started = time.perf_counter()
-        state = self._ask.invoke(
-            {
-                "question": question,
-                "session_id": session_id,
-                "as_of": as_of,
-                "normalized_question": None,
-                "recall_episodes": [],
-                "retrieval_mode": None,
-                "hits": [],
-                "chunk_hits": [],
-                "wiki_hits": [],
-                "claim_ids": [],
-                "chunk_ids": [],
-                "wiki_pages": [],
-                "verification": None,
-                "synthesis_text": None,
-                "synthesis_citations": [],
-                "synthesis_skipped_reason": None,
-                "trace": [],
-                "answer": None,
-            },
-            config=config,
-        )
+        try:
+            state = self._ask.invoke(
+                {
+                    "question": question,
+                    "session_id": session_id,
+                    "as_of": as_of,
+                    "normalized_question": None,
+                    "recall_episodes": [],
+                    "retrieval_mode": None,
+                    "hits": [],
+                    "chunk_hits": [],
+                    "wiki_hits": [],
+                    "claim_ids": [],
+                    "chunk_ids": [],
+                    "wiki_pages": [],
+                    "verification": None,
+                    "synthesis_text": None,
+                    "synthesis_citations": [],
+                    "synthesis_skipped_reason": None,
+                    "trace": [],
+                    "answer": None,
+                },
+                config=config,
+            )
+        except (LlmConfigError, LlmCallError) as exc:
+            raise DomainError(str(exc)) from exc
         answer = state["answer"]
         duration_ms = int((time.perf_counter() - started) * 1000)
         if answer is not None:

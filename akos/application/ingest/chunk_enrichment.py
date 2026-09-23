@@ -12,6 +12,7 @@ from akos.application.ingest.chunk_segmentation import (
     request_segmentation_plan,
     spans_from_chunks,
 )
+from akos.adapters.llm.client import LlmCallError, require_llm_configured
 from infra.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -111,13 +112,11 @@ def _persist_chunks(deps: Any, source_id: str, chunks: list, settings: Settings)
 
 def plan_chunks_for_source(*, source_id: str, deps: Any, settings: Settings) -> bool:
     """对结构 chunk 做 LLM 章节规划。成功替换 chunk 时返回 True；失败或未启用则保留原 chunk。"""
-    if not settings.chunk_llm_segment:
-        logger.debug("跳过章节规划 source=%s（chunk_llm_segment=false）", source_id)
+    if not settings.chunk_llm:
+        logger.debug("跳过章节规划 source=%s（chunk_llm=false）", source_id)
         return False
     client = getattr(deps, "llm_client", None)
-    if client is None or not client.is_configured:
-        logger.debug("跳过章节规划 source=%s（LLM 未配置）", source_id)
-        return False
+    require_llm_configured(client, feature="入库章节规划")
 
     text = deps.knowledge.get_source_text(source_id)
     if text is None:
@@ -132,8 +131,7 @@ def plan_chunks_for_source(*, source_id: str, deps: Any, settings: Settings) -> 
     spans = spans_from_chunks(chunks)
     sections = request_segmentation_plan(client, spans, settings)
     if sections is None:
-        logger.warning("章节规划失败 source=%s，保留结构 chunk", source_id)
-        return False
+        raise LlmCallError(f"章节规划失败 source={source_id}")
 
     drafts = apply_segmentation_plan(text, spans, sections)
     merged_chunks = build_segmented_source_chunks(source_id, text, drafts, sections)
@@ -174,8 +172,16 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
                         chunk.id,
                         kb_id,
                     )
+                    raise
+                logger.warning(
+                    "Chunk 元数据 enrich 重试 source=%s chunk=%s",
+                    source_id,
+                    chunk.id,
+                )
         if enriched is None:
-            continue
+            raise LlmCallError(
+                f"Chunk 元数据 enrich 未返回有效 JSON source={source_id} chunk={chunk.id}"
+            )
         updated = deps.knowledge.update_chunk(
             replace(
                 chunk,
@@ -199,13 +205,13 @@ def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) 
         "Chunk 元数据补全 开始 source=%s kb=%s llm_enrich=%s wiki=%s topic_cluster=%s",
         source_id,
         kb_id,
-        settings.chunk_llm_enrich,
+        settings.chunk_llm,
         getattr(settings, "wiki_compile", False),
         getattr(settings, "topic_cluster", False),
     )
-    client = getattr(deps, "llm_client", None)
-    configured = client is not None and client.is_configured
-    if settings.chunk_llm_enrich and configured:
+    if settings.chunk_llm:
+        client = getattr(deps, "llm_client", None)
+        require_llm_configured(client, feature="Chunk 元数据补全")
         _enrich_chunks_individually(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings, client=client)
         return
     _rebuild_topic_clusters(deps, kb_id, settings)

@@ -6,6 +6,7 @@ from typing import Any
 
 from langsmith import traceable
 
+from akos.adapters.llm.client import LlmCallError, require_llm_configured
 from infra.settings import Settings
 from akos.domain.models.knowledge import SourceChunk
 
@@ -352,16 +353,20 @@ def validate_synthesis_result(context: dict[str, Any], payload: dict[str, Any]) 
 
 @traceable(name="akos.synthesize_answer", run_type="chain")
 def synthesize_answer(context: dict[str, Any], llm_client, settings: Settings) -> dict[str, Any] | None:
-    if not settings.ask_synthesis or llm_client is None or not llm_client.is_configured:
+    if not settings.ask_synthesis:
         return None
+    require_llm_configured(llm_client, feature="Ask 回答综合")
     if not context.get("claims") and not context.get("chunks") and not context.get("wiki_pages"):
         return None
+    raw = llm_client.chat_completions(
+        [{"role": "user", "content": _build_prompt(context)}],
+        temperature=settings.ask_synthesis_temperature,
+    )
     try:
-        raw = llm_client.chat_completions(
-            [{"role": "user", "content": _build_prompt(context)}],
-            temperature=settings.ask_synthesis_temperature,
-        )
         payload = _parse_json_response(raw)
-    except Exception:
-        return None
-    return sanitize_synthesis_payload(context, payload)
+    except Exception as exc:
+        raise LlmCallError(f"Ask 回答综合：无法解析 LLM JSON 响应: {exc}") from exc
+    result = sanitize_synthesis_payload(context, payload)
+    if result is None:
+        raise LlmCallError("Ask 回答综合：LLM 返回未通过校验或与上下文不一致")
+    return result

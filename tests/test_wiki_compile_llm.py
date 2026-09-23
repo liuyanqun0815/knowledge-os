@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+
+import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -118,7 +120,7 @@ def test_topic_merge_prompt_has_structured_sections():
 
 
 def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
-    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import _compile_flat_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_kb(knowledge)
@@ -151,26 +153,22 @@ def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
         ]
     )
     client = FakeLlmClient(json.dumps({"markdown": llm_body}, ensure_ascii=False))
-    settings = Settings(
-        wiki_compile=True,
-        wiki_compile_llm=True,
-        wiki_hierarchy=False,
-        data_root=str(tmp_path),
-    )
+    settings = Settings(wiki_compile=True, data_root=str(tmp_path), llm_api_key="test")
+    wiki_root = compile_wiki_root(tmp_path, "kb1")
+    wiki_root.mkdir(parents=True, exist_ok=True)
 
-    report = compile_topics_for_source(
+    report = _compile_flat_for_source(
         knowledge,
         "kb1",
         "src-a",
-        str(tmp_path),
+        wiki_root,
         settings,
-        graph=None,
         llm_client=client,
     )
     assert report.pages_written >= 1
     assert len(client.calls) == 1
 
-    body = (compile_wiki_root(tmp_path, "kb1") / "topic-退款政策.md").read_text(encoding="utf-8")
+    body = (wiki_root / "topic-退款政策.md").read_text(encoding="utf-8")
     assert "LLM 合并后的摘要" in body
     assert "[[source-src-a|policy_a.md]]" in body
     assert "## 相关原文" in body
@@ -178,19 +176,38 @@ def test_compile_uses_llm_merge_and_preserves_wikilinks(tmp_path: Path):
     assert "## 相关主题" in body
 
 
-def test_compile_falls_back_to_template_on_llm_parse_failure(tmp_path: Path):
-    from akos.application.wiki.compile import compile_topics_for_source
+def test_compile_raises_on_llm_parse_failure(tmp_path: Path):
+    from akos.adapters.llm.client import LlmCallError
+    from akos.application.wiki.compile import _compile_flat_for_source
 
     knowledge = InMemoryKnowledge()
     _seed_kb(knowledge)
 
     client = FakeLlmClient("not-json{{{")
-    settings = Settings(
-        wiki_compile=True,
-        wiki_compile_llm=True,
-        wiki_hierarchy=False,
-        data_root=str(tmp_path),
-    )
+    settings = Settings(wiki_compile=True, data_root=str(tmp_path), llm_api_key="test")
+    wiki_root = compile_wiki_root(tmp_path, "kb1")
+    wiki_root.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(LlmCallError, match="markdown"):
+        _compile_flat_for_source(
+            knowledge,
+            "kb1",
+            "src-a",
+            wiki_root,
+            settings,
+            llm_client=client,
+        )
+    assert len(client.calls) == 1
+
+
+def test_compile_skips_when_wiki_compile_disabled(tmp_path: Path):
+    from akos.application.wiki.compile import compile_topics_for_source
+
+    knowledge = InMemoryKnowledge()
+    _seed_kb(knowledge)
+
+    client = FakeLlmClient(json.dumps({"markdown": "SHOULD_NOT_APPEAR"}, ensure_ascii=False))
+    settings = Settings(wiki_compile=False, data_root=str(tmp_path))
 
     report = compile_topics_for_source(
         knowledge,
@@ -201,42 +218,5 @@ def test_compile_falls_back_to_template_on_llm_parse_failure(tmp_path: Path):
         graph=None,
         llm_client=client,
     )
-    assert report.pages_written >= 1
-    assert len(client.calls) == 1
-
-    body = (compile_wiki_root(tmp_path, "kb1") / "topic-退款政策.md").read_text(encoding="utf-8")
-    assert "LLM 合并后的摘要" not in body
-    assert "## Chunks" in body or "## 相关 Chunk" in body
-    assert "## Claims" in body
-    assert "## 相关实体" in body
-    assert "[[退款|退款]]" in body
-    assert "[[source-src-a|policy_a.md]]" in body
-
-
-def test_compile_skips_llm_when_flag_false(tmp_path: Path):
-    from akos.application.wiki.compile import compile_topics_for_source
-
-    knowledge = InMemoryKnowledge()
-    _seed_kb(knowledge)
-
-    client = FakeLlmClient(json.dumps({"markdown": "SHOULD_NOT_APPEAR"}, ensure_ascii=False))
-    settings = Settings(
-        wiki_compile=True,
-        wiki_compile_llm=False,
-        wiki_hierarchy=False,
-        data_root=str(tmp_path),
-    )
-
-    compile_topics_for_source(
-        knowledge,
-        "kb1",
-        "src-a",
-        str(tmp_path),
-        settings,
-        graph=None,
-        llm_client=client,
-    )
+    assert report.pages_written == 0
     assert client.calls == []
-    body = (compile_wiki_root(tmp_path, "kb1") / "topic-退款政策.md").read_text(encoding="utf-8")
-    assert "SHOULD_NOT_APPEAR" not in body
-    assert "[[source-src-a|policy_a.md]]" in body

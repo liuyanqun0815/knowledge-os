@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     default_domain_type: str = "ecommerce_cs"
 
-    # LLM（OpenAI 兼容）；llm_api_key 为空时 enrich 流程自动跳过
+    # LLM（OpenAI 兼容）；入库 / Ask / Wiki 默认依赖 Key，未配置会报错
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
@@ -56,9 +56,7 @@ class Settings(BaseSettings):
     langsmith_project: str = "akos"
     langsmith_endpoint: str = "https://api.smith.langchain.com"
 
-    # Hybrid 抽取
-    extract_rules: bool = True
-    extract_llm: bool = True
+    # 入库：规则 + LLM 混合抽 Claim（无单独开关；仅规则域见 RuleExtractor）
     chunk_max_chars: int = 3000
     chunk_max_per_doc: int = 40
     # auto=按标题密度选择；heading=按 H1/H2 切；general=段落/标题混合
@@ -71,9 +69,8 @@ class Settings(BaseSettings):
     # 上传表单可覆盖。词表不可穷举，主要靠提示词示例 + 轻量后处理。
     subject_bind_mode: str = "auto"
 
-    # Chunk 索引
-    chunk_index: bool = True
-    chunk_llm_enrich: bool = True
+    # Chunk：结构切分后 LLM 章节规划 + 元数据 enrich（关则仅结构块）
+    chunk_llm: bool = True
     chunk_embedding: bool = False
     retrieval_top_k: int = 8
     # 图谱检索：动态预算 = min(top_k上限, 种子数 × 每种子条数)
@@ -83,7 +80,7 @@ class Settings(BaseSettings):
     # save_chunks 后硬删 stale 行（默认开）
     purge_stale_chunks: bool = True
 
-    # Ask synthesis
+    # Ask：LLM 综合回答 +（有会话时）问句 rewrite
     ask_synthesis: bool = True
     ask_synthesis_temperature: float = 0.2
     ask_synthesis_max_chunks: int = 5
@@ -96,27 +93,15 @@ class Settings(BaseSettings):
     retrieval_wiki_weight: float = 0.9
     retrieval_chunk_weight: float = 0.8
 
-    # Wiki LLM
-    wiki_llm: bool = False
+    # Wiki：关则不入库后编译主题页；开则源文档 LLM 规划 + 主题页 LLM 合并
+    wiki_compile: bool = True
     wiki_llm_cache: bool = True
     wiki_prompt_version: str = "v1"
-    # 同库编译层增量更新；false 时 Ask 仍为双路
-    wiki_compile: bool = True
-    wiki_compile_llm: bool = True
-    # 一期默认关：不沿 [[wikilink]] 扩展检索
     wiki_link_expand: bool = False
-    # Wiki 目录层级（hub/leaf/snippet）；false 时保持平铺 topic- 行为
-    wiki_hierarchy: bool = True
-    wiki_hierarchy_llm: bool = False
-    # 以源文档为单位，由 LLM 规划 wiki 目录与拆分（优先于 topic-cluster 层级）
-    wiki_source_plan: bool = True
-    wiki_source_plan_llm: bool = True
-    # 源文档字数达到该阈值时，Wiki 按「类目/产品名」拆多页
     wiki_split_min_chars: int = 5000
     wiki_migrate_flat: bool = True
     wiki_max_related: int = 12
 
-    chunk_llm_segment: bool = True
     chunk_llm_segment_max_sections: int = 12
     chunk_min_tokens: int = 50
     chunk_min_score: float = 0.5
@@ -144,9 +129,6 @@ class Settings(BaseSettings):
     topic_graph_chunks: bool = True
     topic_llm_summary: bool = False
     topic_claim_boost: float = 0.1
-
-    # Ask 问句归一化：规则未命中时是否用 LLM rewrite
-    ask_normalize_llm: bool = True
 
     # 管理台原文预览
     source_content_max_bytes: int = 1_048_576

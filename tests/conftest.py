@@ -3,6 +3,14 @@ from pathlib import Path
 
 import pytest
 
+
+def pytest_configure(config: pytest.Config) -> None:
+    """测试会话启动前注入 LLM Key，避免 create_app 校验失败。"""
+    os.environ.setdefault("AKOS_LLM_API_KEY", "pytest-llm-key")
+    from infra.settings import get_settings
+
+    get_settings.cache_clear()
+
 ROOT = Path(__file__).resolve().parents[1]
 
 TEST_KB_NAME = "test-ecommerce"

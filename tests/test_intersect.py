@@ -1,3 +1,6 @@
+import pytest
+
+from akos.adapters.llm.client import LlmConfigError
 from akos.application.ingest.intersect import (
     extract_llm_claims_from_text,
     intersect_extracted,
@@ -140,7 +143,7 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
     original_extractor = intersect_module.DomainLlmExtractor
     intersect_module.DomainLlmExtractor = MockLlmExtractor
     try:
-        settings = Settings(extract_rules=True, extract_llm=True, llm_api_key="test")
+        settings = Settings(llm_api_key="test")
         candidates = select_hybrid_candidates(
             text,
             rule_extractor=RuleExtractor(),
@@ -189,7 +192,7 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
 
             return LlmExtractionSpec(allowed_predicates=["倡导"], entity_types=["Concept"])
 
-    settings = Settings(extract_llm=True, chunk_max_chars=3000, llm_api_key="test")
+    settings = Settings(chunk_max_chars=3000, llm_api_key="test")
     extract_llm_claims_from_text(
         "公司倡导诚信经营。",
         MockLlm(),
@@ -200,3 +203,15 @@ def test_extract_llm_claims_from_text_passes_document_anchor(monkeypatch):
 
     assert calls and calls[0] == "锚点产品"
     assert resolve_calls == ["产品说明书.md"]
+
+
+def test_select_hybrid_candidates_raises_when_extract_llm_unconfigured():
+    settings = Settings(llm_api_key="")
+    with pytest.raises(LlmConfigError, match="入库 Claim 抽取"):
+        select_hybrid_candidates(
+            "七天无理由退货运费承担方为买家。",
+            rule_extractor=RuleExtractor(),
+            llm_client=type("L", (), {"is_configured": False})(),
+            domain=type("D", (), {"llm_extraction_spec": lambda self: None})(),
+            settings=settings,
+        )

@@ -63,7 +63,7 @@ def test_retrieve_node_embeds_query_once_then_searches_in_parallel(monkeypatch):
     embedder.embed.side_effect = fake_embed
 
     settings = MagicMock(
-        chunk_index=True,
+        ,
         wiki_compile=True,
         retrieval_top_k=5,
         retrieval_graph_top_k=20,

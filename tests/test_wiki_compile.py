@@ -78,8 +78,6 @@ def test_compile_topics_two_sources_share_topic_file(tmp_path: Path):
 
     settings = Settings(
         wiki_compile=True,
-        wiki_compile_llm=False,
-        wiki_hierarchy=False,
         data_root=str(tmp_path),
     )
 

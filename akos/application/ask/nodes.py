@@ -104,7 +104,7 @@ def index_chunks_node(state: IngestState, deps: Any) -> dict:
         return {"error": "no source_id", "chunk_report": None}
     settings = get_settings()
     chunk_retrieval = getattr(deps, "chunk_retrieval", None)
-    _INGEST_LOG.info("入库·结构切分 开始 source=%s chunk_index=%s", source_id, settings.chunk_index)
+    _INGEST_LOG.info("入库·结构切分 开始 source=%s", source_id)
     report = index_source_chunks(deps.knowledge, chunk_retrieval, source_id, settings)
     if report.errors:
         _INGEST_LOG.warning(
@@ -133,9 +133,9 @@ def plan_chunks_node(state: IngestState, deps: Any) -> dict:
     from akos.application.ingest.chunk_enrichment import plan_chunks_for_source
 
     _INGEST_LOG.info(
-        "入库·章节规划 开始 source=%s chunk_llm_segment=%s",
+        "入库·章节规划 开始 source=%s chunk_llm=%s",
         source_id,
-        settings.chunk_llm_segment,
+        settings.chunk_llm,
     )
     planned = plan_chunks_for_source(source_id=source_id, deps=deps, settings=settings)
     _INGEST_LOG.info(
@@ -321,15 +321,12 @@ def normalize_node(state: AskState, deps: Any) -> dict:
             "anchor": rule_hit.anchor,
             "reason": rule_hit.reason,
         }
-    elif settings.ask_normalize_llm and episodes:
-        try:
-            llm_hit = try_llm_rewrite(
-                normalized,
-                episodes=episodes,
-                llm_client=getattr(deps, "llm_client", None),
-            )
-        except Exception:
-            llm_hit = None
+    elif settings.ask_synthesis and episodes:
+        llm_hit = try_llm_rewrite(
+            normalized,
+            episodes=episodes,
+            llm_client=getattr(deps, "llm_client", None),
+        )
         if llm_hit is not None:
             normalized = llm_hit.text
             methods.append("llm")
@@ -396,7 +393,7 @@ def retrieve_node(state: AskState, deps: Any) -> dict:
     as_of = state.get("as_of")
     chunk_retrieval = getattr(deps, "chunk_retrieval", None)
     wiki_retrieval = getattr(deps, "wiki_retrieval", None)
-    run_chunk = bool(settings.chunk_index and chunk_retrieval is not None)
+    run_chunk = chunk_retrieval is not None
     run_wiki = bool(settings.wiki_compile and wiki_retrieval is not None)
 
     embed_started = time.perf_counter()
@@ -763,19 +760,6 @@ def synthesize_node(state: AskState, deps: Any) -> dict:
         settings=settings,
     )
     result = synthesize_answer(context, deps.llm_client, settings)
-    if result is None:
-        return {
-            "synthesis_skipped_reason": "failed",
-            "trace": [
-                trace_step(
-                    "synthesize",
-                    status="error",
-                    summary="LLM 综合失败",
-                    detail={"skipped_reason": "failed"},
-                    duration_ms=_node_duration_ms(started),
-                )
-            ],
-        }
     citations = result.get("citations", [])
     return {
         "synthesis_text": result["answer"],

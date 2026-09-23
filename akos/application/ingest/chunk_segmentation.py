@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from akos.application.ingest.chunker import DocumentChunkDraft, estimate_token_count, validate_chunk_coverage
+from akos.adapters.llm.client import LlmCallError
 from infra.settings import Settings
 from akos.domain.models.knowledge import SourceChunk
 
@@ -294,13 +295,19 @@ def request_segmentation_plan(client: Any, spans: list[StructuralSpan], settings
         max_sections=settings.chunk_llm_segment_max_sections,
         min_tokens=settings.chunk_min_tokens,
     )
+    last_error: Exception | None = None
     for attempt in range(2):
         try:
             raw = client.chat_completions([{"role": "user", "content": prompt}], temperature=0.0)
             sections = parse_segmentation_plan(raw, span_count=len(spans))
             if sections is not None:
                 return sections
-        except Exception:
-            if attempt == 1:
-                logger.exception("章节规划 LLM 调用失败")
-    return None
+            last_error = LlmCallError("章节规划 LLM 返回无法解析的 JSON")
+        except Exception as exc:
+            last_error = exc
+            if attempt == 0:
+                logger.warning("章节规划 LLM 调用失败，重试一次: %s", exc)
+                continue
+            logger.exception("章节规划 LLM 调用失败")
+            raise
+    raise LlmCallError(f"章节规划 LLM 未返回有效结果: {last_error}") from last_error

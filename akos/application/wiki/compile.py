@@ -25,6 +25,7 @@ from akos.application.wiki.links import (
 from akos.application.wiki.source_plan import compile_source_wiki_for_source
 from akos.application.wiki.meta import WikiPageMeta, load_pages_meta, save_pages_meta
 from akos.application.wiki.paths import compile_wiki_root
+from akos.adapters.llm.client import require_llm_configured
 from akos.application.wiki.prompts import build_topic_merge_prompt
 
 logger = logging.getLogger(__name__)
@@ -194,12 +195,11 @@ def _required_wikilinks_present(body: str, required: list[str]) -> bool:
     return all(link in body for link in required)
 
 
-def _llm_client_ready(settings: Any, llm_client: Any) -> bool:
-    if not getattr(settings, "wiki_compile_llm", False):
+def _wiki_topic_merge_uses_llm(settings: Any, llm_client: Any) -> bool:
+    if not getattr(settings, "wiki_compile", False):
         return False
-    if llm_client is None:
-        return False
-    return bool(getattr(llm_client, "is_configured", False))
+    require_llm_configured(llm_client, feature="Wiki 主题页合并")
+    return True
 
 
 def _evidence_payload(
@@ -294,19 +294,17 @@ def _try_llm_merge(
         ),
         required_wikilinks=required,
     )
-    try:
-        raw = llm_client.chat_completions([{"role": "user", "content": prompt}], temperature=0.2)
-    except Exception:
-        logger.exception("Wiki 主题页 LLM 合并失败 topic=%s", topic_name)
-        return None
+    from akos.adapters.llm.client import LlmCallError
+
+    raw = llm_client.chat_completions([{"role": "user", "content": prompt}], temperature=0.2)
     markdown = _parse_llm_markdown(raw)
     if markdown is None:
-        return None
+        raise LlmCallError(f"Wiki 主题页 LLM 合并未返回有效 markdown topic={topic_name}")
     if not _required_wikilinks_present(markdown, source_links):
-        return None
+        raise LlmCallError(f"Wiki 主题页 LLM 合并缺少必需 wikilink topic={topic_name}")
     for section in ("## 相关原文", "## 相关实体", "## 相关主题"):
         if section not in markdown:
-            return None
+            raise LlmCallError(f"Wiki 主题页 LLM 合并缺少段落 {section} topic={topic_name}")
     return markdown
 
 
@@ -535,7 +533,7 @@ def _compile_hierarchy_for_source(
     written = 0
     topic_names: list[str] = []
     now = datetime.now(timezone.utc)
-    use_llm = _llm_client_ready(settings, llm_client)
+    use_llm = _wiki_topic_merge_uses_llm(settings, llm_client)
     max_related = int(getattr(settings, "wiki_max_related", 12) or 12)
 
     for (hub, leaf), bundle in sorted(bundles.items(), key=lambda item: (item[0][0], item[0][1] or "")):
@@ -591,10 +589,7 @@ def _compile_hierarchy_for_source(
                 source_titles=source_titles,
                 related_links=related,
             )
-            if merged is not None:
-                content = merged
-            else:
-                logger.info("Wiki 主题页 LLM 失败，回退模板 topic=%s", bundle.title)
+            content = merged
 
         page_path.write_text(content, encoding="utf-8")
         written += 1
@@ -654,7 +649,7 @@ def _compile_flat_for_source(
     written = 0
     topic_names: list[str] = []
     now = datetime.now(timezone.utc)
-    use_llm = _llm_client_ready(settings, llm_client)
+    use_llm = _wiki_topic_merge_uses_llm(settings, llm_client)
 
     for cluster in clusters:
         claims = [claims_by_id[cid] for cid in cluster.claim_ids if cid in claims_by_id]
@@ -688,10 +683,7 @@ def _compile_flat_for_source(
                 source_titles=source_titles,
                 related_links=related_links,
             )
-            if merged is not None:
-                content = merged
-            else:
-                logger.info("Wiki 主题页 LLM 失败，回退模板 topic=%s", cluster.name)
+            content = merged
 
         page_path.write_text(content, encoding="utf-8")
         written += 1
@@ -744,13 +736,11 @@ def compile_topics_for_source(
     """Compile topic pages for topics touched by ``source_id`` (template + optional LLM merge)."""
     del graph  # reserved for future cluster rebuild hook
 
+    if not getattr(settings, "wiki_compile", False):
+        return CompileReport()
+
     wiki_root = compile_wiki_root(data_root, kb_id)
     wiki_root.mkdir(parents=True, exist_ok=True)
-
-    if getattr(settings, "wiki_hierarchy", False) and getattr(settings, "wiki_source_plan", True):
-        return _compile_source_plan_for_source(
-            knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client
-        )
-    if getattr(settings, "wiki_hierarchy", False):
-        return _compile_hierarchy_for_source(knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client)
-    return _compile_flat_for_source(knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client)
+    return _compile_source_plan_for_source(
+        knowledge, kb_id, source_id, wiki_root, settings, llm_client=llm_client
+    )

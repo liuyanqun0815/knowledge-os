@@ -10,6 +10,7 @@ from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
 from akos.application.ingest.intersect import resolve_extraction_units
 from akos.domain.ports.compiler import ExtractedClaim
 from akos.application.ingest.spec_utils import apply_open_flag
+from akos.adapters.llm.client import require_llm_configured
 from infra.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -17,14 +18,10 @@ logger = logging.getLogger(__name__)
 
 def ingest_graph_extracts_llm_claims(settings: Settings, deps: Any) -> bool:
     """判断 ingest 图的 compile_node 是否已按 chunk 跑过 LLM Claim 抽取。"""
+    del settings
     client = getattr(deps, "llm_client", None)
     domain = getattr(deps, "domain", None)
-    return (
-        settings.extract_llm
-        and client is not None
-        and client.is_configured
-        and domain is not None
-    )
+    return client is not None and client.is_configured and domain is not None
 
 
 @traceable(name="akos.enrich_source", run_type="chain")
@@ -37,9 +34,7 @@ def enrich_source(
 ) -> None:
     """compile 未抽取 Claim 时补抽（例如崩溃恢复后）。"""
     client = getattr(deps, "llm_client", None)
-    if not settings.extract_llm or client is None or not client.is_configured:
-        deps.knowledge.update_source_status(source_id, "succeeded")
-        return
+    require_llm_configured(client, feature="入库 Claim 补抽")
 
     deps.knowledge.update_source_status(source_id, "enriching")
     try:
@@ -61,7 +56,6 @@ def enrich_source(
         spec = apply_open_flag(deps.domain.llm_extraction_spec(), settings)
         extractor = DomainLlmExtractor(client, spec)
         extracted: list[ExtractedClaim] = []
-        failed_chunks = 0
 
         for unit in units:
             for attempt in range(2):
@@ -77,7 +71,12 @@ def enrich_source(
                     break
                 except Exception:
                     if attempt == 1:
-                        failed_chunks += 1
+                        raise
+                    logger.warning(
+                        "补抽 Claim 单元失败，重试 source=%s unit_title=%s",
+                        source_id,
+                        unit.title,
+                    )
 
         deps.compiler.apply_extracted_claims(
             source_id,
@@ -86,15 +85,13 @@ def enrich_source(
             open_predicates=settings.extract_open_predicates,
         )
         logger.info(
-            "补抽 Claim 完成 source=%s kb=%s extracted=%s units=%s failed_chunks=%s",
+            "补抽 Claim 完成 source=%s kb=%s extracted=%s units=%s",
             source_id,
             kb_id,
             len(extracted),
             len(units),
-            failed_chunks,
         )
-        failure_ratio = failed_chunks / len(units) if units else 0.0
-        final_status = "succeeded_partial" if truncated or failure_ratio >= 0.5 else "succeeded"
+        final_status = "succeeded_partial" if truncated else "succeeded"
         deps.knowledge.update_source_status(source_id, final_status)
     except Exception:
         logger.exception("补抽 Claim 失败 source=%s kb=%s", source_id, kb_id)

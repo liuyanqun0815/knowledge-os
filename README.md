@@ -60,13 +60,13 @@ flowchart TB
 | 阶段 | 作用 |
 |------|------|
 | **index_chunks** | 按标题/空行/`chunk_max_chars` 确定性切分，写入 DB 并建 **Chunk 检索索引**；产出带 **start/end** 的 span，供规划与溯源 |
-| **plan_chunks** | `chunk_llm_segment` 开启时，LLM **只合并**已有 span（不改写原文）；失败则保留结构 Chunk |
-| **compile** | `extract_rules` / `extract_llm` 混合抽 Claim，**按当前 active Chunk** 逐段 LLM（`document_anchor` 为文档级产品名，章节 title/summary 仅作上下文） |
+| **plan_chunks** | `chunk_llm` 开启时，LLM **只合并**已有 span（不改写原文）；失败则保留结构 Chunk |
+| **compile** | 规则 + LLM 混合抽 Claim，**按当前 active Chunk** 逐段 LLM（`document_anchor` 为文档级产品名，章节 title/summary 仅作上下文） |
 | **enrich_source** | 仅在 compile 未跑 LLM、或服务重启续跑 `enriching` 状态时补抽；**正常上传且已 LLM compile 时不再重复** |
-| **enrich_chunks** | `chunk_llm_enrich`：每 Chunk 补 **title / summary / topics**，不改边界；供 Chunk 检索与 Wiki 证据摘要 |
+| **enrich_chunks** | `chunk_llm`：每 Chunk 补 **title / summary / topics**，不改边界；供 Chunk 检索与 Wiki 证据摘要 |
 | **Wiki compile** | 按 `resolve_wiki_layout`（篇幅/章节/catalog）决定单页或 `贷款产品/{产品}/` 多页；侧边栏按 **类目** 聚合展示 |
 
-常用开关见 `infra/settings.py`（如 `chunk_llm_segment`、`chunk_llm_enrich`、`wiki_compile`、`chunk_index`）。知识库级 **`graph_enabled`** 关闭时图谱写入为 NoOp，Ask 仍可用 Claim/Chunk/Wiki。
+常用开关见 `infra/settings.py`（如 `chunk_llm`、`wiki_compile`、`ask_synthesis`、`topic_cluster`）。知识库级 **`graph_enabled`** 关闭时图谱写入为 NoOp，Ask 仍可用 Claim/Chunk/Wiki。
 
 ![文档来源](docs/images/ui-sources.png)
 

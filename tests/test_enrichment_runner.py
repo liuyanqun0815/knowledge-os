@@ -97,7 +97,6 @@ def _deps(text: str | None, client: MockLlmClient) -> SimpleNamespace:
 
 def _settings(**overrides: object) -> Settings:
     values = {
-        "extract_llm": True,
         "chunk_max_chars": 3000,
         "chunk_max_per_doc": 40,
         "extract_min_confidence": 0.5,
@@ -106,26 +105,19 @@ def _settings(**overrides: object) -> Settings:
     return Settings(**values)
 
 
-@pytest.mark.parametrize(
-    ("extract_llm", "is_configured"),
-    [(False, True), (True, False)],
-)
-def test_enrich_source_skips_when_llm_is_disabled_or_unconfigured(
-    extract_llm: bool,
-    is_configured: bool,
-) -> None:
-    client = MockLlmClient([], is_configured=is_configured)
+def test_enrich_source_raises_when_llm_unconfigured() -> None:
+    from akos.adapters.llm.client import LlmConfigError
+
+    client = MockLlmClient([], is_configured=False)
     deps = _deps("公司倡导诚信经营。", client)
 
-    enrich_source(
-        kb_id="kb-1",
-        source_id="source-1",
-        deps=deps,
-        settings=_settings(extract_llm=extract_llm),
-    )
-
-    assert deps.knowledge.get_source("source-1").status == "succeeded"
-    assert client.calls == 0
+    with pytest.raises(LlmConfigError, match="AKOS_LLM_API_KEY"):
+        enrich_source(
+            kb_id="kb-1",
+            source_id="source-1",
+            deps=deps,
+            settings=_settings(),
+        )
 
 
 def test_enrich_source_applies_mock_llm_claims_and_quarantines_low_confidence() -> None:
@@ -147,7 +139,7 @@ def test_enrich_source_applies_mock_llm_claims_and_quarantines_low_confidence() 
     assert deps.knowledge.list_quarantine()[0]["reason"] == "low_confidence"
 
 
-def test_enrich_source_retries_each_failed_chunk_once_and_marks_partial() -> None:
+def test_enrich_source_retries_once_then_raises_on_persistent_llm_error() -> None:
     client = MockLlmClient(
         [
             RuntimeError("temporary"),
@@ -158,16 +150,16 @@ def test_enrich_source_retries_each_failed_chunk_once_and_marks_partial() -> Non
     )
     deps = _deps("alpha\n\nbeta", client)
 
-    enrich_source(
-        kb_id="kb-1",
-        source_id="source-1",
-        deps=deps,
-        settings=_settings(chunk_max_chars=20),
-    )
+    with pytest.raises(RuntimeError, match="persistent"):
+        enrich_source(
+            kb_id="kb-1",
+            source_id="source-1",
+            deps=deps,
+            settings=_settings(chunk_max_chars=20),
+        )
 
     assert client.calls == 4
-    assert deps.knowledge.get_source("source-1").status == "succeeded_partial"
-    assert len(deps.knowledge.get_claims_for_source("source-1")) == 1
+    assert deps.knowledge.get_source("source-1").status == "failed"
 
 
 def test_enrich_source_marks_truncated_documents_partial() -> None:

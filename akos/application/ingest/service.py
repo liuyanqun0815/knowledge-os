@@ -152,11 +152,9 @@ class KnowledgeCompiler:
         source = self._knowledge.get_source(source_id)
         stored_chunks = self._knowledge.list_chunks(source_id, status="active")
         logger.info(
-            "混合抽取 开始 source=%s active_chunks=%s extract_rules=%s extract_llm=%s",
+            "混合抽取 开始 source=%s active_chunks=%s",
             source_id,
             len(stored_chunks),
-            resolved_settings.extract_rules,
-            resolved_settings.extract_llm,
         )
         candidates = select_hybrid_candidates(
             text,

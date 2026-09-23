@@ -107,10 +107,6 @@ def index_source_chunks(
     source_id: str,
     settings: Settings,
 ) -> ChunkIndexReport:
-    if not settings.chunk_index:
-        logger.info("跳过 chunk 索引 source=%s（chunk_index=false）", source_id)
-        return ChunkIndexReport(source_id=source_id, chunks_created=0, truncated=False, errors=[])
-
     text = knowledge.get_source_text(source_id)
     if text is None:
         return ChunkIndexReport(

@@ -11,6 +11,16 @@ from akos.domain.models.knowledge import Claim, Source, SourceChunk, TopicCluste
 from akos.application.wiki.paths import compile_wiki_root
 
 
+class FakeLlmClient:
+    is_configured = True
+
+    def __init__(self, response: str = "[]") -> None:
+        self.response = response
+
+    def chat_completions(self, messages, *, temperature=0.0, timeout=60.0) -> str:
+        return self.response
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -86,7 +96,7 @@ def _cluster(
 
 
 def test_compile_hierarchy_folds_snippets_under_hub(tmp_path: Path) -> None:
-    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import _compile_hierarchy_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-1", "cs.md"))
@@ -122,19 +132,18 @@ def test_compile_hierarchy_folds_snippets_under_hub(tmp_path: Path) -> None:
 
     settings = Settings(
         wiki_compile=True,
-        wiki_compile_llm=False,
-        wiki_hierarchy=True,
-        wiki_source_plan=False,
-        wiki_source_plan_llm=False,
         wiki_migrate_flat=True,
         wiki_max_related=12,
         data_root=str(tmp_path),
         _env_file=None,
     )
-    report = compile_topics_for_source(knowledge, "kb1", "src-1", str(tmp_path), settings, graph=None)
+    wiki_root = compile_wiki_root(tmp_path, "kb1")
+    wiki_root.mkdir(parents=True, exist_ok=True)
+    report = _compile_hierarchy_for_source(
+        knowledge, "kb1", "src-1", wiki_root, settings, llm_client=FakeLlmClient()
+    )
     assert report.pages_written >= 1
 
-    wiki_root = compile_wiki_root(tmp_path, "kb1")
     hub_dir = wiki_root / "客服话术"
     assert (hub_dir / "_index.md").is_file()
     assert (hub_dir / "沟通规范.md").is_file()
@@ -164,7 +173,7 @@ def test_compile_hierarchy_folds_snippets_under_hub(tmp_path: Path) -> None:
 
 
 def test_compile_hierarchy_migrates_flat_topic_files(tmp_path: Path) -> None:
-    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.compile import _compile_hierarchy_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-1", "cs.md"))
@@ -192,21 +201,19 @@ def test_compile_hierarchy_migrates_flat_topic_files(tmp_path: Path) -> None:
 
     settings = Settings(
         wiki_compile=True,
-        wiki_compile_llm=False,
-        wiki_hierarchy=True,
-        wiki_source_plan=False,
-        wiki_source_plan_llm=False,
         wiki_migrate_flat=True,
         data_root=str(tmp_path),
         _env_file=None,
     )
-    compile_topics_for_source(knowledge, "kb1", "src-1", str(tmp_path), settings, graph=None)
+    _compile_hierarchy_for_source(
+        knowledge, "kb1", "src-1", wiki_root, settings, llm_client=FakeLlmClient()
+    )
     assert not stale.exists()
     assert (wiki_root / "客服话术" / "沟通规范.md").is_file()
 
 
-def test_compile_flat_when_hierarchy_disabled(tmp_path: Path) -> None:
-    from akos.application.wiki.compile import compile_topics_for_source
+def test_compile_flat_topic_pages(tmp_path: Path) -> None:
+    from akos.application.wiki.compile import _compile_flat_for_source
 
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source("src-1", "a.md"))
@@ -228,11 +235,10 @@ def test_compile_flat_when_hierarchy_disabled(tmp_path: Path) -> None:
     )
     settings = Settings(
         wiki_compile=True,
-        wiki_compile_llm=False,
-        wiki_hierarchy=False,
         data_root=str(tmp_path),
         _env_file=None,
     )
-    compile_topics_for_source(knowledge, "kb1", "src-1", str(tmp_path), settings, graph=None)
     wiki_root = compile_wiki_root(tmp_path, "kb1")
+    wiki_root.mkdir(parents=True, exist_ok=True)
+    _compile_flat_for_source(knowledge, "kb1", "src-1", wiki_root, settings, llm_client=FakeLlmClient())
     assert (wiki_root / "topic-退款政策.md").is_file()

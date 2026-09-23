@@ -6,6 +6,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from infra.settings import Settings
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Claim, Source, SourceChunk
@@ -33,6 +35,80 @@ class FakeLlmClient:
     ) -> str:
         self.calls.append({"messages": messages, "temperature": temperature, "timeout": timeout})
         return self.response
+
+
+def _size_guide_plan_client() -> FakeLlmClient:
+    llm_body = "\n".join(
+        [
+            "# 尺码选择指南",
+            "",
+            "## 摘要",
+            "> 服装与鞋码对照及选码建议",
+            "",
+            "## 问答",
+            "### 尺码不合适能退吗？",
+            "- **答**：支持七天无理由退换（需商品完好）",
+            "- **来源**：[[source-商品咨询__尺码选择指南|尺码选择指南.md]]",
+            "",
+            "## 相关原文",
+            "- [[source-商品咨询__尺码选择指南|尺码选择指南.md]]",
+            "",
+            "## Chunks",
+            "- [[chunk-商品咨询__尺码选择指南-0|尺码选择指南]]: 对照表",
+            "",
+            "## 相关实体",
+            "- [[退换货政策|退换货政策]]",
+            "",
+        ]
+    )
+    return FakeLlmClient(
+        json.dumps(
+            {
+                "pages": [
+                    {
+                        "folder": "商品咨询",
+                        "slug": "尺码选择指南",
+                        "title": "尺码选择指南",
+                        "markdown": llm_body,
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
+def _after_sales_plan_client() -> FakeLlmClient:
+    markdown = "\n".join(
+        [
+            "# 七天无理由退货",
+            "",
+            "## 摘要",
+            "> 尺码不合适可退货",
+            "",
+            "## 相关原文",
+            "- [[source-售后__七天无理由退货|七天无理由退货.md]]",
+            "",
+            "## Chunks",
+            "- [[chunk-售后__七天无理由退货-0|七天无理由退货]]: 说明",
+            "",
+        ]
+    )
+    return FakeLlmClient(
+        json.dumps(
+            {
+                "pages": [
+                    {
+                        "folder": "售后",
+                        "slug": "七天无理由退货",
+                        "title": "七天无理由退货",
+                        "markdown": markdown,
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def _seed_size_guide_kb(knowledge: InMemoryKnowledge) -> None:
@@ -132,49 +208,9 @@ def test_compile_source_plan_writes_single_aggregated_page(tmp_path: Path) -> No
     _seed_size_guide_kb(knowledge)
     source_id = "商品咨询__尺码选择指南"
 
-    llm_body = "\n".join(
-        [
-            "# 尺码选择指南",
-            "",
-            "## 摘要",
-            "> 服装与鞋码对照及选码建议",
-            "",
-            "## 问答",
-            "### 尺码不合适能退吗？",
-            "- **答**：支持七天无理由退换（需商品完好）",
-            "- **来源**：[[source-商品咨询__尺码选择指南|尺码选择指南.md]]",
-            "",
-            "## 相关原文",
-            "- [[source-商品咨询__尺码选择指南|尺码选择指南.md]]",
-            "",
-            "## Chunks",
-            "- [[chunk-商品咨询__尺码选择指南-0|尺码选择指南]]: 对照表",
-            "",
-            "## 相关实体",
-            "- [[退换货政策|退换货政策]]",
-            "",
-        ]
-    )
-    client = FakeLlmClient(
-        json.dumps(
-            {
-                "pages": [
-                    {
-                        "folder": "商品咨询",
-                        "slug": "尺码选择指南",
-                        "title": "尺码选择指南",
-                        "markdown": llm_body,
-                    }
-                ]
-            },
-            ensure_ascii=False,
-        )
-    )
+    client = _size_guide_plan_client()
     settings = Settings(
         wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan=True,
-        wiki_source_plan_llm=True,
         data_root=str(tmp_path),
         _env_file=None,
     )
@@ -204,7 +240,8 @@ def test_compile_source_plan_writes_single_aggregated_page(tmp_path: Path) -> No
     assert "尺码选择指南" in index_body
 
 
-def test_compile_source_plan_falls_back_to_template(tmp_path: Path) -> None:
+def test_compile_source_plan_raises_on_invalid_llm_json(tmp_path: Path) -> None:
+    from akos.adapters.llm.client import LlmCallError
     from akos.application.wiki.compile import compile_topics_for_source
 
     knowledge = InMemoryKnowledge()
@@ -214,34 +251,23 @@ def test_compile_source_plan_falls_back_to_template(tmp_path: Path) -> None:
     client = FakeLlmClient("not-json")
     settings = Settings(
         wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan=True,
-        wiki_source_plan_llm=True,
         data_root=str(tmp_path),
         _env_file=None,
     )
-    report = compile_topics_for_source(
-        knowledge,
-        "kb1",
-        source_id,
-        str(tmp_path),
-        settings,
-        graph=None,
-        llm_client=client,
-    )
-    assert report.pages_written == 1
-    page = compile_wiki_root(tmp_path, "kb1") / "商品咨询" / "尺码选择指南.md"
-    body = page.read_text(encoding="utf-8")
-    assert "## 要点" in body
-    assert "## 常见问题" in body
-    assert "七天无理由退换" in body
-    assert "退换货政策" in body  # FAQ 需带 subject
-    # 要点不应只剩一句空泛摘要：至少 2 条
-    assert body.count("\n- ") >= 2
+    with pytest.raises(LlmCallError, match="有效页面"):
+        compile_topics_for_source(
+            knowledge,
+            "kb1",
+            source_id,
+            str(tmp_path),
+            settings,
+            graph=None,
+            llm_client=client,
+        )
 
 
 def test_compile_bundle_fallback_clusters_by_chunk_topics(tmp_path: Path) -> None:
-    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.source_plan import _render_bundle_fallback_plans
 
     knowledge = InMemoryKnowledge()
     source_id = "贷款产品合集"
@@ -330,40 +356,27 @@ def test_compile_bundle_fallback_clusters_by_chunk_topics(tmp_path: Path) -> Non
         )
     )
 
-    settings = Settings(
-        wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan=True,
-        wiki_source_plan_llm=False,
-        wiki_split_min_chars=5000,
-        data_root=str(tmp_path),
-        _env_file=None,
+    chunks = knowledge.list_chunks(source_id, status="active")
+    claims = knowledge.get_claims_for_source(source_id)
+    plans = _render_bundle_fallback_plans(
+        kb_id="kb1",
+        folder="贷款产品/贷款产品合集",
+        product_name="贷款产品合集",
+        source_id=source_id,
+        source_title="贷款产品合集.md",
+        source_text=body,
+        chunks=chunks,
+        claims=claims,
+        related_links=[],
     )
-    report = compile_topics_for_source(
-        knowledge,
-        "kb1",
-        source_id,
-        str(tmp_path),
-        settings,
-        graph=None,
-        llm_client=None,
-    )
-    wiki_root = compile_wiki_root(tmp_path, "kb1")
-    assert (wiki_root / "贷款产品" / "贷款产品合集" / "_index.md").is_file()
-    assert (wiki_root / "贷款产品" / "贷款产品合集" / "个人信用贷款.md").is_file()
-    assert (wiki_root / "贷款产品" / "贷款产品合集" / "房屋抵押贷款.md").is_file()
-    assert (wiki_root / "贷款产品" / "贷款产品合集" / "汽车贷款.md").is_file()
-    assert report.pages_written >= 4
-
-    credit = (wiki_root / "贷款产品" / "贷款产品合集" / "个人信用贷款.md").read_text(encoding="utf-8")
-    assert "## 要点" in credit
-    assert "## 常见问题" in credit
-    assert "### 个人信用贷款：额度范围" in credit
-    assert credit.count("### ") <= 8
+    assert len(plans) >= 4
+    credit_plan = next(p for p in plans if p.slug == "个人信用贷款")
+    assert "## 要点" in credit_plan.markdown
+    assert "### 个人信用贷款：额度范围" in credit_plan.markdown
 
 
 def test_compile_bundle_fallback_uses_topics_not_rigid_chapters(tmp_path: Path) -> None:
-    from akos.application.wiki.compile import compile_topics_for_source
+    from akos.application.wiki.source_plan import _render_bundle_fallback_plans
 
     knowledge = InMemoryKnowledge()
     source_id = "青银理财成就系列"
@@ -425,35 +438,23 @@ def test_compile_bundle_fallback_uses_topics_not_rigid_chapters(tmp_path: Path) 
             ),
         ],
     )
-    settings = Settings(
-        wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan=True,
-        wiki_source_plan_llm=False,
-        wiki_split_min_chars=5000,
-        data_root=str(tmp_path),
-        _env_file=None,
+    chunks = knowledge.list_chunks(source_id, status="active")
+    plans = _render_bundle_fallback_plans(
+        kb_id="kb1",
+        folder="理财产品/青银理财成就系列（低波共享）",
+        product_name="青银理财成就系列（低波共享）",
+        source_id=source_id,
+        source_title="青银理财成就系列（低波共享）.md",
+        source_text=body,
+        chunks=chunks,
+        claims=[],
+        related_links=[],
     )
-    report = compile_topics_for_source(
-        knowledge,
-        "kb1",
-        source_id,
-        str(tmp_path),
-        settings,
-        graph=None,
-        llm_client=None,
-    )
-    wiki_root = compile_wiki_root(tmp_path, "kb1")
-    product_dir = wiki_root / "理财产品" / "青银理财成就系列（低波共享）"
-    assert (product_dir / "_index.md").is_file()
-    assert (product_dir / "风险揭示.md").is_file()
-    assert (product_dir / "产品费用.md").is_file()
-    assert (product_dir / "申购赎回.md").is_file()
-    assert report.pages_written >= 4
-    fee = (product_dir / "产品费用.md").read_text(encoding="utf-8")
-    assert "## 要点" in fee
-    assert "## 常见问题" in fee
-    assert "## 问答" not in fee
+    assert len(plans) >= 4
+    fee_plan = next(p for p in plans if p.slug == "产品费用")
+    assert "## 要点" in fee_plan.markdown
+    assert "## 常见问题" in fee_plan.markdown
+    assert "## 问答" not in fee_plan.markdown
 
 
 def test_compile_source_plan_purges_old_fragmented_pages(tmp_path: Path) -> None:
@@ -487,9 +488,6 @@ def test_compile_source_plan_purges_old_fragmented_pages(tmp_path: Path) -> None
 
     settings = Settings(
         wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan=True,
-        wiki_source_plan_llm=True,
         data_root=str(tmp_path),
         _env_file=None,
     )
@@ -500,7 +498,7 @@ def test_compile_source_plan_purges_old_fragmented_pages(tmp_path: Path) -> None
         str(tmp_path),
         settings,
         graph=None,
-        llm_client=None,
+        llm_client=_size_guide_plan_client(),
     )
     assert not stale_dir.exists()
     assert (wiki_root / "商品咨询" / "尺码选择指南.md").is_file()
@@ -530,16 +528,26 @@ def test_compile_source_plan_injects_related_topics(tmp_path: Path) -> None:
 
     settings = Settings(
         wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan_llm=False,
         data_root=str(tmp_path),
         _env_file=None,
     )
     compile_topics_for_source(
-        knowledge, "kb1", "商品咨询__尺码选择指南", str(tmp_path), settings, graph=None, llm_client=None
+        knowledge,
+        "kb1",
+        "商品咨询__尺码选择指南",
+        str(tmp_path),
+        settings,
+        graph=None,
+        llm_client=_size_guide_plan_client(),
     )
     compile_topics_for_source(
-        knowledge, "kb1", "售后__七天无理由退货", str(tmp_path), settings, graph=None, llm_client=None
+        knowledge,
+        "kb1",
+        "售后__七天无理由退货",
+        str(tmp_path),
+        settings,
+        graph=None,
+        llm_client=_after_sales_plan_client(),
     )
 
     size_body = (compile_wiki_root(tmp_path, "kb1") / "商品咨询" / "尺码选择指南.md").read_text(encoding="utf-8")
@@ -549,7 +557,6 @@ def test_compile_source_plan_injects_related_topics(tmp_path: Path) -> None:
 
 def test_compile_source_plan_relinks_existing_pages(tmp_path: Path) -> None:
     from akos.application.wiki.compile import compile_topics_for_source
-    from akos.application.wiki.source_plan import relink_wiki_pages
 
     knowledge = InMemoryKnowledge()
     _seed_size_guide_kb(knowledge)
@@ -569,9 +576,6 @@ def test_compile_source_plan_relinks_existing_pages(tmp_path: Path) -> None:
 
     settings = Settings(
         wiki_compile=True,
-        wiki_hierarchy=True,
-        wiki_source_plan=True,
-        wiki_source_plan_llm=False,
         data_root=str(tmp_path),
         _env_file=None,
     )
@@ -597,7 +601,13 @@ def test_compile_source_plan_relinks_existing_pages(tmp_path: Path) -> None:
     )
 
     compile_topics_for_source(
-        knowledge, "kb1", "售后__七天无理由退货", str(tmp_path), settings, graph=None, llm_client=None
+        knowledge,
+        "kb1",
+        "售后__七天无理由退货",
+        str(tmp_path),
+        settings,
+        graph=None,
+        llm_client=_after_sales_plan_client(),
     )
 
     size_body = (wiki_root / "商品咨询" / "尺码选择指南.md").read_text(encoding="utf-8")

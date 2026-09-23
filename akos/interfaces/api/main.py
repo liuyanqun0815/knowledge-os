@@ -2,7 +2,10 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from akos.adapters.llm.client import LlmCallError, LlmConfigError, ensure_llm_settings
 
 from akos.interfaces.api.admin_api.routes_claims import router as claims_router
 from akos.interfaces.api.admin_api.routes_debug import router as debug_router
@@ -83,10 +86,20 @@ async def lifespan(app: FastAPI):
                 logger.exception("关闭时后台恢复 source 任务失败")
 
 
-def create_app(data_root: str | None = None) -> FastAPI:
+def create_app(data_root: str | None = None, *, validate_llm: bool = True) -> FastAPI:
     settings = Settings(data_root=data_root) if data_root is not None else Settings()
+    if validate_llm:
+        ensure_llm_settings(settings)
     configure_langsmith(settings)
     app = FastAPI(title="AKOS", version="0.1.0", lifespan=lifespan)
+
+    @app.exception_handler(LlmConfigError)
+    async def _llm_config_error_handler(_request: Request, exc: LlmConfigError) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+    @app.exception_handler(LlmCallError)
+    async def _llm_call_error_handler(_request: Request, exc: LlmCallError) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
     app.state.settings = settings
     app.state.orchestrator_cache = {}
     app.include_router(router)

@@ -45,8 +45,8 @@ def test_plan_chunks_replaces_structural_chunks_before_claims():
     knowledge.save_source(_source())
     knowledge.save_source_text("s1", text)
     settings = Settings(
-        chunk_llm_segment=True,
-        chunk_llm_enrich=False,
+        chunk_llm=True,
+        chunk_llm=False,
         chunk_min_tokens=1,
         chunk_max_chars=512,
         chunk_max_per_doc=40,
@@ -87,7 +87,7 @@ def test_plan_chunks_falls_back_when_llm_plan_invalid():
     knowledge = InMemoryKnowledge()
     knowledge.save_source(_source())
     knowledge.save_source_text("s1", text)
-    settings = Settings(chunk_llm_segment=True, chunk_min_tokens=5, chunk_max_chars=512)
+    settings = Settings(chunk_llm=True, chunk_min_tokens=5, chunk_max_chars=512)
     chunks, _ = build_source_chunks("s1", text, settings)
     knowledge.save_chunks("s1", chunks)
     before = [(c.start, c.end, c.text) for c in knowledge.list_chunks("s1", status="active")]
@@ -189,7 +189,7 @@ def test_enrich_chunks_does_not_resegment_boundaries():
             index_chunks=lambda items: None,
         ),
     )
-    settings = Settings(chunk_llm_segment=True, chunk_llm_enrich=True, topic_cluster=False)
+    settings = Settings(chunk_llm=True, chunk_llm=True, topic_cluster=False)
     enrich_chunks(kb_id="kb1", source_id="s1", deps=deps, settings=settings)
 
     active = knowledge.list_chunks("s1", status="active")

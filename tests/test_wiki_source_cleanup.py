@@ -76,7 +76,6 @@ def test_purge_source_side_effects_deletes_sole_source_wiki(tmp_path: Path):
         _env_file=None,
         data_root=str(tmp_path),
         wiki_compile=True,
-        wiki_compile_llm=False,
         topic_cluster=False,
     )
     sole = sole_source_claims(knowledge, "s1")
@@ -138,9 +137,6 @@ def test_purge_wiki_keeps_multi_source_page_and_strips_deleted_id(tmp_path: Path
         _env_file=None,
         data_root=str(tmp_path),
         wiki_compile=True,
-        wiki_compile_llm=False,
-        wiki_hierarchy=False,
-        wiki_source_plan=False,
         topic_cluster=False,
     )
     # Avoid heavy recompile: stub compile by leaving wiki_hierarchy/source_plan flat

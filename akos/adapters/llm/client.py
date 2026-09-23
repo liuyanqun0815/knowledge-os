@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 import httpx
 from langsmith import traceable
@@ -23,6 +24,31 @@ _RETRYABLE_EXCEPTIONS = (
 
 class LlmConfigError(RuntimeError):
     """未配置 LLM 仍发起调用时抛出。"""
+
+
+class LlmCallError(RuntimeError):
+    """LLM 已配置但调用失败（网络、HTTP、响应格式等）。"""
+
+
+_LLM_ENV_HINT = "请在 .env 配置 AKOS_LLM_BASE_URL、AKOS_LLM_API_KEY、AKOS_LLM_MODEL。"
+
+
+def ensure_llm_settings(settings: Settings | None = None) -> None:
+    """进程启动时校验 LLM 必填项；未配置则抛 ``LlmConfigError``。"""
+    resolved = settings or get_settings()
+    if not str(resolved.llm_api_key or "").strip():
+        raise LlmConfigError(f"服务启动失败：未配置 AKOS_LLM_API_KEY。{_LLM_ENV_HINT}")
+    if not str(resolved.llm_base_url or "").strip():
+        raise LlmConfigError(f"服务启动失败：未配置 AKOS_LLM_BASE_URL。{_LLM_ENV_HINT}")
+    if not str(resolved.llm_model or "").strip():
+        raise LlmConfigError(f"服务启动失败：未配置 AKOS_LLM_MODEL。{_LLM_ENV_HINT}")
+
+
+def require_llm_configured(client: Any | None, *, feature: str) -> None:
+    """在需要 LLM 的功能入口校验 client；未配置时抛出 ``LlmConfigError``。"""
+    if client is not None and getattr(client, "is_configured", False):
+        return
+    raise LlmConfigError(f"{feature} 需要 LLM，但未配置 AKOS_LLM_API_KEY。{_LLM_ENV_HINT}")
 
 
 class OpenAiCompatibleClient:
@@ -50,10 +76,7 @@ class OpenAiCompatibleClient:
     ) -> str:
         api_key = self._settings.llm_api_key
         if not api_key:
-            raise LlmConfigError(
-                "AKOS_LLM_API_KEY is not set. "
-                "Configure AKOS_LLM_BASE_URL, AKOS_LLM_API_KEY, and AKOS_LLM_MODEL in .env."
-            )
+            raise LlmConfigError(f"未配置 AKOS_LLM_API_KEY。{_LLM_ENV_HINT}")
 
         model = self._settings.llm_model
         try:
@@ -81,6 +104,7 @@ class OpenAiCompatibleClient:
 
         attempts = max(1, max_retries)
         data = None
+        last_retryable: Exception | None = None
         for attempt in range(1, attempts + 1):
             try:
                 with httpx.Client(timeout=timeout) as client:
@@ -89,8 +113,11 @@ class OpenAiCompatibleClient:
                     data = response.json()
                 break
             except _RETRYABLE_EXCEPTIONS as exc:
+                last_retryable = exc
                 if attempt >= attempts:
-                    raise
+                    raise LlmCallError(
+                        f"LLM 请求失败（{type(exc).__name__}，已重试 {attempts} 次）: {exc}"
+                    ) from exc
                 delay = min(2 ** (attempt - 1), 8)
                 logger.warning(
                     "LLM 请求失败 (%s)，重试 %s/%s，%ss 后: %s",
@@ -101,13 +128,21 @@ class OpenAiCompatibleClient:
                     exc,
                 )
                 time.sleep(delay)
+            except httpx.HTTPStatusError as exc:
+                body = (exc.response.text or "")[:200]
+                raise LlmCallError(
+                    f"LLM HTTP {exc.response.status_code}: {body or exc.response.reason_phrase}"
+                ) from exc
 
-        assert data is not None
+        if data is None:
+            raise LlmCallError(
+                f"LLM 请求未返回有效响应: {last_retryable}" if last_retryable else "LLM 请求未返回有效响应"
+            )
         choices = data.get("choices") or []
         if not choices:
-            raise RuntimeError("LLM response missing choices")
+            raise LlmCallError("LLM 响应缺少 choices")
         message = choices[0].get("message") or {}
         content = message.get("content")
         if not isinstance(content, str):
-            raise RuntimeError("LLM response missing message content")
+            raise LlmCallError("LLM 响应缺少 message.content")
         return content

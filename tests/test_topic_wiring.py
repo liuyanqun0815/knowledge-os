@@ -70,7 +70,7 @@ def test_enrich_chunks_rebuilds_topic_clusters_when_enabled():
         llm_client=_chunk_enrich_llm(['尺码选择']),
         chunk_retrieval=SimpleNamespace(index_chunks=lambda chunks: indexed.extend(chunks)),
     )
-    settings = Settings(chunk_llm_enrich=True, topic_cluster=True, topic_min_chunks=1)
+    settings = Settings(chunk_llm=True, topic_cluster=True, topic_min_chunks=1)
 
     enrich_chunks(kb_id='kb1', source_id='s1', deps=deps, settings=settings)
 
@@ -119,7 +119,7 @@ def test_enrich_chunks_skips_rebuild_when_topic_cluster_disabled():
         llm_client=_chunk_enrich_llm(['尺码选择']),
         chunk_retrieval=SimpleNamespace(index_chunks=lambda chunks: None),
     )
-    settings = Settings(chunk_llm_enrich=True, topic_cluster=False)
+    settings = Settings(chunk_llm=True, topic_cluster=False)
 
     enrich_chunks(kb_id='kb1', source_id='s1', deps=deps, settings=settings)
 

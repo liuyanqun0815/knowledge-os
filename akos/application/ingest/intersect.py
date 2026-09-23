@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from akos.adapters.llm.client import LlmConfigError, require_llm_configured
 from akos.application.ingest.chunker import chunk_document, chunk_text
 from akos.application.ingest.document_anchor import resolve_document_anchor
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
@@ -186,29 +187,18 @@ def select_hybrid_candidates(
     title: str | None = None,
     source_chunks: list | None = None,
 ) -> list[ExtractedClaim]:
-    """按 extract_rules / extract_llm 配置合并规则抽取与 LLM 抽取。"""
-    rule_claims = rule_extractor.extract(text) if settings.extract_rules else []
-    use_llm = settings.extract_llm and llm_client is not None and llm_client.is_configured and domain is not None
-    if not use_llm:
-        return rule_claims
+    """规则抽取 + LLM 抽取，合并去重。"""
+    rule_claims = rule_extractor.extract(text)
+    require_llm_configured(llm_client, feature="入库 Claim 抽取")
+    if domain is None:
+        raise LlmConfigError("入库 Claim 抽取需要领域 domain，但当前未注入。")
 
-    try:
-        llm_claims = extract_llm_claims_from_text(
-            text,
-            llm_client,
-            domain,
-            settings,
-            title=title,
-            source_chunks=source_chunks,
-        )
-    except Exception:
-        if settings.extract_rules and rule_claims:
-            logger.exception(
-                "LLM 抽取失败，回退为 %s 条规则 Claim",
-                len(rule_claims),
-            )
-            return rule_claims
-        raise
-    if settings.extract_rules and settings.extract_llm:
-        return union_extracted(rule_claims, llm_claims, ontology)
-    return llm_claims
+    llm_claims = extract_llm_claims_from_text(
+        text,
+        llm_client,
+        domain,
+        settings,
+        title=title,
+        source_chunks=source_chunks,
+    )
+    return union_extracted(rule_claims, llm_claims, ontology)

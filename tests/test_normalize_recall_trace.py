@@ -46,7 +46,7 @@ def test_rule_rewrite_skips_when_entity_already_present():
 def test_llm_rewrite_used_when_rule_misses(monkeypatch):
     monkeypatch.setattr(
         "akos.application.ask.nodes.get_settings",
-        lambda: Settings(_env_file=None, ask_normalize_llm=True),
+        lambda: Settings(_env_file=None, ask_synthesis=True),
     )
     ontology = MagicMock()
     ontology.normalize_term.side_effect = lambda alias: alias
@@ -85,7 +85,7 @@ def test_llm_rewrite_used_when_rule_misses(monkeypatch):
 def test_normalize_prefers_rule_over_llm(monkeypatch):
     monkeypatch.setattr(
         "akos.application.ask.nodes.get_settings",
-        lambda: Settings(_env_file=None, ask_normalize_llm=True),
+        lambda: Settings(_env_file=None, ask_synthesis=True),
     )
     ontology = MagicMock()
     ontology.normalize_term.side_effect = lambda alias: alias
@@ -117,7 +117,7 @@ def test_normalize_prefers_rule_over_llm(monkeypatch):
 def test_normalize_node_trace_includes_input_and_output(monkeypatch):
     monkeypatch.setattr(
         "akos.application.ask.nodes.get_settings",
-        lambda: Settings(_env_file=None, ask_normalize_llm=False),
+        lambda: Settings(_env_file=None, ask_synthesis=False),
     )
     ontology = MagicMock()
     ontology.normalize_term.side_effect = lambda alias: {"七天": "7天"}.get(alias, alias)

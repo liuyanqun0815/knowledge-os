@@ -74,7 +74,7 @@ def test_index_source_chunks_purges_when_setting_enabled():
     knowledge.save_source_text("s1", "single reindexed body")
     settings = Settings(
         _env_file=None,
-        chunk_index=True,
+        ,
         chunk_max_chars=5000,
         chunk_max_per_doc=10,
         purge_stale_chunks=True,
@@ -104,7 +104,7 @@ def test_index_source_chunks_keeps_stale_when_purge_disabled():
     knowledge.save_source_text("s1", "only one block of text that stays as a single chunk")
     settings = Settings(
         _env_file=None,
-        chunk_index=True,
+        ,
         chunk_max_chars=5000,
         chunk_max_per_doc=10,
         purge_stale_chunks=False,

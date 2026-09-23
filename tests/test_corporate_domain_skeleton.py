@@ -40,10 +40,11 @@ def test_openai_client_raises_without_key():
         client.chat_completions([{"role": "user", "content": "hi"}])
 
 
-def test_llm_extractor_skips_without_key():
+def test_llm_extractor_raises_without_key():
     client = OpenAiCompatibleClient(Settings(llm_api_key=""))
     extractor = LlmExtractor(client=client, domain="corporate_culture")
-    assert extractor.extract("公司倡导诚信协作，禁止内部恶性竞争。") == []
+    with pytest.raises(LlmConfigError, match="AKOS_LLM_API_KEY"):
+        extractor.extract("公司倡导诚信协作，禁止内部恶性竞争。")
 
 
 def test_corporate_domain_registers_ontology():

@@ -38,7 +38,6 @@ def test_merge_small_spans_combines_blank_line_fragments():
 def test_build_source_chunks_compacts_before_return():
     text = FLASH_LOAN_DOC.read_text(encoding="utf-8")
     settings = Settings(
-        chunk_index=True,
         chunk_mode="auto",
         chunk_max_chars=512,
         chunk_max_per_doc=40,

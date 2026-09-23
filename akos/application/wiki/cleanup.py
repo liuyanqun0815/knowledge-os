@@ -74,16 +74,13 @@ def purge_wiki_for_deleted_source(
     if sibling_sources:
         from akos.application.wiki.compile import compile_topics_for_source
 
-        compile_settings = settings
-        if hasattr(settings, "model_copy"):
-            compile_settings = settings.model_copy(update={"wiki_compile_llm": False})
         for sid in sorted(sibling_sources):
             compile_topics_for_source(
                 knowledge,
                 kb_id,
                 sid,
                 data_root,
-                compile_settings,
+                settings,
                 graph=graph,
                 llm_client=llm_client,
             )

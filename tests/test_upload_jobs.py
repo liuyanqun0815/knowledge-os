@@ -66,7 +66,7 @@ def test_process_marks_failed_when_extract_empty(tmp_path, monkeypatch):
     settings = type(
         "S",
         (),
-        {"extract_llm": False, "chunk_llm_enrich": False, "chunk_llm_segment": False},
+        {"chunk_llm": False, "wiki_compile": False},
     )()
     upload_jobs.process_uploaded_source(
         kb_id="kb",
@@ -80,7 +80,7 @@ def test_process_marks_failed_when_extract_empty(tmp_path, monkeypatch):
     assert knowledge.get_source(source.id).status == "failed"
 
 
-def test_process_md_reaches_succeeded_without_llm(tmp_path):
+def test_process_md_fails_enrich_when_llm_not_configured(tmp_path):
     from akos.interfaces.api.admin_api import upload_jobs
 
     knowledge = InMemoryKnowledge()
@@ -109,7 +109,7 @@ def test_process_md_reaches_succeeded_without_llm(tmp_path):
     settings = type(
         "S",
         (),
-        {"extract_llm": False, "chunk_llm_enrich": False, "chunk_llm_segment": False},
+        {"chunk_llm": False, "wiki_compile": False},
     )()
     upload_jobs.process_uploaded_source(
         kb_id="kb",
@@ -120,4 +120,4 @@ def test_process_md_reaches_succeeded_without_llm(tmp_path):
         settings=settings,
         orchestrator=Orchestrator(),
     )
-    assert knowledge.get_source(source.id).status == "succeeded"
+    assert knowledge.get_source(source.id).status == "failed"

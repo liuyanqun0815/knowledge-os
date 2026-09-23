@@ -642,12 +642,13 @@ def _evidence_for_page(evidence: dict[str, Any], *, title: str, focus: str) -> d
     }
 
 
-def _llm_client_ready(settings: Any, llm_client: Any) -> bool:
-    if not getattr(settings, "wiki_source_plan_llm", False):
+def _wiki_source_plan_uses_llm(settings: Any, llm_client: Any) -> bool:
+    if not getattr(settings, "wiki_compile", False):
         return False
-    if llm_client is None:
-        return False
-    return bool(getattr(llm_client, "is_configured", False))
+    from akos.adapters.llm.client import require_llm_configured
+
+    require_llm_configured(llm_client, feature="Wiki 源文档规划")
+    return True
 
 
 def _normalize_plan_folder(
@@ -700,11 +701,7 @@ def _plan_with_llm(
             category=category,
             product_name=product_name,
         )
-        try:
-            raw = llm_client.chat_completions([{"role": "user", "content": prompt}], temperature=0.2)
-        except Exception:
-            logger.exception("Wiki 源文档规划 LLM 失败 source=%s", source_id)
-            return None
+        raw = llm_client.chat_completions([{"role": "user", "content": prompt}], temperature=0.2)
         plans = _parse_llm_plan(raw)
         if plans is None:
             return None
@@ -735,15 +732,11 @@ def _plan_with_llm(
         category=category,
         product_name=product_name,
     )
-    try:
-        outline_raw = llm_client.chat_completions(
-            [{"role": "user", "content": outline_prompt}],
-            temperature=0.2,
-            timeout=90.0,
-        )
-    except Exception:
-        logger.exception("Wiki 目录 outline LLM 失败 source=%s", source_id)
-        return None
+    outline_raw = llm_client.chat_completions(
+        [{"role": "user", "content": outline_prompt}],
+        temperature=0.2,
+        timeout=90.0,
+    )
     outline = _parse_llm_outline(outline_raw)
     if outline is None or len(outline) < 2:
         return None
@@ -774,17 +767,11 @@ def _plan_with_llm(
             sibling_pages=outline,
             product_name=product_name,
         )
-        try:
-            page_raw = llm_client.chat_completions(
-                [{"role": "user", "content": page_prompt}],
-                temperature=0.2,
-                timeout=90.0,
-            )
-        except Exception:
-            logger.exception(
-                "Wiki 单页生成 LLM 失败 source=%s page=%s", source_id, item["slug"]
-            )
-            return None
+        page_raw = llm_client.chat_completions(
+            [{"role": "user", "content": page_prompt}],
+            temperature=0.2,
+            timeout=90.0,
+        )
         markdown = _parse_llm_page_markdown(page_raw)
         if not markdown or source_link not in markdown:
             return None
@@ -993,8 +980,10 @@ def compile_source_wiki_for_source(
         max_related=int(getattr(settings, "wiki_max_related", 12) or 12),
     )
 
+    from akos.adapters.llm.client import LlmCallError
+
     plans: list[SourceWikiPagePlan] | None = None
-    if _llm_client_ready(settings, llm_client):
+    if _wiki_source_plan_uses_llm(settings, llm_client):
         plans = _plan_with_llm(
             llm_client=llm_client,
             source_id=source_id,
@@ -1010,6 +999,8 @@ def compile_source_wiki_for_source(
             category=layout.category,
             product_name=layout.product_name,
         )
+        if plans is None:
+            raise LlmCallError(f"Wiki 源文档规划未产生有效页面 source={source_id}")
 
     if plans is None:
         if layout.split_mode in {"catalog_bundle", "product_bundle"}:

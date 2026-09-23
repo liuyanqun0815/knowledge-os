@@ -13,7 +13,7 @@ from akos.application.ingest.subject_bind import (
     effective_subject_bind_mode,
     subject_bind_prompt_rules,
 )
-from akos.adapters.llm.client import LlmConfigError
+from akos.adapters.llm.client import require_llm_configured
 from infra.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -116,8 +116,7 @@ class DomainLlmExtractor:
         section_title: str | None = None,
         section_summary: str | None = None,
     ) -> list[ExtractedClaim]:
-        if not self._client.is_configured:
-            return []
+        require_llm_configured(self._client, feature="Claim LLM 抽取")
 
         try:
             content = self._client.chat_completions(
@@ -133,8 +132,6 @@ class DomainLlmExtractor:
                     }
                 ]
             )
-        except LlmConfigError:
-            return []
         except Exception:
             logger.exception("LLM Claim 抽取请求失败")
             raise

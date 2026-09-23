@@ -320,7 +320,7 @@ def export_wiki(
         for chunk in knowledge.list_chunks(source.id, status="active"):
             chunks_by_id[chunk.id] = chunk
 
-    hierarchy_enabled = bool(settings is not None and getattr(settings, "wiki_hierarchy", False))
+    hierarchy_enabled = bool(settings is not None and getattr(settings, "wiki_compile", False))
     assignments: dict[str, HierarchyAssignment] = {}
     if hierarchy_enabled and clusters:
         from akos.domains.ecommerce_cs.wiki_hierarchy import get_ecommerce_wiki_seeds

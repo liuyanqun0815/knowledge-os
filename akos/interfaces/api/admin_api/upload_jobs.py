@@ -113,6 +113,7 @@ def process_uploaded_source(
     replaces_source_id: str | None = None,
     subject_bind_mode: str | None = None,
 ) -> None:
+    from akos.adapters.llm.client import LlmCallError, LlmConfigError
     from akos.application.ingest.chunk_enrichment import enrich_chunks
     from akos.application.ingest.enrichment import enrich_source, ingest_graph_extracts_llm_claims
     from akos.application.ingest.subject_bind import subject_bind_mode_override
@@ -148,13 +149,16 @@ def process_uploaded_source(
         return
 
     if (
-        getattr(settings, "chunk_llm_enrich", False)
+        getattr(settings, "chunk_llm", False)
         or getattr(settings, "topic_cluster", False)
         or getattr(settings, "wiki_compile", False)
     ):
         _LOG.info("上传任务 后台 enrich_chunks / Wiki source=%s", source_id)
         try:
             enrich_chunks(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+        except (LlmConfigError, LlmCallError) as exc:
+            _LOG.error("上传任务 enrich_chunks 失败（LLM）kb=%s source=%s: %s", kb_id, source_id, exc)
+            deps.knowledge.update_source_status(source_id, "failed")
         except Exception as exc:
             # ingest 已成功，不因 enrich 失败把 source 标为 failed
             _LOG.exception(
