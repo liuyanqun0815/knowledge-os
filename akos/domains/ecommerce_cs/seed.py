@@ -4,10 +4,20 @@ ENTITY_SEEDS = {
     "七天无理由": "RefundRule",
     "非定制商品": "Category",
     "定制商品": "Category",
+    "定作商品": "Category",
+    "鲜活易腐": "Category",
+    "数字化商品": "Category",
+    "音像制品": "Category",
+    "计算机软件": "Category",
+    "报纸": "Category",
+    "期刊": "Category",
     "退换货政策": "Policy",
     "买家": "Concept",
     "卖家": "Concept",
+    "商家": "Concept",
+    "经营者": "Concept",
     "平台": "Concept",
+    "消费者": "Concept",
 }
 
 PREDICATES = [
@@ -25,8 +35,12 @@ PREDICATES = [
 
 ALIASES = {
     "7天无理由": "七天无理由",
+    "七日无理由": "七天无理由",
     "七天无理由退货": "七天无理由",
     "无理由退货": "七天无理由",
+    "定作的商品": "定作商品",
+    "消费者定作的商品": "定作商品",
+    "鲜活易腐的商品": "鲜活易腐",
 }
 
 

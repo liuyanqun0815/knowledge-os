@@ -80,10 +80,23 @@ def _path_from_file_uri(uri: str) -> Path | None:
 def resume_incomplete_uploads(app) -> None:
     settings = app.state.settings
     cache = getattr(app.state, "orchestrator_cache", {})
+    in_progress = {
+        "chunking",
+        "extracting_claims",
+        "enriching_chunks",
+        "compiling_wiki",
+        "running",
+        "enriching",
+    }
     for kb_id, orchestrator in list(cache.items()):
         kb_dir = Path(settings.data_root) / kb_id
         for source in orchestrator.deps.knowledge.list_sources():
-            if source.status not in {"pending", "running"}:
+            if source.status in in_progress:
+                # 不做中途续跑：中断的任务标失败，避免卡在中间态
+                orchestrator.deps.knowledge.update_source_status(source.id, "failed")
+                _LOG.warning("上传任务 启动时清理中断状态 source=%s was=%s", source.id, source.status)
+                continue
+            if source.status != "pending":
                 continue
             original = _path_from_file_uri(source.uri)
             if original is None or not original.is_file():
@@ -114,14 +127,12 @@ def process_uploaded_source(
     subject_bind_mode: str | None = None,
 ) -> None:
     from akos.adapters.llm.client import LlmCallError, LlmConfigError
-    from akos.application.ingest.chunk_enrichment import enrich_chunks
-    from akos.application.ingest.enrichment import enrich_source, ingest_graph_extracts_llm_claims
+    from akos.application.ingest.chunk_enrichment import compile_wiki_for_source, enrich_chunks
     from akos.application.ingest.subject_bind import subject_bind_mode_override
 
     source_id = source_id_for_upload(kb_dir, original)
     _LOG.info("上传任务 开始 kb=%s source=%s file=%s", kb_id, source_id, original.name)
     try:
-        deps.knowledge.update_source_status(source_id, "running")
         ingest_path = materialize_markdown_for_ingest(original)
         with subject_bind_mode_override(subject_bind_mode):
             report = orchestrator.ingest(
@@ -130,16 +141,11 @@ def process_uploaded_source(
                 replaces_source_id=replaces_source_id,
             )
             source_id = report.source_id
-            if ingest_graph_extracts_llm_claims(settings, deps):
-                deps.knowledge.update_source_status(source_id, "succeeded")
-                _LOG.info(
-                    "上传任务 ingest 完成（compile 已 LLM 抽 Claim，跳过 enrich_source）source=%s claims=%s",
-                    source_id,
-                    report.claims_created,
-                )
-            else:
-                _LOG.info("上传任务 ingest 完成，进入 enrich_source 补抽 source=%s", source_id)
-                enrich_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+        _LOG.info(
+            "上传任务 ingest 完成 source=%s claims=%s",
+            source_id,
+            report.claims_created,
+        )
     except Exception as exc:
         _LOG.exception("上传任务 失败 kb=%s source=%s: %s", kb_id, source_id, exc)
         try:
@@ -148,24 +154,27 @@ def process_uploaded_source(
             _LOG.exception("标记 source 失败状态出错 source=%s", source_id)
         return
 
-    if (
-        getattr(settings, "chunk_llm", False)
-        or getattr(settings, "topic_cluster", False)
-        or getattr(settings, "wiki_compile", False)
-    ):
-        _LOG.info("上传任务 后台 enrich_chunks / Wiki source=%s", source_id)
-        try:
+    need_chunk_enrich = bool(
+        getattr(settings, "chunk_llm", False) or getattr(settings, "topic_cluster", False)
+    )
+    need_wiki = bool(getattr(settings, "wiki_compile", False))
+
+    try:
+        if need_chunk_enrich:
+            deps.knowledge.update_source_status(source_id, "enriching_chunks")
+            _LOG.info("上传任务 补全 Chunk 元数据 source=%s", source_id)
             enrich_chunks(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
-        except (LlmConfigError, LlmCallError) as exc:
-            _LOG.error("上传任务 enrich_chunks 失败（LLM）kb=%s source=%s: %s", kb_id, source_id, exc)
-            deps.knowledge.update_source_status(source_id, "failed")
-        except Exception as exc:
-            # ingest 已成功，不因 enrich 失败把 source 标为 failed
-            _LOG.exception(
-                "上传任务 enrich_chunks 失败（source 保持 succeeded）kb=%s source=%s: %s",
-                kb_id,
-                source_id,
-                exc,
-            )
-    else:
-        _LOG.info("上传任务 结束 source=%s（未启用 chunk/wiki 后台 enrich）", source_id)
+
+        if need_wiki:
+            deps.knowledge.update_source_status(source_id, "compiling_wiki")
+            _LOG.info("上传任务 编译 Wiki source=%s", source_id)
+            compile_wiki_for_source(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
+
+        deps.knowledge.update_source_status(source_id, "succeeded")
+        _LOG.info("上传任务 结束 source=%s status=succeeded", source_id)
+    except (LlmConfigError, LlmCallError) as exc:
+        _LOG.error("上传任务 收尾失败（LLM）kb=%s source=%s: %s", kb_id, source_id, exc)
+        deps.knowledge.update_source_status(source_id, "failed")
+    except Exception as exc:
+        _LOG.exception("上传任务 收尾失败 kb=%s source=%s: %s", kb_id, source_id, exc)
+        deps.knowledge.update_source_status(source_id, "failed")

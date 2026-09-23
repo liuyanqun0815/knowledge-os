@@ -78,6 +78,14 @@ def test_single_upload_accepts_relative_path(client: TestClient, tmp_path: Path)
     assert len(matched) == 1
     assert matched[0]["id"] == "docs__guide"
 
+    detail = client.get("/admin/knowledge-bases/single-kb/sources/docs__guide")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == "docs__guide"
+    assert detail.json()["relative_path"] == "docs/guide.md"
+
+    missing = client.get("/admin/knowledge-bases/single-kb/sources/not-there")
+    assert missing.status_code == 404
+
 
 def test_move_file_keeps_source_id_stable(client: TestClient, tmp_path: Path) -> None:
     upload = _upload_tree(client, "move-kb", [("a/guide.md", "# 指南")])

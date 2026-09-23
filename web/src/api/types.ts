@@ -15,6 +15,10 @@ export type SourceItem = {
   created_at: string;
   compile_status:
     | "pending"
+    | "chunking"
+    | "extracting_claims"
+    | "enriching_chunks"
+    | "compiling_wiki"
     | "running"
     | "enriching"
     | "succeeded"

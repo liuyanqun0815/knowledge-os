@@ -5,19 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { SourcesPage } from "./SourcesPage";
 
-const { deleteSource, deleteTree, listSources, moveSources, uploadSource, uploadTree, useKb } = vi.hoisted(() => ({
-  deleteSource: vi.fn(),
-  deleteTree: vi.fn(),
-  listSources: vi.fn(),
-  moveSources: vi.fn(),
-  uploadSource: vi.fn(),
-  uploadTree: vi.fn(),
-  useKb: vi.fn(),
-}));
+const { deleteSource, deleteTree, fetchSource, listSources, moveSources, uploadSource, uploadTree, useKb } =
+  vi.hoisted(() => ({
+    deleteSource: vi.fn(),
+    deleteTree: vi.fn(),
+    fetchSource: vi.fn(),
+    listSources: vi.fn(),
+    moveSources: vi.fn(),
+    uploadSource: vi.fn(),
+    uploadTree: vi.fn(),
+    useKb: vi.fn(),
+  }));
 
 vi.mock("../api/sources", () => ({
   deleteSource,
   deleteTree,
+  fetchSource,
   listSources,
   moveSources,
   uploadSource,
@@ -214,10 +217,19 @@ describe("sources page", () => {
       results: [{ source_id: "a", path: "a.md", claims_created: 0, entities_upserted: 0, evidence_links: 0, quarantined: 0, errors: [] }],
       errors: [],
     });
-    listSources
-      .mockResolvedValueOnce([source])
-      .mockResolvedValueOnce([{ ...source, id: "a", filename: "a.md", compile_status: "pending" as const }])
-      .mockResolvedValueOnce([{ ...source, id: "a", filename: "a.md", compile_status: "succeeded" as const }]);
+    const pendingSource = {
+      ...source,
+      id: "a",
+      filename: "a.md",
+      relative_path: "a.md",
+      claims_count: 0,
+      compile_status: "pending" as const,
+    };
+    const succeededSource = { ...pendingSource, claims_count: 3, compile_status: "succeeded" as const };
+    fetchSource
+      .mockResolvedValueOnce(pendingSource)
+      .mockResolvedValueOnce(succeededSource)
+      .mockResolvedValue(succeededSource);
 
     render(<SourcesPage />);
     await screen.findByRole("tree");
@@ -228,11 +240,15 @@ describe("sources page", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent(/后台编译中/);
     await waitFor(() => {
-      expect(listSources.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(fetchSource).toHaveBeenCalledWith("kb-1", "a");
     });
     await vi.advanceTimersByTimeAsync(2000);
     await waitFor(() => {
-      expect(listSources.mock.calls.length).toBeGreaterThanOrEqual(3);
+      expect(fetchSource.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(/编译完成/);
+    });
+    expect(screen.getByText("3 条 Claim")).toBeInTheDocument();
   });
 });

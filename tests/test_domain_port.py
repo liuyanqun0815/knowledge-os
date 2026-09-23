@@ -32,8 +32,9 @@ def test_load_ecommerce_cs_domain():
     domain = load_domain("ecommerce_cs")
     assert domain.name == "ecommerce_cs"
     aliases = domain.get_aliases()
-    assert "七天无理由" in aliases
     assert "7天无理由" in aliases
+    assert "七日无理由" in aliases
+    assert "七天无理由退货" in aliases
 
 
 def test_ecommerce_format_claim_exclude():

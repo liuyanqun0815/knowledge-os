@@ -5,6 +5,16 @@ import { useKb } from "../app/KbContext";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SourceFileBrowser } from "../components/SourceFileBrowser";
+import {
+  COMPILE_STATUS_LABELS,
+  isTerminalCompileStatus,
+  mergeSourceItems,
+  pollUploadedSources,
+} from "../upload/pollUploadedSources";
+
+function statusLabel(status: SourceItem["compile_status"]): string {
+  return COMPILE_STATUS_LABELS[status] ?? status;
+}
 
 const ACCEPTED_EXTENSIONS = [".md", ".txt", ".pdf", ".docx", ".zip"];
 
@@ -159,7 +169,6 @@ export function SourcesPage() {
     setError(null);
     setUploadSummary(null);
     const pollKbId = kbId;
-    const pollQuery = searchQuery;
     try {
       const result =
         selectedTreeEntries.length > 0
@@ -172,31 +181,36 @@ export function SourcesPage() {
       setSelectedTreeEntries([]);
       setReplacesSourceId("");
       setSubjectBindMode("auto");
+      const uploadedIds = result.results.map((item) => item.source_id).filter(Boolean);
       setUploadSummary(
-        result.accepted_async !== false
-          ? `已接收 ${result.results.length} 个文件，后台编译中`
+        result.accepted_async === true
+          ? `已接收 ${result.results.length} 个文件，后台编译中…`
           : formatUploadSummary(result),
       );
       setIsUploading(false);
-      const pollGen = ++pollGenerationRef.current;
-      void (async () => {
-        const deadline = Date.now() + 180_000;
-        while (Date.now() < deadline && pollGenerationRef.current === pollGen) {
-          const items = await listSources(pollKbId, { query: pollQuery });
-          if (pollGenerationRef.current !== pollGen) {
-            return;
-          }
-          setSources(items);
-          const busy = items.some(
-            (s) =>
-              s.compile_status === "pending" ||
-              s.compile_status === "running" ||
-              s.compile_status === "enriching",
-          );
-          if (!busy) return;
-          await new Promise((r) => setTimeout(r, 2000));
-        }
-      })();
+      await loadSources();
+      if (result.accepted_async === true && uploadedIds.length > 0) {
+        const pollGen = ++pollGenerationRef.current;
+        void pollUploadedSources(pollKbId, uploadedIds, {
+          isActive: () => pollGenerationRef.current === pollGen,
+          onUpdate: (items) => {
+            setSources((prev) => mergeSourceItems(prev, items));
+            const summaryParts = items.map(
+              (item) =>
+                `${item.relative_path || item.filename}：${item.claims_count ?? 0} 条 Claim，${statusLabel(item.compile_status)}`,
+            );
+            setUploadSummary(`后台编译中 — ${summaryParts.join("；")}`);
+            if (items.every((item) => isTerminalCompileStatus(item.compile_status))) {
+              const failed = items.filter((item) => item.compile_status === "failed");
+              if (failed.length > 0) {
+                setUploadSummary(`编译结束：${failed.length} 个文件失败，请查看列表状态。`);
+              } else {
+                setUploadSummary(`编译完成：${items.length} 个文件已就绪。`);
+              }
+            }
+          },
+        });
+      }
     } catch {
       setError("文档上传失败，请稍后重试。");
       setIsUploading(false);

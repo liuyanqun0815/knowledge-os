@@ -42,7 +42,7 @@ Claim 是可审计的真相单元；Chunk 保真原文；Wiki 做人读与主题
 
 ### 入库
 
-上传后 **LangGraph ingest** 在单次任务内完成主链路；**Chunk 元数据 enrich** 与 **Wiki compile** 仍在后台收尾（见 `upload_jobs.process_uploaded_source`）。
+上传后 **LangGraph ingest** 完成切分与 Claim；**Chunk 元数据 enrich** 与 **Wiki compile** 在同一后台任务收尾，**全部结束后**才标 `succeeded`（见 `upload_jobs.process_uploaded_source`）。
 
 ```mermaid
 flowchart TB
@@ -53,6 +53,7 @@ flowchart TB
   E --> F[可问答 / Claim 已入库]
   F -.-> G[enrich_chunks<br/>title / summary / topics]
   G -.-> H[Wiki compile<br/>可选]
+  H --> I[source status=succeeded]
 ```
 
 **阶段说明（与代码一致）：**
@@ -62,9 +63,20 @@ flowchart TB
 | **index_chunks** | 按标题/空行/`chunk_max_chars` 确定性切分，写入 DB 并建 **Chunk 检索索引**；产出带 **start/end** 的 span，供规划与溯源 |
 | **plan_chunks** | `chunk_llm` 开启时，LLM **只合并**已有 span（不改写原文）；失败则保留结构 Chunk |
 | **compile** | 规则 + LLM 混合抽 Claim，**按当前 active Chunk** 逐段 LLM（`document_anchor` 为文档级产品名，章节 title/summary 仅作上下文） |
-| **enrich_source** | 仅在 compile 未跑 LLM、或服务重启续跑 `enriching` 状态时补抽；**正常上传且已 LLM compile 时不再重复** |
-| **enrich_chunks** | `chunk_llm`：每 Chunk 补 **title / summary / topics**，不改边界；供 Chunk 检索与 Wiki 证据摘要 |
+| **enrich_chunks** | `chunk_llm`：每 Chunk 补 **title / summary / topics**，不改边界；供 Chunk 检索与主题簇 |
 | **Wiki compile** | 按 `resolve_wiki_layout`（篇幅/章节/catalog）决定单页或 `贷款产品/{产品}/` 多页；侧边栏按 **类目** 聚合展示 |
+
+**Source 状态机（上传任务可见）：**
+
+| 状态 | 界面 | 含义 |
+|------|------|------|
+| `pending` | 等待处理 | 已登记，后台尚未开始 |
+| `chunking` | 切分中 | 结构切分 + 可选章节规划 |
+| `extracting_claims` | 抽取 Claim | 规则 + LLM 混合抽取 |
+| `enriching_chunks` | 补全 Chunk | Chunk 元数据 / 主题簇（按开关） |
+| `compiling_wiki` | 编译 Wiki | Wiki 编译（按开关） |
+| `succeeded` / `succeeded_partial` | 已完成 / 部分完成 | **全部收尾结束后**才标记 |
+| `failed` | 失败 | 任一段失败 |
 
 常用开关见 `infra/settings.py`（如 `chunk_llm`、`wiki_compile`、`ask_synthesis`、`topic_cluster`）。知识库级 **`graph_enabled`** 关闭时图谱写入为 NoOp，Ask 仍可用 Claim/Chunk/Wiki。
 

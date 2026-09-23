@@ -10,6 +10,11 @@ from infra.upload_utils import directory_from_relative, fuzzy_match, relative_pa
 
 def _enrichment_status(source_status: str) -> str | None:
     return {
+        "chunking": "running",
+        "extracting_claims": "running",
+        "enriching_chunks": "running",
+        "compiling_wiki": "running",
+        "running": "running",
         "enriching": "running",
         "succeeded": "done",
         "succeeded_partial": "done",

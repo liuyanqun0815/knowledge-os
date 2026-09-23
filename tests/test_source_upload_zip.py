@@ -18,6 +18,16 @@ SAMPLE_MD = ROOT / "tests" / "fixtures" / "refund_policy_v3.md"
 def client(tmp_path, monkeypatch):
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
     monkeypatch.setenv("AKOS_USE_PG", "false")
+    monkeypatch.setenv("AKOS_CHUNK_LLM", "false")
+    monkeypatch.setenv("AKOS_WIKI_COMPILE", "false")
+    monkeypatch.setenv("AKOS_TOPIC_CLUSTER", "false")
+    monkeypatch.setenv("AKOS_GRAPH_BACKEND", "memory")
+    from infra.settings import get_settings
+
+    get_settings.cache_clear()
+    from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
+
+    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda *a, **k: [])
     return TestClient(create_app(data_root=str(tmp_path / "data")))
 
 

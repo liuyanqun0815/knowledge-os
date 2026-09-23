@@ -49,6 +49,12 @@ export async function listSources(kbId: string, options: ListSourcesOptions = {}
   return raw.map(mapSource);
 }
 
+export async function fetchSource(kbId: string, sourceId: string): Promise<SourceItem> {
+  const response = await apiFetch(`/admin/knowledge-bases/${kbId}/sources/${encodeURIComponent(sourceId)}`);
+  const raw = (await response.json()) as BackendSource;
+  return mapSource(raw);
+}
+
 export type { UploadSourceOptions };
 
 export async function uploadSource(

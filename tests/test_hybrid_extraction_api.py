@@ -1,34 +1,53 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from types import SimpleNamespace
-
 from fastapi.testclient import TestClient
 
 from akos.interfaces.api.main import create_app
 from akos.application.ingest.domain_llm_extractor import DomainLlmExtractor
 from akos.domain.ports.compiler import ExtractedClaim
 from akos.bootstrap import DEFAULT_IN_MEMORY_KB_ID
-from infra.settings import Settings
-from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
-from akos.domain.models.knowledge import Source
+from infra.settings import Settings, get_settings
 
 
-def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypatch) -> None:
-    from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
-
+def _disable_post_ingest(monkeypatch) -> None:
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
-    monkeypatch.setenv("AKOS_EXTRACT_LLM", "true")
+    monkeypatch.setenv("AKOS_CHUNK_LLM", "false")
+    monkeypatch.setenv("AKOS_WIKI_COMPILE", "false")
+    monkeypatch.setenv("AKOS_TOPIC_CLUSTER", "false")
+    monkeypatch.setenv("AKOS_GRAPH_BACKEND", "memory")
+    get_settings.cache_clear()
+
+
+def test_upload_runs_hybrid_compile_and_finishes_succeeded(tmp_path, monkeypatch) -> None:
+    from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
+
+    _disable_post_ingest(monkeypatch)
     app = create_app(data_root=str(tmp_path))
-    app.state.settings = Settings(data_root=str(tmp_path), extract_llm=True, llm_api_key="test-key")
+    settings = Settings(
+        data_root=str(tmp_path),
+        llm_api_key="test-key",
+        chunk_llm=False,
+        topic_cluster=False,
+        wiki_compile=False,
+    )
+    app.state.settings = settings
     scheduled: list[tuple[object, tuple, dict]] = []
     sync_llm_calls: list[str] = []
+    status_trace: list[str] = []
 
     def capture_task(self, func, *args, **kwargs) -> None:
         scheduled.append((func, args, kwargs))
 
-    def track_sync_llm(self, text: str, *, document_anchor=None, section_title=None, section_summary=None, **_kwargs) -> list[ExtractedClaim]:
+    def track_sync_llm(
+        self,
+        text: str,
+        *,
+        document_anchor=None,
+        section_title=None,
+        section_summary=None,
+        **_kwargs,
+    ) -> list[ExtractedClaim]:
         sync_llm_calls.append(text)
         return []
 
@@ -49,169 +68,121 @@ def test_upload_runs_hybrid_compile_and_schedules_enrichment(tmp_path, monkeypat
     assert task is process_uploaded_source
     assert not args
     assert kwargs["kb_id"] == DEFAULT_IN_MEMORY_KB_ID
-    assert kwargs["source_type"] == "policy"
-
-    task(**kwargs)
-    assert sync_llm_calls, "background job should invoke LLM when extract_llm is enabled"
-    assert kwargs["deps"].knowledge.get_source(source_id).status == "succeeded"
-
-
-def test_enrich_open_predicates_writes_novel_claim(tmp_path, monkeypatch) -> None:
-    from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
-    from akos.application.ingest.enrichment import enrich_source
-
-    monkeypatch.setenv("AKOS_USE_PG", "false")
-    monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
-    monkeypatch.setenv("AKOS_EXTRACT_OPEN_PREDICATES", "true")
-    app = create_app(data_root=str(tmp_path))
-    open_settings = Settings(
-        data_root=str(tmp_path),
-        extract_rules=False,
-        extract_llm=True,
-        llm_api_key="test-key",
-        extract_open_predicates=True,
-    )
-    app.state.settings = open_settings
-    scheduled: list[tuple[object, dict]] = []
-
-    def capture_task(self, func, *args, **kwargs) -> None:
-        assert not args
-        scheduled.append((func, kwargs))
-
-    monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
-    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text, *, document_anchor=None, **_kwargs: [])
-    source_text = "七天无理由由买家承担"
-    response = TestClient(app).post(
-        f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
-        files={"file": ("policy.md", source_text.encode(), "text/markdown")},
-    )
-    assert response.status_code == 202, response.text
-    source_id = response.json()["results"][0]["source_id"]
-
-    task, kwargs = scheduled[0]
-    assert task is process_uploaded_source
-    kwargs["settings"] = open_settings
-    task(**kwargs)
-    assert kwargs["deps"].knowledge.get_source_text(source_id) == source_text
-
-    extracted_texts: list[str] = []
-
-    def extract_unknown(self, text: str, *, document_anchor=None, section_title=None, section_summary=None, **_kwargs) -> list[ExtractedClaim]:
-        extracted_texts.append(text)
-        return [
-            ExtractedClaim(
-                subject="七天无理由",
-                predicate="unknown_predicate",
-                object="买家",
-                confidence=0.9,
-                quote=text,
-                start=0,
-                end=len(text),
-            )
-        ]
-
-    monkeypatch.setattr(DomainLlmExtractor, "extract", extract_unknown)
-    enrich_source(
-        kb_id=DEFAULT_IN_MEMORY_KB_ID,
-        source_id=source_id,
-        deps=kwargs["deps"],
-        settings=open_settings,
-    )
 
     knowledge = kwargs["deps"].knowledge
-    assert extracted_texts == [source_text]
+    original_update = knowledge.update_source_status
+
+    def trace_status(sid: str, status: str) -> None:
+        if sid == source_id:
+            status_trace.append(status)
+        original_update(sid, status)
+
+    monkeypatch.setattr(knowledge, "update_source_status", trace_status)
+    kwargs["settings"] = settings
+    task(**kwargs)
+
+    assert sync_llm_calls, "background job should invoke LLM during compile"
     assert knowledge.get_source(source_id).status == "succeeded"
-    active = [c for c in knowledge.get_claims_by_status("active") if c.predicate == "unknown_predicate"]
-    assert active
-    assert not any(q["reason"] == "invalid_predicate" for q in knowledge.list_quarantine())
+    assert "chunking" in status_trace
+    assert "extracting_claims" in status_trace
+    assert status_trace[-1] == "succeeded"
+    assert "enriching" not in status_trace
 
 
-def test_enrich_closed_predicates_quarantines_novel_claim(tmp_path, monkeypatch) -> None:
+def test_upload_marks_compiling_wiki_before_succeeded(tmp_path, monkeypatch) -> None:
     from akos.interfaces.api.admin_api.upload_jobs import process_uploaded_source
-    from akos.application.ingest.enrichment import enrich_source
+    import akos.application.ingest.chunk_enrichment as chunk_enrichment
 
     monkeypatch.setenv("AKOS_USE_PG", "false")
     monkeypatch.setenv("AKOS_LLM_API_KEY", "test-key")
-    monkeypatch.setenv("AKOS_EXTRACT_OPEN_PREDICATES", "false")
-    app = create_app(data_root=str(tmp_path))
-    closed_settings = Settings(
+    monkeypatch.setenv("AKOS_CHUNK_LLM", "false")
+    monkeypatch.setenv("AKOS_TOPIC_CLUSTER", "false")
+    monkeypatch.setenv("AKOS_WIKI_COMPILE", "true")
+    monkeypatch.setenv("AKOS_GRAPH_BACKEND", "memory")
+    get_settings.cache_clear()
+
+    settings = Settings(
         data_root=str(tmp_path),
-        extract_rules=False,
-        extract_llm=True,
         llm_api_key="test-key",
-        extract_open_predicates=False,
+        chunk_llm=False,
+        topic_cluster=False,
+        wiki_compile=True,
     )
-    app.state.settings = closed_settings
-    scheduled: list[tuple[object, dict]] = []
+    app = create_app(data_root=str(tmp_path))
+    app.state.settings = settings
+    scheduled: list[dict] = []
+    wiki_calls: list[str] = []
+    status_trace: list[str] = []
 
     def capture_task(self, func, *args, **kwargs) -> None:
         assert not args
-        scheduled.append((func, kwargs))
+        scheduled.append(kwargs)
+
+    def fake_wiki(*, kb_id: str, source_id: str, deps, settings) -> None:
+        wiki_calls.append(source_id)
 
     monkeypatch.setattr("starlette.background.BackgroundTasks.add_task", capture_task)
-    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda self, text, *, document_anchor=None, **_kwargs: [])
-    source_text = "七天无理由由买家承担"
+    monkeypatch.setattr(DomainLlmExtractor, "extract", lambda *a, **k: [])
+    monkeypatch.setattr(chunk_enrichment, "compile_wiki_for_source", fake_wiki)
+
     response = TestClient(app).post(
         f"/admin/knowledge-bases/{DEFAULT_IN_MEMORY_KB_ID}/sources/upload",
-        files={"file": ("policy.md", source_text.encode(), "text/markdown")},
+        files={
+            "file": (
+                "policy.md",
+                "七天无理由适用类目为非定制商品。".encode("utf-8"),
+                "text/markdown",
+            )
+        },
     )
     assert response.status_code == 202, response.text
     source_id = response.json()["results"][0]["source_id"]
+    kwargs = scheduled[0]
+    assert kwargs["settings"].wiki_compile is True
+    knowledge = kwargs["deps"].knowledge
+    original_update = knowledge.update_source_status
 
-    task, kwargs = scheduled[0]
-    assert task is process_uploaded_source
-    kwargs["settings"] = closed_settings
-    task(**kwargs)
+    def trace_status(sid: str, status: str) -> None:
+        if sid == source_id:
+            status_trace.append(status)
+        original_update(sid, status)
 
-    def extract_unknown(self, text: str, *, document_anchor=None, section_title=None, section_summary=None, **_kwargs) -> list[ExtractedClaim]:
-        return [
-            ExtractedClaim(
-                subject="七天无理由",
-                predicate="unknown_predicate",
-                object="买家",
-                confidence=0.9,
-                quote=text,
-                start=0,
-                end=len(text),
-            )
-        ]
+    monkeypatch.setattr(knowledge, "update_source_status", trace_status)
+    process_uploaded_source(**kwargs)
 
-    monkeypatch.setattr(DomainLlmExtractor, "extract", extract_unknown)
-    enrich_source(
-        kb_id=DEFAULT_IN_MEMORY_KB_ID,
-        source_id=source_id,
-        deps=kwargs["deps"],
-        settings=closed_settings,
-    )
-    assert kwargs["deps"].knowledge.list_quarantine()[-1]["reason"] == "invalid_predicate"
+    assert "compiling_wiki" in status_trace, status_trace
+    assert status_trace.index("compiling_wiki") < status_trace.index("succeeded")
+    assert wiki_calls == [source_id]
+    assert knowledge.get_source(source_id).status == "succeeded"
 
 
-def test_lifespan_retries_only_enriching_sources(tmp_path, monkeypatch) -> None:
+def test_lifespan_marks_interrupted_enriching_as_failed(tmp_path, monkeypatch) -> None:
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
+    from akos.domain.models.knowledge import Source
+
     monkeypatch.setenv("AKOS_USE_PG", "false")
+    monkeypatch.setenv("AKOS_CHUNK_LLM", "false")
+    get_settings.cache_clear()
     app = create_app(data_root=str(tmp_path))
     knowledge = InMemoryKnowledge()
-    for source_id, status in (("resume-me", "enriching"), ("leave-me", "ready")):
-        knowledge.save_source(
-            Source(
-                id=source_id,
-                title=f"{source_id}.md",
-                type="policy",
-                uri=f"file://{source_id}.md",
-                version="1",
-                created_at=datetime.now(timezone.utc),
-                status=status,
-            )
+    knowledge.save_source(
+        Source(
+            id="stuck",
+            title="stuck.md",
+            type="policy",
+            uri="file://stuck.md",
+            version="1",
+            created_at=datetime.now(timezone.utc),
+            status="enriching",
         )
+    )
     deps = SimpleNamespace(knowledge=knowledge)
     app.state.orchestrator_cache["kb-resume"] = SimpleNamespace(deps=deps)
-    resumed: list[tuple[str, str]] = []
-
-    def record_resume(*, kb_id: str, source_id: str, deps, settings: Settings) -> None:
-        resumed.append((kb_id, source_id))
-
-    monkeypatch.setattr("akos.interfaces.api.main.enrich_source", record_resume)
 
     with TestClient(app):
         pass
 
-    assert resumed == [("kb-resume", "resume-me")]
+    assert knowledge.get_source("stuck").status == "failed"

@@ -20,7 +20,6 @@ from akos.interfaces.api.admin_api.routes_topics import router as topics_router
 from akos.interfaces.api.admin_auth import require_admin_token
 from akos.interfaces.api.routes import router
 from akos.interfaces.api.admin_api.upload_jobs import resume_incomplete_uploads
-from akos.application.ingest.enrichment import enrich_source
 from akos.bootstrap import _get_kb_repo, build_orchestrator_for_kb
 from infra.schema_bootstrap import ensure_pg_schema
 from infra.settings import Settings
@@ -44,27 +43,9 @@ def _load_orchestrators_for_resume(app: FastAPI) -> dict:
     return cache
 
 
-def _resume_enriching_sources(app: FastAPI) -> None:
-    settings = app.state.settings
-    for kb_id, orchestrator in _load_orchestrators_for_resume(app).items():
-        for source in orchestrator.deps.knowledge.list_sources():
-            if source.status != "enriching":
-                continue
-            try:
-                enrich_source(
-                    kb_id=kb_id,
-                    source_id=source.id,
-                    deps=orchestrator.deps,
-                    settings=settings,
-                )
-            except Exception:
-                logger.exception("恢复 enrich 失败 source=%s kb=%s", source.id, kb_id)
-
-
 def _resume_background_source_jobs(app: FastAPI) -> None:
     _load_orchestrators_for_resume(app)
     resume_incomplete_uploads(app)
-    _resume_enriching_sources(app)
 
 
 @asynccontextmanager

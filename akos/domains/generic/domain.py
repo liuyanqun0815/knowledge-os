@@ -9,6 +9,10 @@ _GENERIC_PREDICATES = [
     ("Concept", "相关", "Concept"),
     ("Concept", "定义", "Concept"),
     ("Concept", "属于", "Concept"),
+    ("Policy", "规定", "Concept"),
+    ("Policy", "适用于", "Concept"),
+    ("Policy", "禁止", "Concept"),
+    ("Policy", "要求", "Concept"),
 ]
 
 
@@ -24,7 +28,8 @@ class GenericDomain:
         register_generic_ontology(ontology)
 
     def get_extractor(self) -> RuleExtractor:
-        return RuleExtractor()
+        # 通用域不注入电商等专用正则，避免跨域误抽
+        return RuleExtractor([])
 
     def get_aliases(self) -> list[str]:
         return []
@@ -40,7 +45,7 @@ class GenericDomain:
 
     def llm_extraction_spec(self) -> LlmExtractionSpec:
         return LlmExtractionSpec(
-            allowed_predicates=["规定", "适用于", "禁止", "要求"],
+            allowed_predicates=["规定", "适用于", "禁止", "要求", "相关", "定义", "属于"],
             entity_types=["Concept", "Policy"],
             few_shot_hints=[
                 "正例：subject=具体政策或主题实体，predicate=规定，object=…",

@@ -56,9 +56,15 @@ def store_source_node(state: IngestState, deps: Any) -> dict:
             knowledge_base_id=deps.knowledge_base_id,
         )
         source = stored.source
+        existing = deps.knowledge.get_source(source.id)
+        # 保留上传登记的 pending/中间态，避免 LocalFileStore 的 ready 被当成「已完成」
+        preserved_status = existing.status if existing is not None else "pending"
         replaces_source_id = state.get("replaces_source_id")
-        if replaces_source_id:
-            source = replace(source, replaces_source_id=replaces_source_id)
+        source = replace(
+            source,
+            status=preserved_status,
+            replaces_source_id=replaces_source_id or getattr(source, "replaces_source_id", None),
+        )
         source = deps.knowledge.save_source(source)
         deps.knowledge.save_source_text(source.id, stored.text)
         _INGEST_LOG.info(
@@ -79,6 +85,7 @@ def compile_node(state: IngestState, deps: Any) -> dict:
     if not source_id:
         return {"error": "no source_id", "report": None}
     staging = bool(state.get("replaces_source_id"))
+    deps.knowledge.update_source_status(source_id, "extracting_claims")
     _INGEST_LOG.info("入库·编译 Claim 开始 source=%s staging=%s", source_id, staging)
     report = deps.compiler.ingest(
         source_id,
@@ -104,6 +111,7 @@ def index_chunks_node(state: IngestState, deps: Any) -> dict:
         return {"error": "no source_id", "chunk_report": None}
     settings = get_settings()
     chunk_retrieval = getattr(deps, "chunk_retrieval", None)
+    deps.knowledge.update_source_status(source_id, "chunking")
     _INGEST_LOG.info("入库·结构切分 开始 source=%s", source_id)
     report = index_source_chunks(deps.knowledge, chunk_retrieval, source_id, settings)
     if report.errors:

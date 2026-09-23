@@ -9,6 +9,7 @@ from akos.application.ingest.intersect import (
 )
 from akos.domain.ports.compiler import ExtractedClaim
 from akos.application.ingest.rule_extractor import RuleExtractor
+from akos.domains.ecommerce_cs.rules import ECOMMERCE_RULES
 from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
 from infra.settings import Settings
 from akos.adapters.ontology.memory import InMemoryOntology
@@ -146,7 +147,7 @@ def test_select_hybrid_candidates_uses_union_when_both_enabled():
         settings = Settings(llm_api_key="test")
         candidates = select_hybrid_candidates(
             text,
-            rule_extractor=RuleExtractor(),
+            rule_extractor=RuleExtractor(ECOMMERCE_RULES),
             llm_client=MockLlm(),
             domain=MockDomain(),
             settings=settings,
@@ -210,7 +211,7 @@ def test_select_hybrid_candidates_raises_when_extract_llm_unconfigured():
     with pytest.raises(LlmConfigError, match="入库 Claim 抽取"):
         select_hybrid_candidates(
             "七天无理由退货运费承担方为买家。",
-            rule_extractor=RuleExtractor(),
+            rule_extractor=RuleExtractor(ECOMMERCE_RULES),
             llm_client=type("L", (), {"is_configured": False})(),
             domain=type("D", (), {"llm_extraction_spec": lambda self: None})(),
             settings=settings,

@@ -194,19 +194,17 @@ def _enrich_chunks_individually(*, kb_id: str, source_id: str, deps: Any, settin
             chunk_retrieval.index_chunks([updated])
 
     _rebuild_topic_clusters(deps, kb_id, settings)
-    _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)
     logger.info("Chunk 元数据补全完成 source=%s kb=%s", source_id, kb_id)
 
 
 @traceable(name="akos.enrich_chunks", run_type="chain")
 def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
-    """Claim 入库后仅补 chunk 元数据，不改变切分边界。"""
+    """Claim 入库后仅补 chunk 元数据与主题簇，不改变切分边界、不编译 Wiki。"""
     logger.info(
-        "Chunk 元数据补全 开始 source=%s kb=%s llm_enrich=%s wiki=%s topic_cluster=%s",
+        "Chunk 元数据补全 开始 source=%s kb=%s llm_enrich=%s topic_cluster=%s",
         source_id,
         kb_id,
         settings.chunk_llm,
-        getattr(settings, "wiki_compile", False),
         getattr(settings, "topic_cluster", False),
     )
     if settings.chunk_llm:
@@ -215,4 +213,8 @@ def enrich_chunks(*, kb_id: str, source_id: str, deps: Any, settings: Settings) 
         _enrich_chunks_individually(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings, client=client)
         return
     _rebuild_topic_clusters(deps, kb_id, settings)
+
+
+def compile_wiki_for_source(*, kb_id: str, source_id: str, deps: Any, settings: Settings) -> None:
+    """按开关为单个 source 编译 Wiki 并刷新检索索引。"""
     _maybe_compile_wiki(kb_id=kb_id, source_id=source_id, deps=deps, settings=settings)

@@ -59,9 +59,16 @@ def test_corporate_domain_registers_ontology():
     assert ontology.validate_claim("Policy", "适用于", "Department")
 
 
-def test_corporate_domain_uses_llm_extractor():
+def test_corporate_domain_uses_rule_extractor():
+    from akos.application.ingest.rule_extractor import RuleExtractor
+
     domain = load_domain("corporate_culture")
-    assert isinstance(domain.get_extractor(), LlmExtractor)
+    extractor = domain.get_extractor()
+    assert isinstance(extractor, RuleExtractor)
+    claims = extractor.extract("员工手册倡导诚信协作，禁止贿赂。")
+    preds = {c.predicate for c in claims}
+    assert "倡导" in preds
+    assert "禁止" in preds
 
 
 def test_corporate_format_claim():
@@ -90,7 +97,7 @@ def test_llm_extractor_parses_json_response():
     assert claims[0].object == "诚信"
 
 
-@pytest.mark.skipif(not os.getenv("AKOS_LLM_API_KEY"), reason="optional LLM integration; set AKOS_LLM_API_KEY")
+@pytest.mark.skipif(os.getenv("AKOS_LLM_INTEGRATION") != "1", reason="optional LLM integration; set AKOS_LLM_INTEGRATION=1")
 def test_llm_extractor_integration_with_real_key():
     extractor = LlmExtractor(domain="corporate_culture")
     text = "员工手册倡导诚信协作，禁止内部恶性竞争，适用于研发部。"

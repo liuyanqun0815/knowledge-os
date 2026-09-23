@@ -326,6 +326,21 @@ def list_sources(
     return [SourceResponse(**payload) for payload in filtered]
 
 
+@router.get("/{kb_id}/sources/{source_id}", response_model=SourceResponse)
+def get_source(
+    kb_id: str,
+    source_id: str,
+    request: Request,
+    _: None = Depends(_resolve_active_kb),
+) -> SourceResponse:
+    knowledge = get_knowledge_for_request(kb_id, request)
+    source = knowledge.get_source(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"source_not_found: {source_id}")
+    kb_dir = _kb_dir(kb_id, request)
+    return SourceResponse(**build_source_response(source, knowledge, kb_dir))
+
+
 @router.post("/{kb_id}/sources/move", response_model=list[SourceResponse])
 def move_sources(
     kb_id: str,

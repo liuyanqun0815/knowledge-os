@@ -46,7 +46,6 @@ def test_plan_chunks_replaces_structural_chunks_before_claims():
     knowledge.save_source_text("s1", text)
     settings = Settings(
         chunk_llm=True,
-        chunk_llm=False,
         chunk_min_tokens=1,
         chunk_max_chars=512,
         chunk_max_per_doc=40,

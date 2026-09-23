@@ -5,13 +5,17 @@ import { SourceDetailPanel } from "./SourceDetailPanel";
 import { SourceContentModal } from "./SourceContentModal";
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: "等待编译",
-  running: "编译中",
-  enriching: "LLM 补抽中",
+  pending: "等待处理",
+  chunking: "切分中",
+  extracting_claims: "抽取 Claim",
+  enriching_chunks: "补全 Chunk",
+  compiling_wiki: "编译 Wiki",
+  running: "处理中",
+  enriching: "处理中",
   ready: "已完成",
   succeeded: "已完成",
   succeeded_partial: "部分完成",
-  failed: "编译失败",
+  failed: "失败",
 };
 
 type SourceFileBrowserProps = {

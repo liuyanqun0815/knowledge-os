@@ -3,15 +3,36 @@ from pathlib import Path
 
 from akos.application.ingest.rule_extractor import RuleExtractor
 from akos.application.ingest.service import KnowledgeCompiler
+from akos.domains.ecommerce_cs.domain import EcommerceCsDomain
+from akos.domains.ecommerce_cs.rules import ECOMMERCE_RULES
 from akos.domains.ecommerce_cs.seed import register_ecommerce_cs
 from akos.adapters.persistence.evidence_memory import InMemoryEvidence
 from akos.adapters.persistence.graph_memory import InMemoryGraph
 from akos.adapters.persistence.knowledge_memory import InMemoryKnowledge
 from akos.domain.models.knowledge import Event, Source
 from akos.adapters.ontology.memory import InMemoryOntology
+from infra.settings import Settings
 
 
-def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:
+class _ConfiguredLlm:
+    is_configured = True
+
+
+def _ingest(compiler: KnowledgeCompiler, source_id: str, *, staging: bool = False, monkeypatch):
+    monkeypatch.setattr(
+        "akos.application.ingest.intersect.extract_llm_claims_from_text",
+        lambda *args, **kwargs: [],
+    )
+    return compiler.ingest(
+        source_id,
+        staging=staging,
+        llm_client=_ConfiguredLlm(),
+        domain=EcommerceCsDomain(),
+        settings=Settings(llm_api_key="test"),
+    )
+
+
+def _compile_v4(*, staging: bool = False, monkeypatch) -> tuple[InMemoryKnowledge, str]:
     onto = InMemoryOntology()
     register_ecommerce_cs(onto)
     knowledge = InMemoryKnowledge()
@@ -40,13 +61,13 @@ def _compile_v4(*, staging: bool = False) -> tuple[InMemoryKnowledge, str]:
     knowledge.save_source(src_v4)
     knowledge.save_source_text(src_v3.id, Path("tests/fixtures/refund_policy_v3.md").read_text(encoding="utf-8"))
     knowledge.save_source_text(src_v4.id, Path("tests/fixtures/refund_policy_v4.md").read_text(encoding="utf-8"))
-    compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor())
-    compiler.ingest(src_v3.id)
-    compiler.ingest(src_v4.id, staging=staging)
+    compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor(ECOMMERCE_RULES))
+    _ingest(compiler, src_v3.id, monkeypatch=monkeypatch)
+    _ingest(compiler, src_v4.id, staging=staging, monkeypatch=monkeypatch)
     return knowledge, src_v4.id
 
 
-def test_staging_compile_skips_exact_spo_already_active():
+def test_staging_compile_skips_exact_spo_already_active(monkeypatch):
     """Identical SPO must not create a staging twin beside an existing active claim."""
     onto = InMemoryOntology()
     register_ecommerce_cs(onto)
@@ -77,14 +98,14 @@ def test_staging_compile_skips_exact_spo_already_active():
     knowledge.save_source(src_new)
     knowledge.save_source_text(src_old.id, text)
     knowledge.save_source_text(src_new.id, text)
-    compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor())
-    compiler.ingest(src_old.id)
+    compiler = KnowledgeCompiler(onto, knowledge, graph, evidence, RuleExtractor(ECOMMERCE_RULES))
+    _ingest(compiler, src_old.id, monkeypatch=monkeypatch)
     active_before = {
         (c.subject, c.predicate, c.object): c.id for c in knowledge.get_claims_by_status("active")
     }
     assert active_before
 
-    report = compiler.ingest(src_new.id, staging=True)
+    report = _ingest(compiler, src_new.id, staging=True, monkeypatch=monkeypatch)
 
     assert report.claims_created == 0
     assert not knowledge.get_claims_by_status("staging")
@@ -92,8 +113,8 @@ def test_staging_compile_skips_exact_spo_already_active():
     assert active_after == active_before
 
 
-def test_staging_compile_writes_staging_claims_not_active():
-    knowledge, v4_id = _compile_v4(staging=True)
+def test_staging_compile_writes_staging_claims_not_active(monkeypatch):
+    knowledge, v4_id = _compile_v4(staging=True, monkeypatch=monkeypatch)
 
     staging = knowledge.get_claims_by_status("staging")
     assert staging
@@ -109,8 +130,8 @@ def test_staging_compile_writes_staging_claims_not_active():
     assert active_freight[0].object == "买家"
 
 
-def test_default_compile_writes_active_claims():
-    knowledge, v4_id = _compile_v4(staging=False)
+def test_default_compile_writes_active_claims(monkeypatch):
+    knowledge, v4_id = _compile_v4(staging=False, monkeypatch=monkeypatch)
 
     # Identical SPO vs v3 are skipped; exclusive object change becomes staging (not a second active).
     v4_claims = knowledge.get_claims_for_source(v4_id)
